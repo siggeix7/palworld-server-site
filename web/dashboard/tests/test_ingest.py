@@ -4,6 +4,7 @@ import time
 from django.test import Client, TestCase, override_settings
 
 from dashboard.models import LatestDataset, MetricSample, Player, PlayerSession, PositionSample, ServerEvent
+from palworld_site import ingest_settings
 
 
 def record(dataset, value, clock=None, name=None):
@@ -156,6 +157,9 @@ class IngestTests(TestCase):
 
 
 class PortSeparationTests(TestCase):
+    def test_ingest_port_allows_private_http_transport(self):
+        self.assertFalse(ingest_settings.SECURE_SSL_REDIRECT)
+
     def test_public_urlconf_does_not_expose_ingest(self):
         response = self.client.post(
             "/api/v1/zabbix/ingest", data="", content_type="application/x-ndjson"
