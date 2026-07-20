@@ -13,6 +13,13 @@
     selectedPlayer: null,
     map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0 },
     points: { fast_travel: [], boss_tower: [] },
+    historySamples: [],
+    chartPoints: [],
+    chartHoverIndex: null,
+    requests: {},
+    notices: { snapshot: null, history: null },
+    historyTimer: null,
+    toastTimer: null,
   }
 
   const $ = (selector) => document.querySelector(selector)
@@ -30,8 +37,10 @@
     signalBar: $('#signalBar'),
     signalAge: $('#signalAge'),
     metricFpsAverage: $('#metricFpsAverage'),
+    metricFpsMinimum: $('#metricFpsMinimum'),
     metricFrameTime: $('#metricFrameTime'),
     metricPeak: $('#metricPeak'),
+    metricPlayersAverage: $('#metricPlayersAverage'),
     metricBases: $('#metricBases'),
     mapViewport: $('#mapViewport'),
     mapPlane: $('#mapPlane'),
@@ -43,18 +52,26 @@
     trailLayer: $('#trailLayer'),
     mapRoster: $('#mapRoster'),
     rosterCount: $('#rosterCount'),
+    mapSelection: $('#mapSelection'),
+    selectedPlayerName: $('#selectedPlayerName'),
+    selectedPlayerDetail: $('#selectedPlayerDetail'),
     playersTable: $('#playersTable'),
     settingsGrid: $('#settingsGrid'),
+    worldHighlights: $('#worldHighlights'),
     eventList: $('#eventList'),
     historyRange: $('#historyRange'),
     historyChart: $('#historyChart'),
     chartEmpty: $('#chartEmpty'),
     chartSummary: $('#chartSummary'),
+    chartTooltip: $('#chartTooltip'),
+    dataNotice: $('#dataNotice'),
     connectionToast: $('#connectionToast'),
   }
 
   function setText(element, value) {
-    if (element) element.textContent = value
+    if (!element) return
+    const text = String(value)
+    if (element.textContent !== text) element.textContent = text
   }
 
   function formatNumber(value, digits = 0) {
@@ -64,6 +81,7 @@
   }
 
   function formatDuration(value) {
+    if (value === null || value === undefined) return '--'
     let seconds = Math.max(0, Number(value) || 0)
     const days = Math.floor(seconds / 86400)
     seconds %= 86400
@@ -85,8 +103,62 @@
     return new Intl.DateTimeFormat('it-IT', options).format(date)
   }
 
+  function formatChartDate(value, compact, timeSpan) {
+    if (!compact) return formatDate(value, true)
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '--'
+    const options = timeSpan > 36 * 60 * 60 * 1000
+      ? { day: '2-digit', month: '2-digit' }
+      : { hour: '2-digit', minute: '2-digit' }
+    return new Intl.DateTimeFormat('it-IT', options).format(date)
+  }
+
   function initials(name) {
     return String(name || '?').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+  }
+
+  function hasMapLocation(player) {
+    const x = Number(player?.location_x)
+    const y = Number(player?.location_y)
+    return player?.location_available !== false && Number.isFinite(x) && Number.isFinite(y) && (x !== 0 || y !== 0)
+  }
+
+  async function requestJson(url, key, timeout = 8000) {
+    if (state.requests[key]) state.requests[key].abort()
+    const controller = new AbortController()
+    state.requests[key] = controller
+    let timedOut = false
+    const timer = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, timeout)
+    try {
+      const response = await fetch(url, { cache: 'no-store', signal: controller.signal })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      return await response.json()
+    } catch (error) {
+      if (timedOut) {
+        const timeoutError = new Error('request timeout')
+        timeoutError.name = 'TimeoutError'
+        throw timeoutError
+      }
+      throw error
+    } finally {
+      window.clearTimeout(timer)
+      if (state.requests[key] === controller) delete state.requests[key]
+    }
+  }
+
+  function renderNotice() {
+    const notice = state.notices.snapshot || state.notices.history
+    elements.dataNotice.hidden = !notice
+    elements.dataNotice.classList.toggle('error', Boolean(notice?.error))
+    setText(elements.dataNotice, notice?.message || '')
+  }
+
+  function setNotice(key, message = null, error = false) {
+    state.notices[key] = message ? { message, error } : null
+    renderNotice()
   }
 
   function worldToPercent(x, y) {
@@ -124,31 +196,51 @@
   }
 
   function setZoom(next) {
+    const previous = state.map.scale
     state.map.scale = Math.min(5, Math.max(1, next))
     if (state.map.scale === 1) {
       state.map.panX = 0
       state.map.panY = 0
     }
     applyMapTransform()
+    return previous !== state.map.scale
+  }
+
+  function clearTrail() {
+    elements.trailLayer.querySelector('polyline').setAttribute('points', '')
+  }
+
+  function clearSelection(render = true) {
+    const previousPlayer = state.selectedPlayer
+    const restoreFocus = document.activeElement === $('#clearSelection')
+    state.selectedPlayer = null
+    if (state.requests.trail) state.requests.trail.abort()
+    clearTrail()
+    elements.mapSelection.hidden = true
+    if (render && state.snapshot) renderMap(state.snapshot.players || [])
+    if (restoreFocus && previousPlayer) {
+      elements.mapRoster.querySelector(`[data-player-id="${previousPlayer}"]`)?.focus({ preventScroll: true })
+    }
   }
 
   function resetMap() {
     state.map.scale = 1
     state.map.panX = 0
     state.map.panY = 0
-    state.selectedPlayer = null
-    elements.trailLayer.querySelector('polyline').setAttribute('points', '')
+    clearSelection()
     applyMapTransform()
   }
 
   function centerPlayer(player) {
+    if (!hasMapLocation(player)) return
     const position = worldToPercent(player.location_x, player.location_y)
     const rect = elements.mapViewport.getBoundingClientRect()
     state.map.scale = Math.max(2.2, state.map.scale)
-    state.map.panX = (50 - position.left) / 100 * rect.width * state.map.scale
-    state.map.panY = (50 - position.top) / 100 * rect.height * state.map.scale
+    state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
+    state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
     state.selectedPlayer = player.id
     applyMapTransform()
+    renderMap(state.snapshot?.players || [])
     if ($('#showTrail').checked) loadTrail(player.id)
   }
 
@@ -180,7 +272,23 @@
     }
   }
 
+  function renderSelection(players) {
+    const selected = players.find((player) => player.id === state.selectedPlayer)
+    elements.mapSelection.hidden = !selected
+    if (!selected) return
+    setText(elements.selectedPlayerName, selected.name)
+    setText(
+      elements.selectedPlayerDetail,
+      `Lv.${formatNumber(selected.level)} · ${formatNumber(selected.ping)} ms · X ${formatNumber(selected.location_x)} / Y ${formatNumber(selected.location_y)}`,
+    )
+  }
+
   function renderMap(players) {
+    const focusedElement = document.activeElement
+    const focusedId = focusedElement?.dataset?.playerId
+    const focusedLayer = focusedElement?.closest('#playerLayer')
+      ? 'marker'
+      : (focusedElement?.closest('#mapRoster') ? 'roster' : null)
     elements.playerLayer.replaceChildren()
     elements.mapRoster.replaceChildren()
     setText(elements.rosterCount, String(players.length))
@@ -191,19 +299,31 @@
       empty.className = 'empty-copy'
       empty.textContent = 'Nessun esploratore rilevato.'
       elements.mapRoster.appendChild(empty)
-      elements.trailLayer.querySelector('polyline').setAttribute('points', '')
+      clearTrail()
+      elements.mapSelection.hidden = true
       return
     }
 
     for (const player of players) {
-      const node = marker('player', [player.location_x, player.location_y], `Lv.${player.level} ${player.name}`)
-      node.setAttribute('aria-label', `Centra ${player.name} sulla mappa`)
-      node.addEventListener('click', () => centerPlayer(player))
-      elements.playerLayer.appendChild(node)
+      const mapped = hasMapLocation(player)
+      if (mapped) {
+        const node = marker('player', [player.location_x, player.location_y], `Lv.${player.level} ${player.name}`)
+        node.dataset.playerId = player.id
+        node.classList.toggle('selected', player.id === state.selectedPlayer)
+        node.setAttribute('aria-label', `Centra ${player.name} sulla mappa`)
+        node.setAttribute('aria-pressed', String(player.id === state.selectedPlayer))
+        node.addEventListener('click', () => centerPlayer(player))
+        elements.playerLayer.appendChild(node)
+      }
 
       const roster = document.createElement('button')
       roster.type = 'button'
+      roster.dataset.playerId = player.id
       roster.className = 'roster-player'
+      roster.classList.toggle('selected', player.id === state.selectedPlayer)
+      roster.classList.toggle('unmapped', !mapped)
+      roster.setAttribute('aria-pressed', String(player.id === state.selectedPlayer))
+      if (!mapped) roster.setAttribute('aria-disabled', 'true')
       const avatar = document.createElement('i')
       avatar.textContent = initials(player.name)
       const identity = document.createElement('span')
@@ -213,34 +333,44 @@
       detail.textContent = `Lv.${player.level} · ${formatNumber(player.ping, 0)} ms`
       identity.append(name, detail)
       const coordinate = document.createElement('span')
-      coordinate.textContent = `${formatNumber(player.location_x, 0)} / ${formatNumber(player.location_y, 0)}`
+      coordinate.textContent = mapped
+        ? `${formatNumber(player.location_x, 0)} / ${formatNumber(player.location_y, 0)}`
+        : 'Posizione non disponibile'
       roster.append(avatar, identity, coordinate)
-      roster.addEventListener('click', () => centerPlayer(player))
+      if (mapped) roster.addEventListener('click', () => centerPlayer(player))
       elements.mapRoster.appendChild(roster)
+    }
+
+    renderSelection(players)
+    if (focusedId && focusedLayer) {
+      const layer = focusedLayer === 'marker' ? elements.playerLayer : elements.mapRoster
+      layer.querySelector(`[data-player-id="${focusedId}"]`)?.focus({ preventScroll: true })
     }
   }
 
   async function loadTrail(playerId) {
     if (!playerId || !$('#showTrail').checked) {
-      elements.trailLayer.querySelector('polyline').setAttribute('points', '')
+      clearTrail()
       return
     }
     try {
-      const response = await fetch(`/api/v1/player/${encodeURIComponent(playerId)}/trail?range=6h`, { cache: 'no-store' })
-      if (!response.ok) throw new Error('trail unavailable')
-      const data = await response.json()
-      if (state.selectedPlayer !== playerId) return
-      const points = data.positions.map((position) => {
-        const mapped = worldToPercent(position.x, position.y)
-        return `${mapped.left * 10},${mapped.top * 10}`
-      }).join(' ')
+      const data = await requestJson(`/api/v1/player/${encodeURIComponent(playerId)}/trail?range=6h`, 'trail')
+      if (state.selectedPlayer !== playerId || !$('#showTrail').checked) return
+      const points = (data.positions || [])
+        .filter((position) => Number(position.x) !== 0 || Number(position.y) !== 0)
+        .map((position) => {
+          const mapped = worldToPercent(position.x, position.y)
+          return `${mapped.left * 10},${mapped.top * 10}`
+        })
+        .join(' ')
       elements.trailLayer.querySelector('polyline').setAttribute('points', points)
-    } catch (_error) {
-      elements.trailLayer.querySelector('polyline').setAttribute('points', '')
+    } catch (error) {
+      if (error.name !== 'AbortError' && state.selectedPlayer === playerId) clearTrail()
     }
   }
 
   function renderPlayersTable(players) {
+    const focusedId = document.activeElement?.closest('.player-link')?.dataset?.playerId
     elements.playersTable.replaceChildren()
     if (!players.length) {
       const row = document.createElement('tr')
@@ -254,13 +384,25 @@
     }
 
     for (const player of players) {
+      const mapped = hasMapLocation(player)
       const row = document.createElement('tr')
       const identity = document.createElement('td')
+      const playerButton = document.createElement('button')
+      playerButton.type = 'button'
+      playerButton.className = 'player-link'
+      playerButton.dataset.playerId = player.id
       const name = document.createElement('strong')
       name.textContent = player.name
       const account = document.createElement('small')
       account.textContent = player.accountName || 'account non disponibile'
-      identity.append(name, account)
+      playerButton.append(name, account)
+      if (mapped) {
+        playerButton.setAttribute('aria-label', `Mostra ${player.name} sulla mappa`)
+        playerButton.addEventListener('click', () => centerPlayer(player))
+      } else {
+        playerButton.setAttribute('aria-disabled', 'true')
+      }
+      identity.appendChild(playerButton)
 
       const level = document.createElement('td')
       level.textContent = formatNumber(player.level)
@@ -276,11 +418,15 @@
       session.append(currentSession, weeklySession)
       const coords = document.createElement('td')
       const code = document.createElement('code')
-      code.textContent = `X ${formatNumber(player.location_x, 0)} · Y ${formatNumber(player.location_y, 0)}`
+      code.textContent = mapped
+        ? `X ${formatNumber(player.location_x, 0)} · Y ${formatNumber(player.location_y, 0)}`
+        : 'Posizione non disponibile'
       coords.appendChild(code)
       row.append(identity, level, ping, buildings, session, coords)
-      row.addEventListener('click', () => centerPlayer(player))
       elements.playersTable.appendChild(row)
+    }
+    if (focusedId) {
+      elements.playersTable.querySelector(`[data-player-id="${focusedId}"]`)?.focus({ preventScroll: true })
     }
   }
 
@@ -304,8 +450,31 @@
     return String(value)
   }
 
+  function renderWorldHighlights(settings) {
+    elements.worldHighlights.replaceChildren()
+    const highlights = [
+      ['Modalità', Object.hasOwn(settings, 'bIsPvP') ? (settings.bIsPvP ? 'PvP' : 'PvE') : null],
+      ['Esperienza', Object.hasOwn(settings, 'ExpRate') ? `× ${formatNumber(settings.ExpRate, 2)}` : null],
+      ['Raccolta', Object.hasOwn(settings, 'CollectionDropRate') ? `× ${formatNumber(settings.CollectionDropRate, 2)}` : null],
+      ['Viaggio rapido', Object.hasOwn(settings, 'bEnableFastTravel') ? (settings.bEnableFastTravel ? 'Attivo' : 'Disattivo') : null],
+      ['Capacità', Object.hasOwn(settings, 'ServerPlayerMaxNum') ? `${formatNumber(settings.ServerPlayerMaxNum)} giocatori` : null],
+    ]
+    for (const [label, value] of highlights) {
+      if (value === null) continue
+      const card = document.createElement('article')
+      card.className = 'world-highlight'
+      const caption = document.createElement('span')
+      caption.textContent = label
+      const content = document.createElement('strong')
+      content.textContent = value
+      card.append(caption, content)
+      elements.worldHighlights.appendChild(card)
+    }
+  }
+
   function renderSettings(settings) {
     elements.settingsGrid.replaceChildren()
+    renderWorldHighlights(settings)
     if (!Object.keys(settings).length) {
       const empty = document.createElement('p')
       empty.className = 'empty-copy'
@@ -365,10 +534,15 @@
     const metrics = data.metrics || {}
     const players = data.players || []
     const online = Boolean(data.status?.online)
+    const stale = Boolean(data.status?.stale)
+
+    if (state.selectedPlayer && !players.some((player) => player.id === state.selectedPlayer && hasMapLocation(player))) {
+      clearSelection(false)
+    }
 
     elements.headerStatus.classList.toggle('online', online)
     elements.headerStatus.classList.toggle('offline', !online)
-    setText(elements.headerStatus.querySelector('b'), online ? 'ONLINE' : (data.status?.stale ? 'DATI OBSOLETI' : 'OFFLINE'))
+    setText(elements.headerStatus.querySelector('b'), online ? 'ONLINE' : (stale ? 'DATI OBSOLETI' : 'OFFLINE'))
     setText(elements.serverName, data.info?.servername || 'Palworld Server')
     setText(elements.serverDescription, data.info?.description || 'Telemetria pubblica del server dedicato.')
     setText(elements.serverVersion, data.info?.version || '--')
@@ -379,11 +553,14 @@
     setText(elements.heroFps, formatNumber(metrics.serverfps, 1))
     setText(elements.heroUptime, formatDuration(metrics.uptime))
     setText(elements.heroDay, formatNumber(metrics.days))
-    setText(elements.signalAge, data.status?.data_age_seconds == null ? '--' : `${data.status.data_age_seconds}s`)
-    elements.signalBar.style.width = `${Math.max(0, 100 - Math.min(100, (data.status?.data_age_seconds || 0) / 1.2))}%`
+    const dataAge = data.status?.data_age_seconds
+    setText(elements.signalAge, dataAge == null ? '--' : `${dataAge}s`)
+    elements.signalBar.style.width = dataAge == null ? '0%' : `${Math.max(0, 100 - Math.min(100, dataAge / 1.2))}%`
     setText(elements.metricFpsAverage, formatNumber(data.summary_24h?.average_fps, 1))
+    setText(elements.metricFpsMinimum, formatNumber(data.summary_24h?.minimum_fps, 1))
     setText(elements.metricFrameTime, formatNumber(metrics.serverframetime, 2))
     setText(elements.metricPeak, formatNumber(data.summary_24h?.peak_players))
+    setText(elements.metricPlayersAverage, formatNumber(data.summary_24h?.average_players, 1))
     setText(elements.metricBases, formatNumber(metrics.basecampnum))
 
     renderMap(players)
@@ -391,13 +568,51 @@
     renderSettings(data.settings || {})
     renderEvents(data.events || [])
 
-    if (state.selectedPlayer && !players.some((player) => player.id === state.selectedPlayer)) {
-      state.selectedPlayer = null
-      elements.trailLayer.querySelector('polyline').setAttribute('points', '')
+    const staleMessage = data.status?.reachable
+      ? 'Il collegamento è attivo, ma la telemetria è aggiornata in ritardo.'
+      : 'Il server non è raggiungibile e gli ultimi dati disponibili sono obsoleti.'
+    setNotice('snapshot', stale ? staleMessage : null)
+  }
+
+  function chartScale(samples) {
+    const fpsValues = samples.map((sample) => Number(sample.fps) || 0)
+    const minimum = Math.min(...fpsValues)
+    const maximum = Math.max(...fpsValues)
+    const minFps = Math.max(0, Math.floor((minimum - 2) / 5) * 5)
+    const maxFps = Math.max(minFps + 5, Math.ceil((maximum + 2) / 5) * 5)
+    const observedMaxPlayers = Math.max(0, ...samples.map((sample) => Number(sample.players) || 0))
+    return {
+      minFps,
+      maxFps,
+      maxPlayers: Math.max(1, observedMaxPlayers),
+      observedMaxPlayers,
     }
   }
 
-  function drawChart(samples) {
+  function updateChartTooltip() {
+    const point = state.chartPoints[state.chartHoverIndex]
+    if (!point) {
+      elements.chartTooltip.hidden = true
+      return
+    }
+    elements.chartTooltip.replaceChildren()
+    const time = document.createElement('strong')
+    time.textContent = formatDate(point.sample.timestamp, true)
+    const fps = document.createElement('span')
+    fps.textContent = `${formatNumber(point.sample.fps, 1)} FPS`
+    const players = document.createElement('span')
+    players.textContent = `${formatNumber(point.sample.players)} giocatori`
+    elements.chartTooltip.append(time, fps, players)
+    elements.chartTooltip.hidden = false
+    const canvasLeft = elements.historyChart.offsetLeft
+    const canvasTop = elements.historyChart.offsetTop
+    const tooltipWidth = elements.chartTooltip.offsetWidth
+    const cardWidth = elements.historyChart.parentElement.clientWidth
+    elements.chartTooltip.style.left = `${Math.min(cardWidth - tooltipWidth - 8, Math.max(8, canvasLeft + point.x + 12))}px`
+    elements.chartTooltip.style.top = `${Math.max(42, canvasTop + point.yFps - 38)}px`
+  }
+
+  function drawChart(samples = state.historySamples) {
     const canvas = elements.historyChart
     const context = canvas.getContext('2d')
     const rect = canvas.getBoundingClientRect()
@@ -406,21 +621,30 @@
     canvas.height = Math.max(1, Math.floor(300 * ratio))
     context.scale(ratio, ratio)
     context.clearRect(0, 0, rect.width, 300)
-    elements.chartEmpty.hidden = samples.length > 1
-    if (samples.length < 2) {
+
+    const validSamples = samples
+      .filter((sample) => Number.isFinite(new Date(sample.timestamp).getTime()))
+      .sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp))
+    elements.chartEmpty.hidden = validSamples.length > 1
+    state.chartPoints = []
+    if (validSamples.length < 2) {
+      elements.chartTooltip.hidden = true
       setText(elements.chartSummary, 'Nessun campione storico disponibile.')
       return
     }
 
     const width = rect.width
     const height = 300
-    const pad = { left: 42, right: 28, top: 20, bottom: 30 }
-    const plotWidth = width - pad.left - pad.right
+    const pad = { left: 48, right: 48, top: 20, bottom: 34 }
+    const plotWidth = Math.max(1, width - pad.left - pad.right)
     const plotHeight = height - pad.top - pad.bottom
-    const maxFps = Math.max(60, ...samples.map((sample) => Number(sample.fps) || 0))
-    const maxPlayers = Math.max(1, ...samples.map((sample) => Number(sample.max_players) || Number(sample.players) || 0))
-    const minFps = Math.min(...samples.map((sample) => Number(sample.fps) || 0))
-    setText(elements.chartSummary, `Storico composto da ${samples.length} campioni. FPS da ${formatNumber(minFps, 1)} a ${formatNumber(maxFps, 1)}; massimo ${formatNumber(maxPlayers)} giocatori.`)
+    const firstTime = new Date(validSamples[0].timestamp).getTime()
+    const lastTime = new Date(validSamples[validSamples.length - 1].timestamp).getTime()
+    const timeSpan = Math.max(1, lastTime - firstTime)
+    const { minFps, maxFps, maxPlayers, observedMaxPlayers } = chartScale(validSamples)
+    const observedMinFps = Math.min(...validSamples.map((sample) => Number(sample.fps) || 0))
+    const observedMaxFps = Math.max(...validSamples.map((sample) => Number(sample.fps) || 0))
+    setText(elements.chartSummary, `Storico di ${validSamples.length} campioni. FPS da ${formatNumber(observedMinFps, 1)} a ${formatNumber(observedMaxFps, 1)}; massimo ${formatNumber(observedMaxPlayers)} giocatori online.`)
 
     context.strokeStyle = 'rgba(196,220,199,.13)'
     context.fillStyle = '#8ea29a'
@@ -432,40 +656,93 @@
       context.moveTo(pad.left, y)
       context.lineTo(width - pad.right, y)
       context.stroke()
-      context.fillText(String(Math.round(maxFps * (1 - index / 4))), 6, y + 4)
+      const fpsLabel = maxFps - ((maxFps - minFps) * index) / 4
+      const playerLabel = maxPlayers - (maxPlayers * index) / 4
+      context.fillText(formatNumber(fpsLabel, 0), 7, y + 4)
+      const rightLabel = formatNumber(playerLabel, playerLabel < 4 ? 1 : 0)
+      context.fillText(rightLabel, width - pad.right + 9, y + 4)
     }
 
-    const draw = (field, color, max) => {
+    state.chartPoints = validSamples.map((sample) => {
+      const x = pad.left + ((new Date(sample.timestamp).getTime() - firstTime) / timeSpan) * plotWidth
+      const fpsRatio = ((Number(sample.fps) || 0) - minFps) / (maxFps - minFps)
+      const playerRatio = (Number(sample.players) || 0) / maxPlayers
+      return {
+        sample,
+        x,
+        yFps: pad.top + plotHeight - fpsRatio * plotHeight,
+        yPlayers: pad.top + plotHeight - playerRatio * plotHeight,
+      }
+    })
+
+    const drawLine = (field, color) => {
       context.beginPath()
       context.strokeStyle = color
       context.lineWidth = 2
-      samples.forEach((sample, index) => {
-        const x = pad.left + (index / (samples.length - 1)) * plotWidth
-        const y = pad.top + plotHeight - ((Number(sample[field]) || 0) / max) * plotHeight
-        if (index === 0) context.moveTo(x, y)
-        else context.lineTo(x, y)
+      state.chartPoints.forEach((point, index) => {
+        if (index === 0) context.moveTo(point.x, point[field])
+        else context.lineTo(point.x, point[field])
       })
       context.stroke()
     }
-    draw('fps', '#4ce0c1', maxFps)
-    draw('players', '#ff735c', maxPlayers)
+    drawLine('yFps', '#4ce0c1')
+    drawLine('yPlayers', '#ff735c')
 
-    const first = formatDate(samples[0].timestamp, true)
-    const last = formatDate(samples[samples.length - 1].timestamp, true)
+    const compactLabels = width < 520
+    const labels = [
+      [formatChartDate(validSamples[0].timestamp, compactLabels, timeSpan), pad.left, 'left'],
+      [formatChartDate(validSamples[validSamples.length - 1].timestamp, compactLabels, timeSpan), width - pad.right, 'right'],
+    ]
+    if (width >= 520) {
+      labels.splice(1, 0, [formatChartDate(new Date(firstTime + timeSpan / 2).toISOString(), false, timeSpan), pad.left + plotWidth / 2, 'center'])
+    }
     context.fillStyle = '#8ea29a'
-    context.fillText(first, pad.left, height - 7)
-    const measured = context.measureText(last).width
-    context.fillText(last, width - pad.right - measured, height - 7)
+    for (const [label, x, alignment] of labels) {
+      context.textAlign = alignment
+      context.fillText(label, x, height - 8)
+    }
+    context.textAlign = 'left'
+
+    const hovered = state.chartPoints[state.chartHoverIndex]
+    if (hovered) {
+      context.strokeStyle = 'rgba(233,224,197,.35)'
+      context.beginPath()
+      context.moveTo(hovered.x, pad.top)
+      context.lineTo(hovered.x, pad.top + plotHeight)
+      context.stroke()
+      for (const [y, color] of [[hovered.yFps, '#4ce0c1'], [hovered.yPlayers, '#ff735c']]) {
+        context.fillStyle = color
+        context.beginPath()
+        context.arc(hovered.x, y, 4, 0, Math.PI * 2)
+        context.fill()
+      }
+    }
+    updateChartTooltip()
+  }
+
+  function setChartHover(index) {
+    if (!state.chartPoints.length) return
+    state.chartHoverIndex = Math.max(0, Math.min(state.chartPoints.length - 1, index))
+    drawChart()
   }
 
   async function loadHistory() {
+    const requestedRange = elements.historyRange.value
     try {
-      const response = await fetch(`/api/v1/history?range=${encodeURIComponent(elements.historyRange.value)}`, { cache: 'no-store' })
-      if (!response.ok) throw new Error('history unavailable')
-      const data = await response.json()
-      drawChart(data.samples || [])
-    } catch (_error) {
-      drawChart([])
+      const data = await requestJson(`/api/v1/history?range=${encodeURIComponent(requestedRange)}`, 'history')
+      if (requestedRange !== elements.historyRange.value) return
+      state.historySamples = data.samples || []
+      state.chartHoverIndex = null
+      setNotice('history')
+      setText(elements.chartEmpty, 'Lo storico inizierà a popolarsi con le trasmissioni del connector.')
+      drawChart()
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      setNotice('history', 'Lo storico non è raggiungibile: continuo a mostrare gli ultimi campioni ricevuti.', true)
+      if (!state.historySamples.length) {
+        setText(elements.chartEmpty, 'Storico temporaneamente non disponibile.')
+        drawChart()
+      }
     }
   }
 
@@ -473,38 +750,64 @@
     setText(elements.connectionToast, message)
     elements.connectionToast.classList.toggle('error', error)
     elements.connectionToast.classList.add('visible')
-    window.setTimeout(() => elements.connectionToast.classList.remove('visible'), 3500)
+    window.clearTimeout(state.toastTimer)
+    state.toastTimer = window.setTimeout(() => elements.connectionToast.classList.remove('visible'), 3500)
   }
 
   async function loadSnapshot(initial = false) {
     try {
-      const response = await fetch('/api/v1/snapshot', { cache: 'no-store' })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
+      const data = await requestJson('/api/v1/snapshot', 'snapshot')
       renderSnapshot(data)
       if (initial) showToast('Collegamento telemetrico stabilito')
-    } catch (_error) {
+      if (state.selectedPlayer) loadTrail(state.selectedPlayer)
+    } catch (error) {
+      if (error.name === 'AbortError') return
       if (initial) showToast('Dati temporaneamente non disponibili', true)
       elements.headerStatus.classList.remove('online')
       elements.headerStatus.classList.add('offline')
       setText(elements.headerStatus.querySelector('b'), 'CONNESSIONE PERSA')
+      setNotice('snapshot', 'Collegamento telemetrico interrotto: i valori mostrati sono gli ultimi ricevuti.', true)
     }
+  }
+
+  function bindChartControls() {
+    elements.historyChart.addEventListener('pointermove', (event) => {
+      if (!state.chartPoints.length) return
+      const rect = elements.historyChart.getBoundingClientRect()
+      const pointerX = event.clientX - rect.left
+      let closest = 0
+      for (let index = 1; index < state.chartPoints.length; index += 1) {
+        if (Math.abs(state.chartPoints[index].x - pointerX) < Math.abs(state.chartPoints[closest].x - pointerX)) closest = index
+      }
+      if (closest !== state.chartHoverIndex) setChartHover(closest)
+    })
+    elements.historyChart.addEventListener('pointerleave', () => {
+      state.chartHoverIndex = null
+      drawChart()
+    })
+    elements.historyChart.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      event.preventDefault()
+      const current = state.chartHoverIndex ?? (event.key === 'ArrowRight' ? -1 : state.chartPoints.length)
+      setChartHover(current + (event.key === 'ArrowRight' ? 1 : -1))
+    })
   }
 
   function bindMapControls() {
     $('#zoomIn').addEventListener('click', () => setZoom(state.map.scale + 0.45))
     $('#zoomOut').addEventListener('click', () => setZoom(state.map.scale - 0.45))
     $('#resetMap').addEventListener('click', resetMap)
+    $('#clearSelection').addEventListener('click', () => clearSelection())
     $('#showFastTravel').addEventListener('change', (event) => elements.fastTravelLayer.classList.toggle('visible', event.target.checked))
     $('#showTowers').addEventListener('change', (event) => elements.towerLayer.classList.toggle('visible', event.target.checked))
     $('#showTrail').addEventListener('change', (event) => {
-      if (!event.target.checked) elements.trailLayer.querySelector('polyline').setAttribute('points', '')
+      if (!event.target.checked) clearTrail()
       else if (state.selectedPlayer) loadTrail(state.selectedPlayer)
     })
 
     elements.mapViewport.addEventListener('wheel', (event) => {
-      event.preventDefault()
-      setZoom(state.map.scale + (event.deltaY < 0 ? .3 : -.3))
+      const changed = setZoom(state.map.scale + (event.deltaY < 0 ? .3 : -.3))
+      if (changed) event.preventDefault()
     }, { passive: false })
     elements.mapViewport.addEventListener('pointerdown', (event) => {
       if (event.target.closest('.map-marker.player')) return
@@ -547,20 +850,43 @@
     })
   }
 
-  async function initialize() {
-    bindMapControls()
-    elements.historyRange.addEventListener('change', loadHistory)
-    window.addEventListener('resize', () => loadHistory())
+  async function loadStaticPoints() {
     try {
-      const response = await fetch('/static/dashboard/data/map-points.json')
-      if (response.ok) state.points = await response.json()
+      state.points = await requestJson('/static/dashboard/data/map-points.json', 'points', 5000)
       renderStaticPoints()
     } catch (_error) {
       // Static POIs are optional; live player positions remain available.
     }
-    await Promise.all([loadSnapshot(true), loadHistory()])
-    window.setInterval(() => loadSnapshot(false), 10000)
-    window.setInterval(loadHistory, 60000)
+  }
+
+  function scheduleHistoryPoll() {
+    window.clearTimeout(state.historyTimer)
+    state.historyTimer = window.setTimeout(async () => {
+      await loadHistory()
+      scheduleHistoryPoll()
+    }, 60000)
+  }
+
+  async function snapshotLoop(initial = false) {
+    await loadSnapshot(initial)
+    window.setTimeout(() => snapshotLoop(false), 10000)
+  }
+
+  function initialize() {
+    bindMapControls()
+    bindChartControls()
+    elements.historyRange.addEventListener('change', async () => {
+      await loadHistory()
+      scheduleHistoryPoll()
+    })
+    let resizeFrame = null
+    window.addEventListener('resize', () => {
+      window.cancelAnimationFrame(resizeFrame)
+      resizeFrame = window.requestAnimationFrame(() => drawChart())
+    })
+    loadStaticPoints()
+    snapshotLoop(true)
+    loadHistory().then(scheduleHistoryPoll)
   }
 
   initialize()

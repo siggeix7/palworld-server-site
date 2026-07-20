@@ -65,6 +65,11 @@ Il template applica questo tag soltanto ai cinque master item `status`, `info`,
 permette al receiver di riconoscere il contenuto senza dipendere da item ID o
 nomi localizzati.
 
+I quattro master HTTP conservano un'ora di history. Zabbix non inoltra ai
+connector gli item configurati con `History: Do not store`, quindi questo
+intervallo minimo non deve essere azzerato. I payload grezzi restano quindi nel
+database Zabbix per un'ora: limita l'accesso alla history agli amministratori.
+
 Dopo aver salvato il connector, esegui sul server Zabbix:
 
 ```sh

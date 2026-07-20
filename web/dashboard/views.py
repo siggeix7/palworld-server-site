@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import connection
-from django.db.models import Avg, Max
+from django.db.models import Avg, Max, Min
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -119,6 +119,13 @@ def snapshot(request):
     stats = _session_stats([player["id"] for player in players], now)
     for player in players:
         player["session"] = stats.get(player["id"], {})
+        x = player.get("location_x")
+        y = player.get("location_y")
+        player["location_available"] = (
+            isinstance(x, (int, float))
+            and isinstance(y, (int, float))
+            and (x != 0 or y != 0)
+        )
 
     recent_events = [
         {
@@ -133,7 +140,9 @@ def snapshot(request):
     since = now - timedelta(hours=24)
     aggregates = MetricSample.objects.filter(source_clock__gte=since).aggregate(
         peak_players=Max("current_players"),
+        average_players=Avg("current_players"),
         average_fps=Avg("server_fps_average"),
+        minimum_fps=Min("server_fps"),
     )
 
     response = JsonResponse(
@@ -153,7 +162,9 @@ def snapshot(request):
             "events": recent_events,
             "summary_24h": {
                 "peak_players": aggregates["peak_players"] or 0,
+                "average_players": round(aggregates["average_players"] or 0, 2),
                 "average_fps": round(aggregates["average_fps"] or 0, 2),
+                "minimum_fps": round(aggregates["minimum_fps"] or 0, 2),
             },
             "version": settings.APP_VERSION,
         }

@@ -34,7 +34,7 @@ zabbix_export:
           type: HTTP_AGENT
           key: palworld.info
           delay: 30m
-          history: '0'
+          history: 1h
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/info'
@@ -89,7 +89,7 @@ zabbix_export:
           type: HTTP_AGENT
           key: palworld.metrics
           delay: 20s
-          history: '0'
+          history: 1h
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/metrics'
@@ -203,7 +203,7 @@ zabbix_export:
           type: HTTP_AGENT
           key: palworld.players
           delay: 20s
-          history: '0'
+          history: 1h
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/players'
@@ -233,7 +233,7 @@ zabbix_export:
           type: HTTP_AGENT
           key: palworld.settings
           delay: 4h
-          history: '0'
+          history: 1h
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/settings'

@@ -80,7 +80,21 @@ class PublicApiTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["status"]["online"])
         self.assertEqual(payload["players"][0]["name"], "Explorer")
+        self.assertTrue(payload["players"][0]["location_available"])
+        self.assertEqual(payload["summary_24h"]["average_players"], 1.0)
+        self.assertEqual(payload["summary_24h"]["minimum_fps"], 59.0)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
+
+    def test_snapshot_marks_missing_player_location(self):
+        dataset = LatestDataset.objects.get(key="players")
+        dataset.payload["players"][0]["location_x"] = 0
+        dataset.payload["players"][0]["location_y"] = 0
+        dataset.save(update_fields=["payload"])
+
+        response = self.client.get("/api/v1/snapshot")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["players"][0]["location_available"])
 
     def test_history_and_trail(self):
         response = self.client.get("/api/v1/history?range=24h")
