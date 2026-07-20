@@ -1,0 +1,11 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Registrazione ricevuta{% endblock %}
+{% block content %}
+  <p class="eyebrow">Registrazione ricevuta</p>
+  <h1>Controlla la tua email</h1>
+  <p class="auth-copy">Apri il collegamento che ti abbiamo inviato. Dopo la verifica, la richiesta passerà all'amministratore del sito.</p>
+  <div class="auth-links">
+    <a href="{% url 'login' %}">Vai al login</a>
+    <a href="{% url 'resend-verification' %}">Non hai ricevuto l'email?</a>
+  </div>
+{% endblock %}

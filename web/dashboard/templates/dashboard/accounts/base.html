@@ -1,0 +1,29 @@
+{% load static %}
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071a1d">
+  <meta name="robots" content="noindex,nofollow">
+  <title>{% block title %}Account{% endblock %} · Palworld Server Observatory</title>
+  <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <a class="brand auth-brand" href="{% url 'home' %}" aria-label="Palworld Server Observatory">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span><strong>Palworld</strong><small>Server Observatory</small></span>
+    </a>
+    <section class="auth-card">
+      {% if messages %}
+        <div class="auth-messages" role="status">
+          {% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </section>
+    <p class="auth-credit"><a href="{% static 'dashboard/THIRD_PARTY_NOTICES.txt' %}">Licenze e crediti</a></p>
+  </main>
+</body>
+</html>

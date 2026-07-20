@@ -2,7 +2,7 @@ import time
 from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest import mock
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from dashboard.models import (
     LatestDataset,
@@ -13,6 +13,7 @@ from dashboard.models import (
 )
 
 
+@override_settings(SITE_AUTH_REQUIRED=False)
 class PublicApiTests(TestCase):
     def setUp(self):
         now = datetime.fromtimestamp(int(time.time()), tz=dt_timezone.utc)
@@ -97,7 +98,8 @@ class PublicApiTests(TestCase):
             payload["status"]["started_at"],
             expected_start.isoformat().replace("+00:00", "Z"),
         )
-        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertIn("private", response.headers["Cache-Control"])
 
     def test_snapshot_marks_missing_player_location(self):
         dataset = LatestDataset.objects.get(key="players")
@@ -113,10 +115,79 @@ class PublicApiTests(TestCase):
     def test_history_and_trail(self):
         response = self.client.get("/api/v1/history?range=24h")
         self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertIn("private", response.headers["Cache-Control"])
         self.assertEqual(len(response.json()["samples"]), 1)
+        self.assertEqual(response.json()["fps_health"]["state"], "calibrating")
         response = self.client.get("/api/v1/player/public-player-id/trail?range=6h")
         self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertIn("private", response.headers["Cache-Control"])
         self.assertEqual(response.json()["positions"][0]["x"], -100)
+
+    def test_fps_health_uses_cadence_and_breaks_at_data_gaps(self):
+        now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
+        MetricSample.objects.all().delete()
+        timestamps = [now - timedelta(minutes=20) + timedelta(seconds=20 * index) for index in range(10)]
+        timestamps += [now - timedelta(minutes=5) + timedelta(seconds=20 * index) for index in range(16)]
+        for index, timestamp in enumerate(timestamps):
+            fps = 20 if index < 10 else 60
+            MetricSample.objects.create(
+                source_clock=timestamp,
+                current_players=1,
+                max_players=8,
+                server_fps=fps,
+                server_fps_average=fps,
+                frame_time=1000 / fps,
+                world_days=100,
+                base_camps=4,
+                uptime=7200,
+            )
+
+        with mock.patch("dashboard.views.timezone.now", return_value=now):
+            response = self.client.get("/api/v1/history?range=7d")
+
+        self.assertEqual(response.status_code, 200)
+        health = response.json()["fps_health"]
+        self.assertEqual(health["state"], "ok")
+        self.assertEqual(health["nominal_cadence_seconds"], 20)
+        self.assertEqual(health["gap_threshold_seconds"], 60)
+        self.assertEqual(health["longest_dip_seconds"], 200)
+        self.assertLessEqual(health["score"], 30)
+
+    def test_sparse_and_future_fps_samples_do_not_create_false_coverage(self):
+        now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
+        MetricSample.objects.all().delete()
+        for timestamp in [
+            now - timedelta(minutes=10),
+            now - timedelta(minutes=5),
+            now,
+            now + timedelta(minutes=1),
+        ]:
+            MetricSample.objects.create(
+                source_clock=timestamp,
+                current_players=0,
+                max_players=8,
+                server_fps=60,
+                server_fps_average=60,
+                frame_time=16.7,
+                world_days=100,
+                base_camps=4,
+                uptime=7200,
+            )
+
+        with mock.patch("dashboard.views.timezone.now", return_value=now):
+            response = self.client.get("/api/v1/history?range=90d")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertIn("private", response.headers["Cache-Control"])
+        payload = response.json()
+        self.assertEqual(len(payload["samples"]), 3)
+        self.assertEqual(payload["fps_health"]["state"], "calibrating")
+        self.assertEqual(payload["fps_health"]["coverage_seconds"], 60)
+        self.assertEqual(payload["fps_health"]["gap_threshold_seconds"], 60)
+        self.assertTrue(payload["samples"][1]["gap_before"])
 
     def test_player_archive_returns_periods_and_rolling_minutes(self):
         now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
@@ -211,3 +282,4 @@ class PublicApiTests(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
+        self.assertContains(response, "THIRD_PARTY_NOTICES.txt")

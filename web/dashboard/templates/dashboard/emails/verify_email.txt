@@ -1,0 +1,9 @@
+Ciao {{ user.username }},
+
+conferma il tuo indirizzo email aprendo questo collegamento:
+
+{{ verify_url }}
+
+Dopo la verifica, un amministratore dovrà approvare il tuo account.
+
+Se non hai richiesto questa registrazione, ignora il messaggio.

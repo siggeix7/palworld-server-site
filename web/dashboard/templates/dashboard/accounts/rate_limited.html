@@ -1,0 +1,8 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Troppe richieste{% endblock %}
+{% block content %}
+  <p class="eyebrow">Limite temporaneo</p>
+  <h1>Troppe richieste</h1>
+  <p class="auth-copy">Attendi qualche minuto prima di riprovare. Questo limite protegge gli account e il servizio email.</p>
+  <div class="auth-links"><a href="{% url 'login' %}">Torna al login</a></div>
+{% endblock %}

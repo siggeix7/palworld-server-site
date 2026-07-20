@@ -1,20 +1,33 @@
 services:
   palworld-server-site:
     image: "${IMAGE:-palworld-server-site:latest}"
-    build: .
     container_name: palworld-server-site
     restart: unless-stopped
     ports:
-      - "${SITE_BIND:-0.0.0.0}:${SITE_PORT:-8080}:8000"
+      - "${SITE_BIND:-127.0.0.1}:${SITE_PORT:-8080}:8000"
       - "${ZABBIX_INGEST_BIND:-127.0.0.1}:${ZABBIX_INGEST_PORT:-8081}:8001"
     environment:
-      PUBLIC_SITE_URL: "${PUBLIC_SITE_URL:-}"
-      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-*}"
+      PUBLIC_SITE_URL: "${PUBLIC_SITE_URL:?PUBLIC_SITE_URL is required}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:?DJANGO_ALLOWED_HOSTS is required}"
       DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}"
       PLAYER_HASH_SECRET: "${PLAYER_HASH_SECRET:?PLAYER_HASH_SECRET is required}"
       ZABBIX_CONNECTOR_TOKEN: "${ZABBIX_CONNECTOR_TOKEN:?ZABBIX_CONNECTOR_TOKEN is required}"
       ZABBIX_SOURCE_HOST: "${ZABBIX_SOURCE_HOST:-}"
-      DJANGO_USE_X_FORWARDED_HOST: "${DJANGO_USE_X_FORWARDED_HOST:-true}"
+      SITE_ADMIN_USERS: "${SITE_ADMIN_USERS:?SITE_ADMIN_USERS is required}"
+      AUTH_TRUSTED_PROXY_ADDRESSES: "${AUTH_TRUSTED_PROXY_ADDRESSES:-127.0.0.1,::1}"
+      PALWORLD_PUBLIC_HOST: "${PALWORLD_PUBLIC_HOST:?PALWORLD_PUBLIC_HOST is required}"
+      PALWORLD_PUBLIC_PORT: "${PALWORLD_PUBLIC_PORT:-8211}"
+      PALWORLD_PUBLIC_PASSWORD: "${PALWORLD_PUBLIC_PASSWORD:?PALWORLD_PUBLIC_PASSWORD is required}"
+      EMAIL_BACKEND: "${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}"
+      EMAIL_HOST: "${EMAIL_HOST:-smtp.libero.it}"
+      EMAIL_PORT: "${EMAIL_PORT:-465}"
+      EMAIL_HOST_USER: "${EMAIL_HOST_USER:-guidi.zabbix@libero.it}"
+      EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD:?EMAIL_HOST_PASSWORD is required}"
+      EMAIL_USE_SSL: "${EMAIL_USE_SSL:-true}"
+      EMAIL_USE_TLS: "${EMAIL_USE_TLS:-false}"
+      EMAIL_TIMEOUT: "${EMAIL_TIMEOUT:-15}"
+      DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL:-guidi.zabbix@libero.it}"
+      DJANGO_USE_X_FORWARDED_HOST: "${DJANGO_USE_X_FORWARDED_HOST:-false}"
       DJANGO_SECURE_SSL_REDIRECT: "${DJANGO_SECURE_SSL_REDIRECT:-true}"
       DJANGO_SECURE_HSTS_SECONDS: "${DJANGO_SECURE_HSTS_SECONDS:-86400}"
       DATA_STALE_SECONDS: "${DATA_STALE_SECONDS:-90}"
@@ -23,7 +36,7 @@ services:
       TIME_ZONE: "${TIME_ZONE:-Europe/Rome}"
       WEB_WORKERS: "${WEB_WORKERS:-2}"
     volumes:
-      - "${DATA_PATH:-/opt/palworld-server-site}:/data"
+      - "${DATA_PATH:-/opt/palworld-server-site/data}:/data"
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777

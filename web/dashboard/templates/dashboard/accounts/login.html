@@ -1,0 +1,18 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Accedi{% endblock %}
+{% block content %}
+  <p class="eyebrow">Area riservata</p>
+  <h1>Accedi all'osservatorio</h1>
+  <p class="auth-copy">Il sito è visibile soltanto agli account con email verificata e approvati da un amministratore.</p>
+  <form method="post" class="auth-form">
+    {% csrf_token %}
+    {{ form.as_p }}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button type="submit">Accedi</button>
+  </form>
+  <div class="auth-links">
+    <a href="{% url 'register' %}">Crea un account</a>
+    <a href="{% url 'password_reset' %}">Password dimenticata?</a>
+    <a href="{% url 'resend-verification' %}">Reinvia conferma email</a>
+  </div>
+{% endblock %}

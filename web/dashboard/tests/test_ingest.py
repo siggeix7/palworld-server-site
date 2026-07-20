@@ -32,6 +32,7 @@ def ndjson(*records):
     ROOT_URLCONF="palworld_site.ingest_urls",
     ZABBIX_CONNECTOR_TOKEN="test-connector-token",
     PLAYER_HASH_SECRET="test-player-secret",
+    SITE_AUTH_REQUIRED=False,
 )
 class IngestTests(TestCase):
     def setUp(self):
@@ -180,6 +181,37 @@ class IngestTests(TestCase):
         self.assertEqual(PlayerSession.objects.filter(ended_at__isnull=True).count(), 0)
         self.assertEqual(ServerEvent.objects.filter(event_type="leave").count(), 1)
 
+    def test_player_field_aliases_are_normalized_without_leaking_ids(self):
+        raw_player = {
+            "nickname": "Alias Explorer",
+            "account_name": "alias-account",
+            "player_uid": "RAW-PLAYER-UID",
+            "user_id": "RAW-USER-ID",
+            "ip": "192.0.2.30",
+            "ping": 42,
+            "location_x": None,
+            "location_y": None,
+            "building_count": None,
+            "locationX": -123.5,
+            "locationY": 456.25,
+            "level": 12,
+            "buildingCount": 7,
+        }
+
+        response = self.post(ndjson(record("players", {"players": [raw_player]})))
+
+        self.assertEqual(response.status_code, 200)
+        player = LatestDataset.objects.get(key="players").payload["players"][0]
+        self.assertEqual(player["name"], "Alias Explorer")
+        self.assertEqual(player["accountName"], "alias-account")
+        self.assertEqual(player["location_x"], -123.5)
+        self.assertEqual(player["location_y"], 456.25)
+        self.assertEqual(player["building_count"], 7)
+        serialized = json.dumps(player)
+        self.assertNotIn("RAW-PLAYER-UID", serialized)
+        self.assertNotIn("RAW-USER-ID", serialized)
+        self.assertNotIn("192.0.2.30", serialized)
+
     def test_ignores_items_not_selected_for_the_site(self):
         unknown = record("unknown", {"secret": "value"})
         unknown["item_tags"] = [{"tag": "integration", "value": "something-else"}]
@@ -199,7 +231,22 @@ class PortSeparationTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    @override_settings(
+        ROOT_URLCONF="palworld_site.ingest_urls",
+        SITE_AUTH_REQUIRED=True,
+        ZABBIX_CONNECTOR_TOKEN="test-connector-token",
+    )
+    def test_site_login_gate_does_not_block_ingest(self):
+        response = self.client.post(
+            "/api/v1/zabbix/ingest",
+            data=ndjson(record("status", 1)),
+            content_type="application/x-ndjson",
+            HTTP_AUTHORIZATION="Bearer test-connector-token",
+        )
+        self.assertEqual(response.status_code, 200)
+
     @override_settings(ROOT_URLCONF="palworld_site.ingest_urls")
+    @override_settings(SITE_AUTH_REQUIRED=False)
     def test_ingest_urlconf_does_not_expose_dashboard(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 404)

@@ -1,0 +1,26 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Gestione membri{% endblock %}
+{% block content %}
+  <p class="eyebrow">Amministrazione</p>
+  <h1>Gestione membri</h1>
+  <p class="auth-copy">Approva soltanto persone autorizzate a vedere telemetria e credenziali del server Palworld.</p>
+  <div class="member-section">
+    <h2>In attesa</h2>
+    {% for profile in pending_profiles %}
+      <article class="member-row">
+        <div><strong>{{ profile.user.username }}</strong><small>{{ profile.user.email }} · {% if profile.email_verified %}email verificata{% else %}email non verificata{% endif %}</small></div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="profile_id" value="{{ profile.pk }}"><button type="submit" name="action" value="approve" {% if not profile.email_verified %}disabled{% endif %}>Approva</button></form>
+      </article>
+    {% empty %}<p class="empty-copy">Nessun membro in attesa.</p>{% endfor %}
+  </div>
+  <div class="member-section">
+    <h2>Abilitati</h2>
+    {% for profile in approved_profiles %}
+      <article class="member-row">
+        <div><strong>{{ profile.user.username }}</strong><small>{{ profile.user.email }}</small></div>
+        {% if profile.user != request.user %}<form method="post">{% csrf_token %}<input type="hidden" name="profile_id" value="{{ profile.pk }}"><button type="submit" name="action" value="revoke">Revoca</button></form>{% endif %}
+      </article>
+    {% empty %}<p class="empty-copy">Nessun membro abilitato.</p>{% endfor %}
+  </div>
+  <div class="auth-links"><a href="{% url 'home' %}">Torna al sito</a></div>
+{% endblock %}

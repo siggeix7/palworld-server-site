@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -91,3 +92,29 @@ class RuntimeState(models.Model):
     key = models.CharField(max_length=64, unique=True)
     value = models.JSONField(default=dict)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="site_profile"
+    )
+    email_verified = models.BooleanField(default=False)
+    approved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_site_profiles",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class AuthThrottle(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    window_started_at = models.DateTimeField(db_index=True)
+    attempts = models.PositiveIntegerField(default=0)

@@ -1,0 +1,7 @@
+Un nuovo utente ha verificato la propria email ed è in attesa di approvazione.
+
+Username: {{ user.username }}
+Email: {{ user.email }}
+
+Gestisci la richiesta:
+{{ members_url }}

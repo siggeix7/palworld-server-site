@@ -28,7 +28,10 @@ RUN useradd --create-home --uid 1000 palworld-site \
 
 COPY . .
 RUN chmod +x /app/docker/entrypoint.sh \
-    && DJANGO_SECRET_KEY=build-collectstatic-key python3 web/manage.py collectstatic --noinput
+    && DJANGO_SECRET_KEY=build-collectstatic-key \
+       PUBLIC_SITE_URL=https://build.invalid \
+       SITE_ADMIN_USERS=build-admin@example.invalid \
+       python3 web/manage.py collectstatic --noinput
 
 VOLUME ["/data"]
 EXPOSE 8000 8001

@@ -7,20 +7,35 @@
     minX: -1099400,
     minY: -724400,
   }
+  // Palette and interaction concepts adapted from RNZ01/palworld-server-dashboard.
+  // This implementation uses deterministic public IDs; see THIRD_PARTY_NOTICES.txt.
+  const PLAYER_COLORS = [
+    '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e',
+    '#f97316', '#eab308', '#14b8a6', '#0ea5e9', '#6366f1', '#d946ef',
+  ]
+  const THEMES = new Set(['observatory', 'tron', 'ares', 'clu', 'athena', 'aphrodite', 'poseidon'])
 
   const state = {
     snapshot: null,
     selectedPlayer: null,
-    map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0 },
+    map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null },
     points: { fast_travel: [], boss_tower: [] },
     historySamples: [],
+    historyWindow: null,
     chartPoints: [],
     chartHoverIndex: null,
     requests: {},
     notices: { snapshot: null, history: null },
+    snapshotTimer: null,
+    snapshotFailures: 0,
+    snapshotGeneration: 0,
     historyTimer: null,
     archiveTimer: null,
     archivePlayers: [],
+    archiveUpdated: null,
+    favoritePlayers: new Set(),
+    playerQuery: '',
+    favoritesOnly: false,
     toastTimer: null,
   }
 
@@ -44,8 +59,11 @@
     metricPeak: $('#metricPeak'),
     metricPlayersAverage: $('#metricPlayersAverage'),
     metricBases: $('#metricBases'),
+    themeSelect: $('#themeSelect'),
     mapViewport: $('#mapViewport'),
     mapPlane: $('#mapPlane'),
+    mapImage: $('#mapImage'),
+    mapImageError: $('#mapImageError'),
     mapCoordinate: $('#mapCoordinate'),
     mapEmpty: $('#mapEmpty'),
     playerLayer: $('#playerLayer'),
@@ -58,9 +76,13 @@
     selectedPlayerName: $('#selectedPlayerName'),
     selectedPlayerDetail: $('#selectedPlayerDetail'),
     playersTable: $('#playersTable'),
+    mobilePlayers: $('#mobilePlayers'),
     playerArchive: $('#playerArchive'),
     playerArchiveStatus: $('#playerArchiveStatus'),
+    playerSearch: $('#playerSearch'),
+    favoritesOnly: $('#favoritesOnly'),
     settingsGrid: $('#settingsGrid'),
+    settingsSearch: $('#settingsSearch'),
     serverProfile: $('#serverProfile'),
     worldHighlights: $('#worldHighlights'),
     eventList: $('#eventList'),
@@ -69,6 +91,10 @@
     chartEmpty: $('#chartEmpty'),
     chartSummary: $('#chartSummary'),
     chartTooltip: $('#chartTooltip'),
+    performanceHealth: $('#performanceHealth'),
+    healthLabel: $('#healthLabel'),
+    healthScore: $('#healthScore'),
+    healthDetail: $('#healthDetail'),
     dataNotice: $('#dataNotice'),
     connectionToast: $('#connectionToast'),
   }
@@ -96,6 +122,17 @@
     if (days) return `${days}g ${hours}h`
     if (hours) return `${hours}h ${minutes}m`
     return `${minutes}m`
+  }
+
+  function formatShortDuration(value) {
+    const seconds = Math.max(0, Math.round(Number(value) || 0))
+    if (seconds < 60) return `${seconds}s`
+    if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60)
+      const remainder = seconds % 60
+      return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`
+    }
+    return formatDuration(seconds)
   }
 
   function formatDate(value, includeDate = false) {
@@ -133,6 +170,52 @@
 
   function initials(name) {
     return String(name || '?').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+  }
+
+  function playerColor(playerId) {
+    let hash = 2166136261
+    for (const character of String(playerId || '')) {
+      hash ^= character.charCodeAt(0)
+      hash = Math.imul(hash, 16777619)
+    }
+    return PLAYER_COLORS[(hash >>> 0) % PLAYER_COLORS.length]
+  }
+
+  function contrastColor(hex) {
+    const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255)
+      .map((value) => (value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4))
+    const luminance = channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722
+    return ((luminance + .05) / .05) >= (1.05 / (luminance + .05)) ? '#061719' : '#ffffff'
+  }
+
+  function pingClass(value) {
+    const ping = Number(value)
+    if (ping < 80) return 'ping-good'
+    if (ping < 150) return 'ping-warn'
+    return 'ping-bad'
+  }
+
+  function readStorage(key, fallback = null) {
+    try {
+      return window.localStorage.getItem(key) ?? fallback
+    } catch (_error) {
+      return fallback
+    }
+  }
+
+  function writeStorage(key, value) {
+    try {
+      window.localStorage.setItem(key, value)
+    } catch (_error) {
+      // Preferences remain optional when storage is blocked.
+    }
+  }
+
+  function initializeTheme() {
+    const stored = readStorage('observatory.theme', 'observatory')
+    const theme = THEMES.has(stored) ? stored : 'observatory'
+    document.documentElement.dataset.theme = theme
+    elements.themeSelect.value = theme
   }
 
   function hasMapLocation(player) {
@@ -207,20 +290,52 @@
     }
   }
 
-  function applyMapTransform() {
-    const { scale, panX, panY } = state.map
-    elements.mapPlane.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`
-    elements.mapPlane.style.setProperty('--inverse-scale', String(1 / scale))
+  function clampMapPan() {
+    const rect = elements.mapViewport.getBoundingClientRect()
+    const maxX = Math.max(0, (rect.width * (state.map.scale - 1)) / 2)
+    const maxY = Math.max(0, (rect.height * (state.map.scale - 1)) / 2)
+    state.map.panX = Math.max(-maxX, Math.min(maxX, state.map.panX))
+    state.map.panY = Math.max(-maxY, Math.min(maxY, state.map.panY))
   }
 
-  function setZoom(next) {
+  function applyMapTransform() {
+    clampMapPan()
+    if (state.map.frame !== null) return
+    state.map.frame = window.requestAnimationFrame(() => {
+      state.map.frame = null
+      const { scale, panX, panY } = state.map
+      elements.mapPlane.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`
+      elements.mapPlane.style.setProperty('--inverse-scale', String(1 / scale))
+    })
+  }
+
+  function scheduleMapRender() {
+    window.clearTimeout(state.map.renderTimer)
+    state.map.renderTimer = window.setTimeout(() => {
+      state.map.renderTimer = null
+      if (state.snapshot) renderMap(state.snapshot.players || [])
+    }, 120)
+  }
+
+  function setZoom(next, anchor = null) {
     const previous = state.map.scale
+    const rect = elements.mapViewport.getBoundingClientRect()
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+    const anchorX = anchor?.x ?? centerX
+    const anchorY = anchor?.y ?? centerY
+    const localX = centerX + (anchorX - centerX - state.map.panX) / previous
+    const localY = centerY + (anchorY - centerY - state.map.panY) / previous
     state.map.scale = Math.min(5, Math.max(1, next))
     if (state.map.scale === 1) {
       state.map.panX = 0
       state.map.panY = 0
+    } else {
+      state.map.panX = anchorX - centerX - state.map.scale * (localX - centerX)
+      state.map.panY = anchorY - centerY - state.map.scale * (localY - centerY)
     }
     applyMapTransform()
+    if (previous !== state.map.scale) scheduleMapRender()
     return previous !== state.map.scale
   }
 
@@ -257,6 +372,7 @@
     state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
     state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
     state.selectedPlayer = player.id
+    elements.trailLayer.style.setProperty('--trail-color', playerColor(player.id))
     applyMapTransform()
     renderMap(state.snapshot?.players || [])
     if ($('#showTrail').checked) loadTrail(player.id)
@@ -264,11 +380,11 @@
 
   function marker(type, point, label = '') {
     const position = worldToPercent(point[0], point[1])
-    const node = document.createElement(type === 'player' ? 'button' : 'span')
+    const node = document.createElement(type === 'player' || type === 'cluster' ? 'button' : 'span')
     node.className = `map-marker ${type}`
     node.style.left = `${position.left}%`
     node.style.top = `${position.top}%`
-    if (type === 'player') node.type = 'button'
+    if (node instanceof HTMLButtonElement) node.type = 'button'
     const icon = document.createElement('span')
     node.appendChild(icon)
     if (label) {
@@ -277,6 +393,59 @@
       node.appendChild(caption)
     }
     return node
+  }
+
+  function groupMapPlayers(players) {
+    const mapped = players
+      .filter(hasMapLocation)
+      .map((player) => ({ player, position: worldToPercent(player.location_x, player.location_y) }))
+    if (state.map.scale >= 4.5 || mapped.length < 2) return mapped.map((entry) => [entry])
+    const rect = elements.mapViewport.getBoundingClientRect()
+    const threshold = 42
+    const visited = new Set()
+    const groups = []
+
+    for (let index = 0; index < mapped.length; index += 1) {
+      if (visited.has(index)) continue
+      const queue = [index]
+      const group = []
+      visited.add(index)
+      while (queue.length) {
+        const currentIndex = queue.shift()
+        const current = mapped[currentIndex]
+        group.push(current)
+        for (let candidateIndex = 0; candidateIndex < mapped.length; candidateIndex += 1) {
+          if (visited.has(candidateIndex)) continue
+          const candidate = mapped[candidateIndex]
+          const distance = Math.hypot(
+            ((candidate.position.left - current.position.left) / 100) * rect.width * state.map.scale,
+            ((candidate.position.top - current.position.top) / 100) * rect.height * state.map.scale,
+          )
+          if (distance <= threshold) {
+            visited.add(candidateIndex)
+            queue.push(candidateIndex)
+          }
+        }
+      }
+      if (group.some((entry) => entry.player.id === state.selectedPlayer)) {
+        groups.push(...group.map((entry) => [entry]))
+      } else {
+        groups.push(group)
+      }
+    }
+    return groups
+  }
+
+  function centerPlayerGroup(group) {
+    const x = group.reduce((total, entry) => total + Number(entry.player.location_x), 0) / group.length
+    const y = group.reduce((total, entry) => total + Number(entry.player.location_y), 0) / group.length
+    const position = worldToPercent(x, y)
+    const rect = elements.mapViewport.getBoundingClientRect()
+    state.map.scale = Math.min(5, Math.max(2.5, state.map.scale + 1.2))
+    state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
+    state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
+    applyMapTransform()
+    renderMap(state.snapshot?.players || [])
   }
 
   function renderStaticPoints() {
@@ -322,18 +491,31 @@
       return
     }
 
-    for (const player of players) {
-      const mapped = hasMapLocation(player)
-      if (mapped) {
+    for (const group of groupMapPlayers(players)) {
+      if (group.length === 1) {
+        const player = group[0].player
         const node = marker('player', [player.location_x, player.location_y], `Lv.${player.level} ${player.name}`)
         node.dataset.playerId = player.id
+        node.style.setProperty('--player-color', playerColor(player.id))
         node.classList.toggle('selected', player.id === state.selectedPlayer)
         node.setAttribute('aria-label', `Centra ${player.name} sulla mappa`)
         node.setAttribute('aria-pressed', String(player.id === state.selectedPlayer))
         node.addEventListener('click', () => centerPlayer(player))
         elements.playerLayer.appendChild(node)
+      } else {
+        const x = group.reduce((total, entry) => total + Number(entry.player.location_x), 0) / group.length
+        const y = group.reduce((total, entry) => total + Number(entry.player.location_y), 0) / group.length
+        const names = group.map((entry) => entry.player.name).join(', ')
+        const node = marker('cluster', [x, y], names)
+        node.setAttribute('aria-label', `Avvicina ${group.length} giocatori: ${names}`)
+        node.addEventListener('click', () => centerPlayerGroup(group))
+        node.querySelector('span').textContent = String(group.length)
+        elements.playerLayer.appendChild(node)
       }
+    }
 
+    for (const player of players) {
+      const mapped = hasMapLocation(player)
       const roster = document.createElement('button')
       roster.type = 'button'
       roster.dataset.playerId = player.id
@@ -341,14 +523,19 @@
       roster.classList.toggle('selected', player.id === state.selectedPlayer)
       roster.classList.toggle('unmapped', !mapped)
       roster.setAttribute('aria-pressed', String(player.id === state.selectedPlayer))
-      if (!mapped) roster.setAttribute('aria-disabled', 'true')
+      roster.style.setProperty('--player-color', playerColor(player.id))
+      if (!mapped) roster.disabled = true
       const avatar = document.createElement('i')
       avatar.textContent = initials(player.name)
+      const color = playerColor(player.id)
+      avatar.style.backgroundColor = color
+      avatar.style.color = contrastColor(color)
       const identity = document.createElement('span')
       const name = document.createElement('strong')
       name.textContent = player.name
       const detail = document.createElement('small')
       detail.textContent = `Lv.${player.level} · ${formatNumber(player.ping, 0)} ms`
+      detail.className = pingClass(player.ping)
       identity.append(name, detail)
       const coordinate = document.createElement('span')
       coordinate.textContent = mapped
@@ -372,7 +559,8 @@
       return
     }
     try {
-      const data = await requestJson(`/api/v1/player/${encodeURIComponent(playerId)}/trail?range=6h`, 'trail')
+      const range = $('#trailRange').value
+      const data = await requestJson(`/api/v1/player/${encodeURIComponent(playerId)}/trail?range=${encodeURIComponent(range)}`, 'trail')
       if (state.selectedPlayer !== playerId || !$('#showTrail').checked) return
       const points = (data.positions || [])
         .filter((position) => Number(position.x) !== 0 || Number(position.y) !== 0)
@@ -409,6 +597,7 @@
       playerButton.type = 'button'
       playerButton.className = 'player-link'
       playerButton.dataset.playerId = player.id
+      playerButton.style.setProperty('--player-color', playerColor(player.id))
       const name = document.createElement('strong')
       name.textContent = player.name
       const account = document.createElement('small')
@@ -418,7 +607,7 @@
         playerButton.setAttribute('aria-label', `Mostra ${player.name} sulla mappa`)
         playerButton.addEventListener('click', () => centerPlayer(player))
       } else {
-        playerButton.setAttribute('aria-disabled', 'true')
+        playerButton.disabled = true
       }
       identity.appendChild(playerButton)
 
@@ -426,6 +615,7 @@
       level.textContent = formatNumber(player.level)
       const ping = document.createElement('td')
       ping.textContent = `${formatNumber(player.ping, 0)} ms`
+      ping.className = pingClass(player.ping)
       const buildings = document.createElement('td')
       buildings.textContent = formatNumber(player.building_count)
       const session = document.createElement('td')
@@ -448,21 +638,74 @@
     }
   }
 
+  function renderMobilePlayers(players) {
+    elements.mobilePlayers.replaceChildren()
+    if (!players.length) {
+      const empty = document.createElement('p')
+      empty.className = 'empty-copy'
+      empty.textContent = 'Nessun giocatore online.'
+      elements.mobilePlayers.appendChild(empty)
+      return
+    }
+    for (const player of players) {
+      const mapped = hasMapLocation(player)
+      const card = document.createElement('article')
+      card.className = 'mobile-player-card'
+      const color = playerColor(player.id)
+      const avatar = document.createElement('i')
+      avatar.textContent = initials(player.name)
+      avatar.style.backgroundColor = color
+      avatar.style.color = contrastColor(color)
+      const identity = document.createElement('div')
+      const name = document.createElement('strong')
+      name.textContent = player.name
+      const account = document.createElement('small')
+      account.textContent = player.accountName || 'account non disponibile'
+      identity.append(name, account)
+      const ping = document.createElement('span')
+      ping.className = pingClass(player.ping)
+      ping.textContent = `${formatNumber(player.ping)} ms`
+      const stats = document.createElement('p')
+      stats.textContent = `Lv.${formatNumber(player.level)} · ${formatNumber(player.building_count)} costruzioni · sessione ${formatDuration(player.session?.current_session)}`
+      card.append(avatar, identity, ping, stats)
+      if (mapped) {
+        const locate = document.createElement('button')
+        locate.type = 'button'
+        locate.textContent = 'Mostra sulla mappa'
+        locate.addEventListener('click', () => centerPlayer(player))
+        card.appendChild(locate)
+      }
+      elements.mobilePlayers.appendChild(card)
+    }
+  }
+
   function renderPlayerArchive(players) {
     const expanded = new Set(
       [...elements.playerArchive.querySelectorAll('details[open]')]
         .map((details) => details.closest('[data-player-id]')?.dataset.playerId),
     )
+    const query = state.playerQuery.trim().toLocaleLowerCase('it')
+    const visiblePlayers = players
+      .filter((player) => !state.favoritesOnly || state.favoritePlayers.has(player.id))
+      .filter((player) => !query || `${player.name} ${player.accountName}`.toLocaleLowerCase('it').includes(query))
+      .sort((left, right) => {
+        const favoriteDifference = Number(state.favoritePlayers.has(right.id)) - Number(state.favoritePlayers.has(left.id))
+        return favoriteDifference || left.name.localeCompare(right.name, 'it', { sensitivity: 'base' })
+      })
     elements.playerArchive.replaceChildren()
-    if (!players.length) {
+    setText(
+      elements.playerArchiveStatus,
+      `${formatNumber(visiblePlayers.length)} di ${formatNumber(players.length)} giocatori · aggiornato ${formatDate(state.archiveUpdated)}`,
+    )
+    if (!visiblePlayers.length) {
       const empty = document.createElement('p')
       empty.className = 'empty-copy'
-      empty.textContent = 'Nessun giocatore registrato.'
+      empty.textContent = players.length ? 'Nessun giocatore corrisponde ai filtri.' : 'Nessun giocatore registrato.'
       elements.playerArchive.appendChild(empty)
       return
     }
 
-    for (const player of players) {
+    for (const player of visiblePlayers) {
       const card = document.createElement('article')
       card.className = 'player-history-card'
       card.dataset.playerId = player.id
@@ -471,6 +714,9 @@
       const avatar = document.createElement('i')
       avatar.className = 'history-avatar'
       avatar.textContent = initials(player.name)
+      const color = playerColor(player.id)
+      avatar.style.backgroundColor = color
+      avatar.style.color = contrastColor(color)
       const identity = document.createElement('div')
       const name = document.createElement('strong')
       name.textContent = player.name
@@ -480,7 +726,20 @@
       const status = document.createElement('span')
       status.className = player.online ? 'archive-status online' : 'archive-status'
       status.textContent = player.online ? 'Online ora' : `Ultimo accesso ${formatFullDate(player.last_seen)}`
-      header.append(avatar, identity, status)
+      const favorite = document.createElement('button')
+      const isFavorite = state.favoritePlayers.has(player.id)
+      favorite.type = 'button'
+      favorite.className = 'favorite-toggle'
+      favorite.textContent = isFavorite ? '★' : '☆'
+      favorite.setAttribute('aria-label', `${isFavorite ? 'Rimuovi' : 'Aggiungi'} ${player.name} dai preferiti locali`)
+      favorite.setAttribute('aria-pressed', String(isFavorite))
+      favorite.addEventListener('click', () => {
+        if (state.favoritePlayers.has(player.id)) state.favoritePlayers.delete(player.id)
+        else state.favoritePlayers.add(player.id)
+        writeStorage('observatory.favoritePlayers', JSON.stringify([...state.favoritePlayers]))
+        renderPlayerArchive(state.archivePlayers)
+      })
+      header.append(avatar, identity, status, favorite)
 
       const totals = document.createElement('dl')
       totals.className = 'player-time-grid'
@@ -533,15 +792,12 @@
     try {
       const data = await requestJson('/api/v1/players', 'playerArchive')
       state.archivePlayers = data.players || []
+      state.archiveUpdated = data.generated_at
       renderPlayerArchive(state.archivePlayers)
-      setText(
-        elements.playerArchiveStatus,
-        `${formatNumber(state.archivePlayers.length)} giocatori · aggiornato ${formatDate(data.generated_at)}`,
-      )
     } catch (error) {
       if (error.name === 'AbortError') return
-      setText(elements.playerArchiveStatus, 'Storico temporaneamente non disponibile.')
       if (!state.archivePlayers.length) renderPlayerArchive([])
+      setText(elements.playerArchiveStatus, 'Storico temporaneamente non disponibile.')
     }
   }
 
@@ -638,8 +894,14 @@
       elements.settingsGrid.appendChild(empty)
       return
     }
+    const query = elements.settingsSearch.value.trim().toLocaleLowerCase('it')
+    let rendered = 0
     for (const [title, keys] of settingGroups) {
-      const available = keys.filter((key) => Object.hasOwn(settings, key))
+      const available = keys.filter((key) => {
+        if (!Object.hasOwn(settings, key)) return false
+        if (!query) return true
+        return `${settingLabel(key)} ${settingValue(settings[key])}`.toLocaleLowerCase('it').includes(query)
+      })
       if (!available.length) continue
       const group = document.createElement('article')
       group.className = 'settings-group'
@@ -657,6 +919,13 @@
         group.appendChild(row)
       }
       elements.settingsGrid.appendChild(group)
+      rendered += available.length
+    }
+    if (!rendered) {
+      const empty = document.createElement('p')
+      empty.className = 'empty-copy'
+      empty.textContent = 'Nessuna regola corrisponde alla ricerca.'
+      elements.settingsGrid.appendChild(empty)
     }
   }
 
@@ -700,7 +969,7 @@
     elements.headerStatus.classList.toggle('offline', !online)
     setText(elements.headerStatus.querySelector('b'), online ? 'ONLINE' : (stale ? 'DATI OBSOLETI' : 'OFFLINE'))
     setText(elements.serverName, data.info?.servername || 'Palworld Server')
-    setText(elements.serverDescription, data.info?.description || 'Telemetria pubblica del server dedicato.')
+    setText(elements.serverDescription, data.info?.description || 'Telemetria riservata del server dedicato.')
     setText(elements.serverVersion, data.info?.version || '--')
     setText(elements.lastUpdate, formatDate(data.status?.last_updated))
     elements.lastUpdate.dateTime = data.status?.last_updated || ''
@@ -721,6 +990,7 @@
 
     renderMap(players)
     renderPlayersTable(players)
+    renderMobilePlayers(players)
     renderServerProfile(data)
     renderSettings(data.settings || {})
     renderEvents(data.events || [])
@@ -743,6 +1013,24 @@
       maxFps,
       maxPlayers: Math.max(1, observedMaxPlayers),
       observedMaxPlayers,
+    }
+  }
+
+  function renderFpsHealth(health = {}) {
+    elements.performanceHealth.dataset.state = health.state || 'no_data'
+    setText(elements.healthLabel, health.label || 'Nessun dato')
+    setText(elements.healthScore, health.score == null ? '--' : `${formatNumber(health.score)} / 100`)
+    if (health.state === 'ok') {
+      setText(
+        elements.healthDetail,
+        `Mediana ${formatNumber(health.median_fps, 1)} FPS · ultimi 10m ${formatNumber(health.recent_median_fps, 1)} · sotto 30 FPS ${formatNumber(health.under_30_percent, 1)}% · calo più lungo ${formatShortDuration(health.longest_dip_seconds)}.`,
+      )
+    } else if (health.state === 'calibrating') {
+      setText(elements.healthDetail, `Raccolti ${formatDuration(health.coverage_seconds)} di campioni; servono almeno 5 minuti.`)
+    } else if (health.state === 'stale') {
+      setText(elements.healthDetail, 'Il campione FPS più recente ha oltre cinque minuti: il giudizio è sospeso.')
+    } else {
+      setText(elements.healthDetail, 'Il giudizio richiede almeno cinque minuti di campioni.')
     }
   }
 
@@ -795,8 +1083,12 @@
     const pad = { left: 48, right: 48, top: 20, bottom: 34 }
     const plotWidth = Math.max(1, width - pad.left - pad.right)
     const plotHeight = height - pad.top - pad.bottom
-    const firstTime = new Date(validSamples[0].timestamp).getTime()
-    const lastTime = new Date(validSamples[validSamples.length - 1].timestamp).getTime()
+    const firstTime = Number.isFinite(new Date(state.historyWindow?.from).getTime())
+      ? new Date(state.historyWindow.from).getTime()
+      : new Date(validSamples[0].timestamp).getTime()
+    const lastTime = Number.isFinite(new Date(state.historyWindow?.to).getTime())
+      ? new Date(state.historyWindow.to).getTime()
+      : new Date(validSamples[validSamples.length - 1].timestamp).getTime()
     const timeSpan = Math.max(1, lastTime - firstTime)
     const { minFps, maxFps, maxPlayers, observedMaxPlayers } = chartScale(validSamples)
     const observedMinFps = Math.min(...validSamples.map((sample) => Number(sample.fps) || 0))
@@ -837,18 +1129,28 @@
       context.strokeStyle = color
       context.lineWidth = 2
       state.chartPoints.forEach((point, index) => {
-        if (index === 0) context.moveTo(point.x, point[field])
+        const hasGap = index > 0 && point.sample.gap_before === true
+        if (index === 0 || hasGap) context.moveTo(point.x, point[field])
         else context.lineTo(point.x, point[field])
       })
       context.stroke()
+      for (const point of state.chartPoints) {
+        context.fillStyle = color
+        context.beginPath()
+        context.arc(point.x, point[field], 1.5, 0, Math.PI * 2)
+        context.fill()
+      }
     }
-    drawLine('yFps', '#4ce0c1')
-    drawLine('yPlayers', '#ff735c')
+    const styles = getComputedStyle(document.documentElement)
+    const fpsColor = styles.getPropertyValue('--teal').trim() || '#4ce0c1'
+    const playersColor = styles.getPropertyValue('--coral').trim() || '#ff735c'
+    drawLine('yFps', fpsColor)
+    drawLine('yPlayers', playersColor)
 
     const compactLabels = width < 520
     const labels = [
-      [formatChartDate(validSamples[0].timestamp, compactLabels, timeSpan), pad.left, 'left'],
-      [formatChartDate(validSamples[validSamples.length - 1].timestamp, compactLabels, timeSpan), width - pad.right, 'right'],
+      [formatChartDate(new Date(firstTime).toISOString(), compactLabels, timeSpan), pad.left, 'left'],
+      [formatChartDate(new Date(lastTime).toISOString(), compactLabels, timeSpan), width - pad.right, 'right'],
     ]
     if (width >= 520) {
       labels.splice(1, 0, [formatChartDate(new Date(firstTime + timeSpan / 2).toISOString(), false, timeSpan), pad.left + plotWidth / 2, 'center'])
@@ -867,7 +1169,7 @@
       context.moveTo(hovered.x, pad.top)
       context.lineTo(hovered.x, pad.top + plotHeight)
       context.stroke()
-      for (const [y, color] of [[hovered.yFps, '#4ce0c1'], [hovered.yPlayers, '#ff735c']]) {
+      for (const [y, color] of [[hovered.yFps, fpsColor], [hovered.yPlayers, playersColor]]) {
         context.fillStyle = color
         context.beginPath()
         context.arc(hovered.x, y, 4, 0, Math.PI * 2)
@@ -889,7 +1191,9 @@
       const data = await requestJson(`/api/v1/history?range=${encodeURIComponent(requestedRange)}`, 'history')
       if (requestedRange !== elements.historyRange.value) return
       state.historySamples = data.samples || []
+      state.historyWindow = data.window || null
       state.chartHoverIndex = null
+      renderFpsHealth(data.fps_health)
       setNotice('history')
       setText(elements.chartEmpty, 'Lo storico inizierà a popolarsi con le trasmissioni del connector.')
       drawChart()
@@ -917,13 +1221,15 @@
       renderSnapshot(data)
       if (initial) showToast('Collegamento telemetrico stabilito')
       if (state.selectedPlayer) loadTrail(state.selectedPlayer)
+      return true
     } catch (error) {
-      if (error.name === 'AbortError') return
+      if (error.name === 'AbortError') return null
       if (initial) showToast('Dati temporaneamente non disponibili', true)
       elements.headerStatus.classList.remove('online')
       elements.headerStatus.classList.add('offline')
       setText(elements.headerStatus.querySelector('b'), 'CONNESSIONE PERSA')
       setNotice('snapshot', 'Collegamento telemetrico interrotto: i valori mostrati sono gli ultimi ricevuti.', true)
+      return false
     }
   }
 
@@ -950,24 +1256,80 @@
     })
   }
 
+  function bindCredentialControls() {
+    const password = $('#palworldPassword')
+    const toggle = $('#togglePalworldPassword')
+    if (password && toggle) {
+      toggle.addEventListener('click', () => {
+        const revealed = toggle.getAttribute('aria-pressed') === 'true'
+        toggle.setAttribute('aria-pressed', String(!revealed))
+        toggle.textContent = revealed ? 'Mostra' : 'Nascondi'
+        password.textContent = revealed ? '••••••••' : password.dataset.secret
+      })
+    }
+    for (const button of document.querySelectorAll('[data-copy-target], [data-copy-secret]')) {
+      button.addEventListener('click', async () => {
+        const targetId = button.dataset.copyTarget || button.dataset.copySecret
+        const target = document.getElementById(targetId)
+        const value = button.dataset.copySecret ? target?.dataset.secret : target?.textContent
+        if (!value || value.startsWith('Non configurat')) return
+        try {
+          await navigator.clipboard.writeText(value.trim())
+          const previous = button.textContent
+          button.textContent = 'Copiato'
+          window.setTimeout(() => { button.textContent = previous }, 1500)
+        } catch (_error) {
+          showToast('Copia non disponibile in questo browser', true)
+        }
+      })
+    }
+  }
+
   function bindMapControls() {
+    const layerPreferences = [
+      ['showPlayers', elements.playerLayer, 'players', true],
+      ['showFastTravel', elements.fastTravelLayer, 'fastTravel', false],
+      ['showTowers', elements.towerLayer, 'towers', false],
+    ]
+    for (const [inputId, layer, key, defaultVisible] of layerPreferences) {
+      const input = $(`#${inputId}`)
+      input.checked = readStorage(`observatory.map.${key}`, defaultVisible ? '1' : '0') === '1'
+      if (key === 'players') layer.hidden = !input.checked
+      else layer.classList.toggle('visible', input.checked)
+      input.addEventListener('change', (event) => {
+        if (key === 'players') layer.hidden = !event.target.checked
+        else layer.classList.toggle('visible', event.target.checked)
+        writeStorage(`observatory.map.${key}`, event.target.checked ? '1' : '0')
+      })
+    }
+    const trailToggle = $('#showTrail')
+    trailToggle.checked = readStorage('observatory.map.trail', '1') !== '0'
+    const storedTrailRange = readStorage('observatory.map.trailRange', '6h')
+    $('#trailRange').value = ['1h', '6h', '24h', '7d'].includes(storedTrailRange) ? storedTrailRange : '6h'
     $('#zoomIn').addEventListener('click', () => setZoom(state.map.scale + 0.45))
     $('#zoomOut').addEventListener('click', () => setZoom(state.map.scale - 0.45))
     $('#resetMap').addEventListener('click', resetMap)
     $('#clearSelection').addEventListener('click', () => clearSelection())
-    $('#showFastTravel').addEventListener('change', (event) => elements.fastTravelLayer.classList.toggle('visible', event.target.checked))
-    $('#showTowers').addEventListener('change', (event) => elements.towerLayer.classList.toggle('visible', event.target.checked))
-    $('#showTrail').addEventListener('change', (event) => {
+    trailToggle.addEventListener('change', (event) => {
+      writeStorage('observatory.map.trail', event.target.checked ? '1' : '0')
       if (!event.target.checked) clearTrail()
       else if (state.selectedPlayer) loadTrail(state.selectedPlayer)
     })
+    $('#trailRange').addEventListener('change', (event) => {
+      writeStorage('observatory.map.trailRange', event.target.value)
+      if (state.selectedPlayer && trailToggle.checked) loadTrail(state.selectedPlayer)
+    })
 
     elements.mapViewport.addEventListener('wheel', (event) => {
-      const changed = setZoom(state.map.scale + (event.deltaY < 0 ? .3 : -.3))
+      const rect = elements.mapViewport.getBoundingClientRect()
+      const changed = setZoom(
+        state.map.scale + (event.deltaY < 0 ? .3 : -.3),
+        { x: event.clientX - rect.left, y: event.clientY - rect.top },
+      )
       if (changed) event.preventDefault()
     }, { passive: false })
     elements.mapViewport.addEventListener('pointerdown', (event) => {
-      if (event.target.closest('.map-marker.player')) return
+      if (event.target.closest('.map-marker')) return
       state.map.dragging = true
       state.map.pointerX = event.clientX
       state.map.pointerY = event.clientY
@@ -991,7 +1353,10 @@
     }
     elements.mapViewport.addEventListener('pointerup', stopDragging)
     elements.mapViewport.addEventListener('pointercancel', stopDragging)
-    elements.mapViewport.addEventListener('dblclick', () => setZoom(state.map.scale + .5))
+    elements.mapViewport.addEventListener('dblclick', (event) => {
+      const rect = elements.mapViewport.getBoundingClientRect()
+      setZoom(state.map.scale + .5, { x: event.clientX - rect.left, y: event.clientY - rect.top })
+    })
     elements.mapViewport.addEventListener('keydown', (event) => {
       const step = 36
       if (event.key === '+' || event.key === '=') setZoom(state.map.scale + .4)
@@ -1019,7 +1384,7 @@
   function scheduleHistoryPoll() {
     window.clearTimeout(state.historyTimer)
     state.historyTimer = window.setTimeout(async () => {
-      await loadHistory()
+      if (!document.hidden) await loadHistory()
       scheduleHistoryPoll()
     }, 60000)
   }
@@ -1027,27 +1392,80 @@
   function scheduleArchivePoll() {
     window.clearTimeout(state.archiveTimer)
     state.archiveTimer = window.setTimeout(async () => {
-      await loadPlayerArchive()
+      if (!document.hidden) await loadPlayerArchive()
       scheduleArchivePoll()
     }, 60000)
   }
 
   async function snapshotLoop(initial = false) {
-    await loadSnapshot(initial)
-    window.setTimeout(() => snapshotLoop(false), 10000)
+    window.clearTimeout(state.snapshotTimer)
+    const generation = ++state.snapshotGeneration
+    if (document.hidden) {
+      state.snapshotTimer = window.setTimeout(() => {
+        if (generation === state.snapshotGeneration) snapshotLoop(false)
+      }, 20000)
+      return
+    }
+    const success = await loadSnapshot(initial)
+    if (generation !== state.snapshotGeneration) return
+    if (success === false) state.snapshotFailures += 1
+    else if (success === true) state.snapshotFailures = 0
+    const delay = Math.min(120000, 20000 * (2 ** Math.min(3, state.snapshotFailures)))
+    state.snapshotTimer = window.setTimeout(() => {
+      if (generation === state.snapshotGeneration) snapshotLoop(false)
+    }, delay)
   }
 
   function initialize() {
+    initializeTheme()
+    try {
+      const favorites = JSON.parse(readStorage('observatory.favoritePlayers', '[]'))
+      if (Array.isArray(favorites)) state.favoritePlayers = new Set(favorites.filter((value) => typeof value === 'string'))
+    } catch (_error) {
+      state.favoritePlayers = new Set()
+    }
     bindMapControls()
     bindChartControls()
+    bindCredentialControls()
+    elements.themeSelect.addEventListener('change', (event) => {
+      const theme = THEMES.has(event.target.value) ? event.target.value : 'observatory'
+      document.documentElement.dataset.theme = theme
+      writeStorage('observatory.theme', theme)
+      drawChart()
+    })
+    elements.playerSearch.addEventListener('input', (event) => {
+      state.playerQuery = event.target.value
+      renderPlayerArchive(state.archivePlayers)
+    })
+    elements.favoritesOnly.addEventListener('change', (event) => {
+      state.favoritesOnly = event.target.checked
+      renderPlayerArchive(state.archivePlayers)
+    })
+    elements.settingsSearch.addEventListener('input', () => renderSettings(state.snapshot?.settings || {}))
     elements.historyRange.addEventListener('change', async () => {
       await loadHistory()
       scheduleHistoryPoll()
     })
+    const setMapImageState = (failed) => {
+      elements.mapImageError.hidden = !failed
+    }
+    elements.mapImage.addEventListener('load', () => setMapImageState(false))
+    elements.mapImage.addEventListener('error', () => setMapImageState(true))
+    if (elements.mapImage.complete) setMapImageState(elements.mapImage.naturalWidth === 0)
     let resizeFrame = null
     window.addEventListener('resize', () => {
       window.cancelAnimationFrame(resizeFrame)
-      resizeFrame = window.requestAnimationFrame(() => drawChart())
+      resizeFrame = window.requestAnimationFrame(() => {
+        applyMapTransform()
+        if (state.snapshot) renderMap(state.snapshot.players || [])
+        drawChart()
+      })
+    })
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return
+      snapshotLoop(false)
+      loadHistory().then(scheduleHistoryPoll)
+      loadPlayerArchive().then(scheduleArchivePoll)
     })
     loadStaticPoints()
     snapshotLoop(true)

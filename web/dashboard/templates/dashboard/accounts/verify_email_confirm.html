@@ -1,0 +1,11 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Conferma email{% endblock %}
+{% block content %}
+  <p class="eyebrow">Verifica email</p>
+  <h1>Conferma il tuo indirizzo</h1>
+  <p class="auth-copy">Stai verificando <strong>{{ verification_user.email }}</strong> per l'account <strong>{{ verification_user.username }}</strong>. Continua soltanto se hai creato tu questo account.</p>
+  <form method="post" class="auth-form">
+    {% csrf_token %}
+    <button type="submit">Conferma email</button>
+  </form>
+{% endblock %}

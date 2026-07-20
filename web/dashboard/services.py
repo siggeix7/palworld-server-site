@@ -107,6 +107,14 @@ def _integer(value, default=0):
         return default
 
 
+def _first_present(mapping, *keys):
+    for key in keys:
+        value = mapping.get(key)
+        if value is not None:
+            return value
+    return None
+
+
 def _payload(value):
     if isinstance(value, (dict, list)):
         return value
@@ -153,9 +161,14 @@ def _record_dataset(record):
 def _player_id(raw):
     identity = (
         raw.get("userId")
+        or raw.get("user_id")
         or raw.get("playerId")
+        or raw.get("player_uid")
+        or raw.get("playerUid")
         or raw.get("accountName")
+        or raw.get("account_name")
         or raw.get("name")
+        or raw.get("nickname")
         or "unknown"
     )
     return hmac.new(
@@ -218,23 +231,27 @@ def _sanitize_players(value):
     ):
         raise IngestError("players dataset must contain a players array")
 
+    # Field aliases follow RNZ01's payload normalizer; raw IDs remain HMAC inputs only.
+    # Adapted from lib/palworld.ts at upstream commit 588fa639; see NOTICE.md.
     players = []
     for raw in value.get("players", []):
         if not isinstance(raw, dict):
             continue
-        name = _clean_text(raw.get("name"), 128)
+        name = _clean_text(raw.get("name") or raw.get("nickname"), 128)
         if not name:
             continue
         players.append(
             {
                 "id": _player_id(raw),
                 "name": name,
-                "accountName": _clean_text(raw.get("accountName"), 128),
+                "accountName": _clean_text(
+                    raw.get("accountName") or raw.get("account_name"), 128
+                ),
                 "ping": round(_number(raw.get("ping")), 2),
-                "location_x": _number(raw.get("location_x")),
-                "location_y": _number(raw.get("location_y")),
+                "location_x": _number(_first_present(raw, "location_x", "locationX")),
+                "location_y": _number(_first_present(raw, "location_y", "locationY")),
                 "level": _integer(raw.get("level")),
-                "building_count": _integer(raw.get("building_count")),
+                "building_count": _integer(_first_present(raw, "building_count", "buildingCount")),
             }
         )
     players.sort(key=lambda player: player["name"].casefold())

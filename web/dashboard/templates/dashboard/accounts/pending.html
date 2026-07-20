@@ -1,0 +1,14 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Accesso in attesa{% endblock %}
+{% block content %}
+  <p class="eyebrow">Stato account</p>
+  {% if not profile.email_verified %}
+    <h1>Conferma la tua email</h1>
+    <p class="auth-copy">Prima dell'approvazione devi verificare l'indirizzo email associato al tuo account.</p>
+    <div class="auth-links"><a href="{% url 'resend-verification' %}">Reinvia email di conferma</a></div>
+  {% else %}
+    <h1>Approvazione in attesa</h1>
+    <p class="auth-copy">La tua email è verificata. Riceverai una notifica quando un amministratore abiliterà l'accesso.</p>
+  {% endif %}
+  <form method="post" action="{% url 'logout' %}" class="auth-form compact-form">{% csrf_token %}<button type="submit">Esci</button></form>
+{% endblock %}
