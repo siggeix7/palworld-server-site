@@ -1,6 +1,13 @@
+# Third-party notices
+
+The coordinate transformation, Palworld v1 map image and static map points were
+adapted from `RNZ01/palworld-server-dashboard`:
+
+https://github.com/RNZ01/palworld-server-dashboard
+
 MIT License
 
-Copyright (c) 2026 palworld-server-site contributors
+Copyright (c) 2026 Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +26,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Palworld and the map artwork are trademarks and copyrighted material of
+Pocketpair, Inc. This project is an unofficial community dashboard and is not
+affiliated with or endorsed by Pocketpair.
