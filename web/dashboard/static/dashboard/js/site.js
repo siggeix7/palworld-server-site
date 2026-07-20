@@ -2,10 +2,10 @@
   'use strict'
 
   const WORLD = {
-    maxX: 447900,
-    maxY: 708920,
-    minX: -999940,
-    minY: -738920,
+    maxX: 349400,
+    maxY: 724400,
+    minX: -1099400,
+    minY: -724400,
   }
 
   const state = {

@@ -1,9 +1,13 @@
 # Third-party notices
 
-The coordinate transformation, Palworld v1 map image and static map points were
-adapted from `RNZ01/palworld-server-dashboard`:
+The coordinate transformation, pak-native 8192 world map image and static map
+points were adapted from `RNZ01/palworld-server-dashboard`:
 
 https://github.com/RNZ01/palworld-server-dashboard
+
+The map asset is based on `full-map-native-8192.webp`, retrieved on 2026-07-20
+from blob `b7b2db97749bd8715bb6ebcb9d9b62eacac61ff2`. Its matching MainMap bounds
+are `[349400, 724400, -1099400, -724400]`.
 
 MIT License
 

@@ -301,7 +301,7 @@ Release. E' configurato per un runner `self-hosted` Linux come `televideo-linux`
 ## Note legali
 
 Questo e' un progetto community non ufficiale. Palworld e la mappa appartengono
-a Pocketpair, Inc. Coordinate, mappa V4 e punti statici derivano dal progetto
+a Pocketpair, Inc. Coordinate, mappa nativa 8192 e punti statici derivano dal progetto
 MIT `RNZ01/palworld-server-dashboard`; dettagli in [NOTICE.md](NOTICE.md). Prima
 di distribuire pubblicamente l'immagine verifica che l'uso della mappa sia
 compatibile con le linee guida fan-content applicabili al tuo sito.
