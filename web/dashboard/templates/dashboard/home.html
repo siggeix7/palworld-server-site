@@ -1,0 +1,166 @@
+{% load static %}
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Telemetria pubblica e mappa live del server Palworld">
+  <meta name="theme-color" content="#071a1d">
+  {% if public_site_url %}<link rel="canonical" href="{{ public_site_url }}">{% endif %}
+  <title>Palworld Server Observatory</title>
+  <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Vai al contenuto</a>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <a class="brand" href="#top" aria-label="Palworld Server Observatory">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span><strong>Palworld</strong><small>Server Observatory</small></span>
+    </a>
+    <nav aria-label="Navigazione principale">
+      <a href="#map">Mappa</a>
+      <a href="#telemetry">Telemetria</a>
+      <a href="#players">Giocatori</a>
+      <a href="#world">Mondo</a>
+    </nav>
+    <div class="live-pill" id="headerStatus"><span></span><b>IN ATTESA</b></div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow">World telemetry / public uplink</p>
+        <h1 id="serverName">Nichelino Palworld Server</h1>
+        <p class="hero-description" id="serverDescription">In attesa della prima trasmissione Zabbix.</p>
+        <div class="hero-actions">
+          <a class="primary-link" href="#map">Apri la mappa <span aria-hidden="true">↘</span></a>
+          <span class="update-label">Server <b id="serverVersion">--</b> · ultimo dato <time id="lastUpdate">mai</time></span>
+        </div>
+      </div>
+
+      <div class="hero-readout" aria-label="Riepilogo server">
+        <div class="readout-grid">
+          <article><span>Esploratori</span><strong><b id="heroPlayers">0</b><small id="heroCapacity">/ 0</small></strong></article>
+          <article><span>Server FPS</span><strong id="heroFps">--</strong></article>
+          <article><span>Uptime</span><strong id="heroUptime">--</strong></article>
+          <article><span>Giorno mondo</span><strong id="heroDay">--</strong></article>
+        </div>
+        <div class="signal-line"><span>Segnale dati</span><i><b id="signalBar"></b></i><strong id="signalAge">--</strong></div>
+      </div>
+    </section>
+
+    <section class="map-section section-shell" id="map">
+      <div class="section-heading">
+        <div><p class="eyebrow">Live cartography</p><h2>Posizioni nel mondo</h2></div>
+        <p>Coordinate aggiornate da Zabbix ogni 20 secondi. Seleziona un giocatore per seguirne la traccia recente.</p>
+      </div>
+
+      <div class="map-layout">
+        <div class="map-card">
+          <div class="map-toolbar" aria-label="Controlli mappa">
+            <div class="map-tools">
+              <button type="button" id="zoomIn" title="Aumenta zoom">+</button>
+              <button type="button" id="zoomOut" title="Riduci zoom">−</button>
+              <button type="button" id="resetMap">Centra</button>
+            </div>
+            <div class="layer-tools">
+              <label><input type="checkbox" id="showFastTravel"> Viaggi rapidi</label>
+              <label><input type="checkbox" id="showTowers"> Torri</label>
+              <label><input type="checkbox" id="showTrail" checked> Traccia</label>
+            </div>
+          </div>
+          <div class="map-viewport" id="mapViewport" tabindex="0" aria-label="Mappa interattiva di Palworld">
+            <div class="map-plane" id="mapPlane">
+              <img src="{% static 'dashboard/images/palworld-map.png' %}" alt="Mappa del mondo di Palworld" draggable="false">
+              <svg class="trail-layer" id="trailLayer" viewBox="0 0 1000 1000" aria-hidden="true"><polyline></polyline></svg>
+              <div class="poi-layer fast-travel-layer" id="fastTravelLayer" aria-hidden="true"></div>
+              <div class="poi-layer tower-layer" id="towerLayer" aria-hidden="true"></div>
+              <div class="player-layer" id="playerLayer"></div>
+            </div>
+            <div class="map-coordinate" id="mapCoordinate">X -- / Y --</div>
+            <div class="map-empty" id="mapEmpty"><strong>Nessun giocatore online</strong><span>La cartografia resta operativa.</span></div>
+          </div>
+        </div>
+
+        <aside class="roster-card">
+          <div class="roster-head"><span>Online adesso</span><strong id="rosterCount">0</strong></div>
+          <div class="roster" id="mapRoster"><p class="empty-copy">Nessun esploratore rilevato.</p></div>
+          <div class="map-legend">
+            <span><i class="legend-player"></i> Giocatore</span>
+            <span><i class="legend-fast"></i> Viaggio rapido</span>
+            <span><i class="legend-tower"></i> Torre</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="telemetry section-shell" id="telemetry">
+      <div class="section-heading compact">
+        <div><p class="eyebrow">Performance archive</p><h2>Telemetria</h2></div>
+        <label class="range-control">Intervallo
+          <select id="historyRange">
+            <option value="6h">6 ore</option>
+            <option value="24h" selected>24 ore</option>
+            <option value="7d">7 giorni</option>
+            <option value="30d">30 giorni</option>
+            <option value="90d">90 giorni</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="metric-strip">
+        <article><span>FPS medio</span><strong id="metricFpsAverage">--</strong><small>ultime 24 ore</small></article>
+        <article><span>Frame time</span><strong id="metricFrameTime">--</strong><small>millisecondi</small></article>
+        <article><span>Picco online</span><strong id="metricPeak">--</strong><small>ultime 24 ore</small></article>
+        <article><span>Campi base</span><strong id="metricBases">--</strong><small>nel mondo</small></article>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-legend"><span><i class="fps-line"></i> FPS</span><span><i class="players-line"></i> Giocatori</span></div>
+        <canvas id="historyChart" height="300" aria-label="Grafico storico FPS e giocatori" aria-describedby="chartSummary"></canvas>
+        <p class="sr-only" id="chartSummary">Nessun campione storico disponibile.</p>
+        <p class="chart-empty" id="chartEmpty">Lo storico inizierà a popolarsi con le trasmissioni del connector.</p>
+      </div>
+    </section>
+
+    <section class="players-section section-shell" id="players">
+      <div class="section-heading">
+        <div><p class="eyebrow">Explorer manifest</p><h2>Giocatori online</h2></div>
+        <p>IP e identificativi interni non vengono memorizzati. Nome e account di piattaforma sono pubblici.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Giocatore</th><th>Livello</th><th>Ping</th><th>Costruzioni</th><th>Sessione</th><th>Coordinate</th></tr></thead>
+          <tbody id="playersTable"><tr><td colspan="6" class="empty-cell">Nessun giocatore online.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="world-section section-shell" id="world">
+      <div class="section-heading">
+        <div><p class="eyebrow">World configuration</p><h2>Regole del mondo</h2></div>
+        <p>Una selezione sicura delle impostazioni pubbliche attive sul server.</p>
+      </div>
+      <div class="world-grid" id="settingsGrid"><p class="empty-copy">Configurazione non ancora ricevuta.</p></div>
+    </section>
+
+    <section class="activity-section section-shell" id="activity">
+      <div class="section-heading compact">
+        <div><p class="eyebrow">Recent transmissions</p><h2>Attività recente</h2></div>
+      </div>
+      <ol class="event-list" id="eventList"><li class="empty-copy">Nessun evento registrato.</li></ol>
+    </section>
+  </main>
+
+  <footer>
+    <span>Palworld Server Observatory</span>
+    <span>build {{ app_version }}</span>
+    <span>Palworld e i relativi asset appartengono a Pocketpair, Inc.</span>
+  </footer>
+
+  <div class="connection-toast" id="connectionToast" role="status">Connessione ai dati in corso…</div>
+  <script src="{% static 'dashboard/js/site.js' %}" defer></script>
+</body>
+</html>

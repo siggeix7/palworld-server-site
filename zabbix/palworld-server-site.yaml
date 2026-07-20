@@ -1,0 +1,343 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 99e1a08d5a694ff0964b1f3c6b82bb10
+      name: Templates/Applications
+  templates:
+    - uuid: 1f73bd71468744bfb76a6e986d319d8f
+      template: 'PALWORLD SERVER SITE RESTAPI'
+      name: 'PALWORLD SERVER SITE RESTAPI'
+      description: |
+        Palworld REST API monitoring and data streaming for palworld-server-site.
+        Only master items tagged integration=palworld-site are exported by the connector.
+      groups:
+        - name: Templates/Applications
+      items:
+        - uuid: b0c24ced304044558f82f07e17623874
+          name: 'Palworld: Rest Api port TCP check'
+          type: SIMPLE
+          key: 'net.tcp.service[http,{$PALAPIIP},{$PALAPIPORT}]'
+          delay: 30s
+          history: 90d
+          tags:
+            - tag: dataset
+              value: status
+            - tag: integration
+              value: palworld-site
+          triggers:
+            - uuid: c152959725e9478bb70f25c4472721c1
+              expression: 'max(/PALWORLD SERVER SITE RESTAPI/net.tcp.service[http,{$PALAPIIP},{$PALAPIPORT}],#3)=0'
+              name: 'Palworld: REST API non raggiungibile'
+              priority: AVERAGE
+        - uuid: 110e8acd01ac40e9b0d4c189ee48ae4a
+          name: 'Palworld: Info'
+          type: HTTP_AGENT
+          key: palworld.info
+          delay: 30m
+          history: '0'
+          value_type: TEXT
+          timeout: 5s
+          url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/info'
+          headers:
+            - name: Accept
+              value: application/json
+            - name: Authorization
+              value: 'Basic {$PALAPIKEY}'
+          tags:
+            - tag: dataset
+              value: info
+            - tag: integration
+              value: palworld-site
+        - uuid: 66343a088be844c694e3215160b3eec6
+          name: 'Palworld: Server Description'
+          type: DEPENDENT
+          key: palworld.info.description
+          history: 90d
+          value_type: TEXT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.description
+          master_item:
+            key: palworld.info
+        - uuid: c88cc77743e94bb9ac8fca66774f1ee4
+          name: 'Palworld: Server Name'
+          type: DEPENDENT
+          key: palworld.info.servername
+          history: 90d
+          value_type: TEXT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.servername
+          master_item:
+            key: palworld.info
+        - uuid: fd934038d59e44649c9752d8d83154a0
+          name: 'Palworld: Server Version'
+          type: DEPENDENT
+          key: palworld.info.version
+          history: 90d
+          value_type: TEXT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.version
+          master_item:
+            key: palworld.info
+        - uuid: c5825980e09a4238bd3e2cbd5d131f93
+          name: 'Palworld: Metrics'
+          type: HTTP_AGENT
+          key: palworld.metrics
+          delay: 20s
+          history: '0'
+          value_type: TEXT
+          timeout: 5s
+          url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/metrics'
+          headers:
+            - name: Accept
+              value: application/json
+            - name: Authorization
+              value: 'Basic {$PALAPIKEY}'
+          tags:
+            - tag: dataset
+              value: metrics
+            - tag: integration
+              value: palworld-site
+        - uuid: 1bc3e74c12184f5889983daaa442aa6a
+          name: 'Palworld: Current Players'
+          type: DEPENDENT
+          key: palworld.metrics.current_players
+          history: 90d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.currentplayernum
+          master_item:
+            key: palworld.metrics
+        - uuid: c6559ce03c6648aa92495f93b46af461
+          name: 'Palworld: Maximum Players'
+          type: DEPENDENT
+          key: palworld.metrics.max_players
+          history: 90d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.maxplayernum
+          master_item:
+            key: palworld.metrics
+        - uuid: aaed89cbc8ab4170b199829821202c74
+          name: 'Palworld: Server FPS'
+          type: DEPENDENT
+          key: palworld.metrics.fps
+          history: 90d
+          value_type: FLOAT
+          units: FPS
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.serverfps
+          master_item:
+            key: palworld.metrics
+        - uuid: 02f7bcbd447d4f9cae39d38b61673042
+          name: 'Palworld: Average Server FPS'
+          type: DEPENDENT
+          key: palworld.metrics.fps_average
+          history: 90d
+          value_type: FLOAT
+          units: FPS
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.serverfpsaverage
+          master_item:
+            key: palworld.metrics
+        - uuid: 916c2f731bc54b6c92afe69db28f8b85
+          name: 'Palworld: Server Frame Time'
+          type: DEPENDENT
+          key: palworld.metrics.frame_time
+          history: 90d
+          value_type: FLOAT
+          units: ms
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.serverframetime
+          master_item:
+            key: palworld.metrics
+        - uuid: 84ae67a682b640b18b0ebd9c02372b57
+          name: 'Palworld: World Days'
+          type: DEPENDENT
+          key: palworld.metrics.days
+          history: 90d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.days
+          master_item:
+            key: palworld.metrics
+        - uuid: 4d0ff00d034b43939e90fec18bc37144
+          name: 'Palworld: Base Camps'
+          type: DEPENDENT
+          key: palworld.metrics.base_camps
+          history: 90d
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.basecampnum
+          master_item:
+            key: palworld.metrics
+        - uuid: e50ddf671a6c40a584807f103028af5e
+          name: 'Palworld: Server Uptime'
+          type: DEPENDENT
+          key: palworld.metrics.uptime
+          history: 90d
+          units: s
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.uptime
+          master_item:
+            key: palworld.metrics
+        - uuid: a3f4b208a877413fa96a47cd833c13bd
+          name: 'Palworld: Player List'
+          type: HTTP_AGENT
+          key: palworld.players
+          delay: 20s
+          history: '0'
+          value_type: TEXT
+          timeout: 5s
+          url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/players'
+          headers:
+            - name: Accept
+              value: application/json
+            - name: Authorization
+              value: 'Basic {$PALAPIKEY}'
+          tags:
+            - tag: dataset
+              value: players
+            - tag: integration
+              value: palworld-site
+        - uuid: 883340a16d6045e5a3f5217e8146e30e
+          name: 'Palworld: Online Player Count'
+          type: DEPENDENT
+          key: palworld.players.count
+          history: 90d
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'return (JSON.parse(value).players || []).length;'
+          master_item:
+            key: palworld.players
+        - uuid: 30a77ab1845a4815964a76a327ad659b
+          name: 'Palworld: Settings'
+          type: HTTP_AGENT
+          key: palworld.settings
+          delay: 4h
+          history: '0'
+          value_type: TEXT
+          timeout: 5s
+          url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/settings'
+          headers:
+            - name: Accept
+              value: application/json
+            - name: Authorization
+              value: 'Basic {$PALAPIKEY}'
+          tags:
+            - tag: dataset
+              value: settings
+            - tag: integration
+              value: palworld-site
+      discovery_rules:
+        - uuid: 3ff245a983ca43a6a4d4776c6a43bb2c
+          name: 'Palworld: Player Discovery'
+          type: DEPENDENT
+          key: palworld.players.discovery
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: d3d9253d55d242e29074197a3a36af9b
+              name: 'Palworld: {#NAME} level'
+              type: DEPENDENT
+              key: 'palworld.player.level[{#PLAYERID}]'
+              history: 90d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.players[?(@.playerId=="{#PLAYERID}")].level.first()'
+              master_item:
+                key: palworld.players
+            - uuid: 52d34cdfd17d4886a34fc892ac4002d6
+              name: 'Palworld: {#NAME} ping'
+              type: DEPENDENT
+              key: 'palworld.player.ping[{#PLAYERID}]'
+              history: 7d
+              value_type: FLOAT
+              units: ms
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.players[?(@.playerId=="{#PLAYERID}")].ping.first()'
+              master_item:
+                key: palworld.players
+            - uuid: 1bc30682e80746b4bc8696c67be5aac4
+              name: 'Palworld: {#NAME} position X'
+              type: DEPENDENT
+              key: 'palworld.player.location_x[{#PLAYERID}]'
+              history: 7d
+              value_type: FLOAT
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.players[?(@.playerId=="{#PLAYERID}")].location_x.first()'
+              master_item:
+                key: palworld.players
+            - uuid: 3f9d64973fd64d09a4674ba130a8a831
+              name: 'Palworld: {#NAME} position Y'
+              type: DEPENDENT
+              key: 'palworld.player.location_y[{#PLAYERID}]'
+              history: 7d
+              value_type: FLOAT
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.players[?(@.playerId=="{#PLAYERID}")].location_y.first()'
+              master_item:
+                key: palworld.players
+            - uuid: f77c47b5db81445681dd473a8b0d465e
+              name: 'Palworld: {#NAME} building count'
+              type: DEPENDENT
+              key: 'palworld.player.buildings[{#PLAYERID}]'
+              history: 90d
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.players[?(@.playerId=="{#PLAYERID}")].building_count.first()'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+              master_item:
+                key: palworld.players
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var players = JSON.parse(value).players || [];
+                  return JSON.stringify(players.map(function (player) {
+                      return {
+                          "{#NAME}": player.name,
+                          "{#PLAYERID}": player.playerId
+                      };
+                  }));
+          master_item:
+            key: palworld.players
+      macros:
+        - macro: '{$PALAPISCHEME}'
+          value: http
+          description: 'Use https only when a trusted TLS proxy fronts the Palworld REST API.'
+        - macro: '{$PALAPIIP}'
+          description: 'Palworld REST API address reachable from Zabbix.'
+        - macro: '{$PALAPIKEY}'
+          type: SECRET_TEXT
+          description: 'Base64 value for admin:<AdminPassword>, without the Basic prefix.'
+        - macro: '{$PALAPIPORT}'
+          value: '8212'
+          description: 'Palworld REST API TCP port.'
