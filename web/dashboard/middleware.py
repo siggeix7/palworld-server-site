@@ -87,6 +87,10 @@ class SiteAccessMiddleware:
             if request.path.startswith("/api/"):
                 return JsonResponse({"error": "account approval required"}, status=403)
             return redirect("pending-approval")
+        if profile.must_change_password:
+            if request.path.startswith("/api/"):
+                return JsonResponse({"error": "password change required"}, status=403)
+            return redirect("password_change")
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):

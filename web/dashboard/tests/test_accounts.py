@@ -14,6 +14,7 @@ from dashboard.tokens import email_verification_token
 @override_settings(
     SITE_AUTH_REQUIRED=True,
     SITE_ADMIN_USERS={"admin@example.com"},
+    CSRF_TRUSTED_ORIGINS=["https://palworld.example.com"],
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     DEFAULT_FROM_EMAIL="site@example.com",
     PUBLIC_SITE_URL="https://palworld.example.com",
@@ -32,6 +33,7 @@ class AccountAccessTests(TestCase):
         *,
         verified=False,
         approved=False,
+        must_change_password=False,
     ):
         user = get_user_model().objects.create_user(
             username=username,
@@ -42,6 +44,7 @@ class AccountAccessTests(TestCase):
             user=user,
             email_verified=verified,
             approved=approved,
+            must_change_password=must_change_password,
         )
         return user
 
@@ -114,6 +117,33 @@ class AccountAccessTests(TestCase):
         self.assertFalse(user.site_profile.approved)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("https://palworld.example.com/accounts/verify/", mail.outbox[0].body)
+
+    @override_settings(ALLOWED_HOSTS=["internal.example"])
+    def test_registration_accepts_canonical_origin_behind_proxy(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        response = csrf_client.get(
+            reverse("register"),
+            secure=True,
+            HTTP_HOST="internal.example",
+        )
+        token = response.cookies["csrftoken"].value
+
+        response = csrf_client.post(
+            reverse("register"),
+            {
+                "csrfmiddlewaretoken": token,
+                "username": "ProxyMember",
+                "email": "proxy@example.com",
+                "password1": self.password,
+                "password2": self.password,
+            },
+            secure=True,
+            HTTP_HOST="internal.example",
+            HTTP_ORIGIN="https://palworld.example.com",
+        )
+
+        self.assertRedirects(response, reverse("registration-done"))
+        self.assertTrue(get_user_model().objects.filter(username="ProxyMember").exists())
 
     def test_registration_rejects_case_insensitive_identifier_collisions(self):
         self.create_user(username="ExistingName", email="existing@example.com")
@@ -298,6 +328,40 @@ class AccountAccessTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("home"))
+
+    def test_temporary_password_must_be_changed_before_site_access(self):
+        user = self.create_user(
+            verified=True,
+            approved=True,
+            must_change_password=True,
+        )
+        self.client.force_login(user)
+
+        self.assertRedirects(
+            self.client.get(reverse("home")),
+            reverse("password_change"),
+            fetch_redirect_response=False,
+        )
+        response = self.client.get(reverse("snapshot"))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"error": "password change required"})
+
+        new_password = "A-new-valid-test-password-963!"
+        response = self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": self.password,
+                "new_password1": new_password,
+                "new_password2": new_password,
+            },
+        )
+
+        self.assertRedirects(response, reverse("home"))
+        user.site_profile.refresh_from_db()
+        user.refresh_from_db()
+        self.assertFalse(user.site_profile.must_change_password)
+        self.assertTrue(user.check_password(new_password))
+        self.assertEqual(self.client.get(reverse("home")).status_code, 200)
 
     def test_login_rate_limit_is_shared_through_the_database(self):
         for _attempt in range(10):

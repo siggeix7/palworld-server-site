@@ -43,6 +43,7 @@
       <div class="account-tools">
         <span>{{ request.user.username }}</span>
         {% if site_admin %}<a href="{% url 'members' %}">Membri</a>{% endif %}
+        <a href="{% url 'password_change' %}">Password</a>
         <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Esci</button></form>
       </div>
       <div class="live-pill" id="headerStatus" role="status" aria-live="polite"><span></span><b>IN ATTESA</b></div>

@@ -113,6 +113,7 @@ if (
 ):
     raise ImproperlyConfigured("PUBLIC_SITE_URL must be an absolute HTTPS origin")
 del public_site_port
+CSRF_TRUSTED_ORIGINS = [PUBLIC_SITE_URL]
 ZABBIX_CONNECTOR_TOKEN = os.getenv("ZABBIX_CONNECTOR_TOKEN", "")
 ZABBIX_SOURCE_HOST = os.getenv("ZABBIX_SOURCE_HOST", "").strip()
 PLAYER_HASH_SECRET = os.getenv("PLAYER_HASH_SECRET", SECRET_KEY)

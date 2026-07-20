@@ -3,6 +3,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import views as auth_views
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
@@ -11,6 +12,8 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
+from django.utils.decorators import method_decorator
+from django.urls import reverse_lazy
 
 from .accounts import get_user_profile, has_site_access, is_site_admin
 from .emails import (
@@ -24,6 +27,34 @@ from .tokens import email_verification_token
 
 
 logger = logging.getLogger(__name__)
+
+
+@method_decorator(login_required, name="dispatch")
+@method_decorator(never_cache, name="dispatch")
+class SitePasswordChangeView(auth_views.PasswordChangeView):
+    template_name = "dashboard/accounts/password_change.html"
+    success_url = reverse_lazy("home")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        profile = get_user_profile(self.request.user)
+        if profile.must_change_password:
+            profile.must_change_password = False
+            profile.save(update_fields=["must_change_password"])
+        messages.success(self.request, "Password aggiornata correttamente.")
+        return response
+
+
+class SitePasswordResetConfirmView(auth_views.PasswordResetConfirmView):
+    template_name = "dashboard/accounts/password_reset_confirm.html"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        profile = UserProfile.objects.filter(user=self.user).first()
+        if profile and profile.must_change_password:
+            profile.must_change_password = False
+            profile.save(update_fields=["must_change_password"])
+        return response
 
 
 @require_http_methods(["GET", "POST"])
