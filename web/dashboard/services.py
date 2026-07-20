@@ -74,6 +74,7 @@ SAFE_SETTING_KEYS = {
     "ServerName",
     "ServerDescription",
     "AllowConnectPlatform",
+    "CrossplayPlatforms",
     "bIsUseBackupSaveData",
 }
 

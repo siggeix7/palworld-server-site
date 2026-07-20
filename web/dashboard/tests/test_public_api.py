@@ -83,6 +83,13 @@ class PublicApiTests(TestCase):
         self.assertTrue(payload["players"][0]["location_available"])
         self.assertEqual(payload["summary_24h"]["average_players"], 1.0)
         self.assertEqual(payload["summary_24h"]["minimum_fps"], 59.0)
+        expected_start = LatestDataset.objects.get(key="metrics").source_clock - timedelta(
+            seconds=7200
+        )
+        self.assertEqual(
+            payload["status"]["started_at"],
+            expected_start.isoformat().replace("+00:00", "Z"),
+        )
         self.assertEqual(response.headers["Cache-Control"], "no-store")
 
     def test_snapshot_marks_missing_player_location(self):

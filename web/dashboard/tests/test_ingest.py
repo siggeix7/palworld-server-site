@@ -113,6 +113,39 @@ class IngestTests(TestCase):
         self.assertEqual(LatestDataset.objects.get(key="metrics").payload["serverfpsaverage"], 59.2)
         self.assertTrue(LatestDataset.objects.get(key="status").payload["reachable"])
 
+    def test_server_metadata_is_sanitized(self):
+        raw_settings = {
+            "ServerName": "Public server",
+            "CrossplayPlatforms": ["Steam", "Xbox"],
+            "PublicIP": "192.0.2.20",
+            "PublicPort": 8211,
+            "RCONPort": 25575,
+            "RESTAPIPort": 8212,
+            "AdminPassword": "not-public",
+        }
+        raw_info = {
+            "version": "v1.0.0",
+            "servername": "Public server",
+            "description": "Public description",
+            "worldguid": "PRIVATE-WORLD-GUID",
+        }
+
+        response = self.post(
+            ndjson(record("settings", raw_settings), record("info", raw_info))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["accepted"], 2)
+        settings_payload = LatestDataset.objects.get(key="settings").payload
+        self.assertEqual(settings_payload["CrossplayPlatforms"], ["Steam", "Xbox"])
+        self.assertEqual(settings_payload["ServerName"], "Public server")
+        self.assertNotIn("PublicIP", settings_payload)
+        self.assertNotIn("PublicPort", settings_payload)
+        self.assertNotIn("RCONPort", settings_payload)
+        self.assertNotIn("RESTAPIPort", settings_payload)
+        self.assertNotIn("AdminPassword", settings_payload)
+        self.assertNotIn("worldguid", LatestDataset.objects.get(key="info").payload)
+
     def test_player_data_is_sanitized_and_sessions_are_inferred(self):
         clock = int(time.time())
         raw_player = {

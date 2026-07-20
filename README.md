@@ -15,7 +15,8 @@ amministrativa del server di gioco.
 - Nome, account, livello, ping e numero di costruzioni per giocatore.
 - Storico FPS e giocatori per 6 ore, 24 ore, 7, 30 o 90 giorni.
 - Sessioni, ingressi, uscite e tempo online negli ultimi 7 giorni.
-- Regole pubbliche del mondo divise per categoria.
+- Scheda server con modalita', occupazione, avvio, piattaforme e funzioni attive.
+- Regole pubbliche del mondo divise per categoria, incluso il crossplay.
 - Layout responsive per desktop e mobile.
 - Sanitizzazione prima della persistenza: IP, `userId`, `playerId`, password e
   porte amministrative non vengono conservati.

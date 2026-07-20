@@ -57,6 +57,7 @@
     selectedPlayerDetail: $('#selectedPlayerDetail'),
     playersTable: $('#playersTable'),
     settingsGrid: $('#settingsGrid'),
+    serverProfile: $('#serverProfile'),
     worldHighlights: $('#worldHighlights'),
     eventList: $('#eventList'),
     historyRange: $('#historyRange'),
@@ -432,22 +433,63 @@
 
   const settingGroups = [
     ['Progressione', ['Difficulty', 'ExpRate', 'PalCaptureRate', 'PalSpawnNumRate', 'WorkSpeedRate', 'PalEggDefaultHatchingTime']],
-    ['Tempo e risorse', ['DayTimeSpeedRate', 'NightTimeSpeedRate', 'CollectionDropRate', 'CollectionObjectHpRate', 'CollectionObjectRespawnSpeedRate', 'EnemyDropItemRate']],
-    ['Giocatori', ['PlayerDamageRateAttack', 'PlayerDamageRateDefense', 'PlayerStomachDecreaceRate', 'PlayerStaminaDecreaceRate', 'DeathPenalty', 'bEnableFriendlyFire']],
-    ['Pal', ['PalDamageRateAttack', 'PalDamageRateDefense', 'PalStomachDecreaceRate', 'PalStaminaDecreaceRate', 'PalAutoHPRegeneRate']],
-    ['Basi e gilde', ['BaseCampMaxNum', 'BaseCampWorkerMaxNum', 'GuildPlayerMaxNum', 'BuildObjectDamageRate', 'BuildObjectDeteriorationDamageRate', 'AutoResetGuildTimeNoOnlinePlayers']],
-    ['Multiplayer', ['ServerPlayerMaxNum', 'CoopPlayerMaxNum', 'bIsPvP', 'bEnablePlayerToPlayerDamage', 'bEnableFastTravel', 'AllowConnectPlatform']],
+    ['Tempo e risorse', ['DayTimeSpeedRate', 'NightTimeSpeedRate', 'CollectionDropRate', 'CollectionObjectHpRate', 'CollectionObjectRespawnSpeedRate', 'EnemyDropItemRate', 'DropItemMaxNum', 'DropItemAliveMaxHours']],
+    ['Giocatori', ['PlayerDamageRateAttack', 'PlayerDamageRateDefense', 'PlayerStomachDecreaceRate', 'PlayerStaminaDecreaceRate', 'PlayerAutoHPRegeneRate', 'PlayerAutoHpRegeneRateInSleep', 'DeathPenalty', 'bEnableFriendlyFire']],
+    ['Pal', ['PalDamageRateAttack', 'PalDamageRateDefense', 'PalStomachDecreaceRate', 'PalStaminaDecreaceRate', 'PalAutoHPRegeneRate', 'PalAutoHpRegeneRateInSleep']],
+    ['Basi e gilde', ['BaseCampMaxNum', 'BaseCampWorkerMaxNum', 'GuildPlayerMaxNum', 'BuildObjectDamageRate', 'BuildObjectDeteriorationDamageRate', 'bAutoResetGuildNoOnlinePlayers', 'AutoResetGuildTimeNoOnlinePlayers', 'bCanPickupOtherGuildDeathPenaltyDrop', 'bEnableDefenseOtherGuildPlayer']],
+    ['Multiplayer', ['ServerPlayerMaxNum', 'CoopPlayerMaxNum', 'bIsPvP', 'bEnablePlayerToPlayerDamage', 'bEnableFastTravel', 'bEnableNonLoginPenalty', 'CrossplayPlatforms', 'AllowConnectPlatform']],
+    ['Mondo e salvataggi', ['bEnableInvaderEnemy', 'bIsStartLocationSelectByMap', 'bExistPlayerAfterLogout', 'bIsUseBackupSaveData']],
+    ['Identità server', ['ServerName', 'ServerDescription']],
   ]
 
+  const settingLabels = {
+    AllowConnectPlatform: 'Piattaforme consentite',
+    CrossplayPlatforms: 'Piattaforme crossplay',
+    ServerDescription: 'Descrizione server',
+    ServerName: 'Nome server',
+    bExistPlayerAfterLogout: 'Giocatore persistente dopo il logout',
+    bIsUseBackupSaveData: 'Backup dei salvataggi',
+  }
+
   function settingLabel(key) {
-    return key.replace(/^b(?=[A-Z])/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replaceAll('_', ' ')
+    return settingLabels[key] || key.replace(/^b(?=[A-Z])/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replaceAll('_', ' ')
   }
 
   function settingValue(value) {
+    if (Array.isArray(value)) return value.map(settingValue).join(', ')
+    if (value === null || value === undefined || value === '') return '--'
     if (value === true) return 'Attivo'
     if (value === false) return 'Disattivo'
     if (typeof value === 'number') return formatNumber(value, 4)
     return String(value)
+  }
+
+  function renderServerProfile(data) {
+    elements.serverProfile.replaceChildren()
+    const settings = data.settings || {}
+    const metrics = data.metrics || {}
+    const status = data.status || {}
+    const platforms = settings.CrossplayPlatforms ?? settings.AllowConnectPlatform
+    const profile = [
+      ['Stato', status.online ? 'Operativo' : (status.stale ? 'Dati obsoleti' : 'Non raggiungibile')],
+      ['Modalità', Object.hasOwn(settings, 'bIsPvP') ? (settings.bIsPvP ? 'PvP' : 'PvE') : null],
+      ['Giocatori', Object.hasOwn(metrics, 'currentplayernum') && Object.hasOwn(metrics, 'maxplayernum') ? `${formatNumber(metrics.currentplayernum)} / ${formatNumber(metrics.maxplayernum)}` : null],
+      ['Avviato', status.started_at ? formatDate(status.started_at, true) : null],
+      ['Versione', data.info?.version || null],
+      ['Piattaforme', platforms === undefined ? null : settingValue(platforms)],
+      ['Backup salvataggi', Object.hasOwn(settings, 'bIsUseBackupSaveData') ? (settings.bIsUseBackupSaveData ? 'Attivo' : 'Disattivo') : null],
+      ['Invasori', Object.hasOwn(settings, 'bEnableInvaderEnemy') ? (settings.bEnableInvaderEnemy ? 'Attivi' : 'Disattivi') : null],
+    ]
+    for (const [label, value] of profile) {
+      if (value === null) continue
+      const item = document.createElement('div')
+      const term = document.createElement('dt')
+      term.textContent = label
+      const description = document.createElement('dd')
+      description.textContent = value
+      item.append(term, description)
+      elements.serverProfile.appendChild(item)
+    }
   }
 
   function renderWorldHighlights(settings) {
@@ -565,6 +607,7 @@
 
     renderMap(players)
     renderPlayersTable(players)
+    renderServerProfile(data)
     renderSettings(data.settings || {})
     renderEvents(data.events || [])
 

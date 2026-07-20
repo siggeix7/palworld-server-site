@@ -111,6 +111,12 @@ def snapshot(request):
     metric_time = datasets.get("metrics").source_clock if datasets.get("metrics") else None
     age = int((now - metric_time).total_seconds()) if metric_time else None
     online = bool(status.get("reachable")) and age is not None and age <= settings.DATA_STALE_SECONDS
+    uptime = metrics.get("uptime")
+    started_at = (
+        metric_time - timedelta(seconds=uptime)
+        if metric_time and isinstance(uptime, (int, float))
+        else None
+    )
 
     players_time = datasets.get("players").source_clock if datasets.get("players") else None
     players_age = int((now - players_time).total_seconds()) if players_time else None
@@ -154,6 +160,7 @@ def snapshot(request):
                 "data_age_seconds": age,
                 "players_stale": players_stale,
                 "last_updated": _iso(last_updated),
+                "started_at": _iso(started_at),
             },
             "info": info,
             "metrics": metrics,
