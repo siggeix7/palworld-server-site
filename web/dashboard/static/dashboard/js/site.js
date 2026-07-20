@@ -19,6 +19,8 @@
     requests: {},
     notices: { snapshot: null, history: null },
     historyTimer: null,
+    archiveTimer: null,
+    archivePlayers: [],
     toastTimer: null,
   }
 
@@ -56,6 +58,8 @@
     selectedPlayerName: $('#selectedPlayerName'),
     selectedPlayerDetail: $('#selectedPlayerDetail'),
     playersTable: $('#playersTable'),
+    playerArchive: $('#playerArchive'),
+    playerArchiveStatus: $('#playerArchiveStatus'),
     settingsGrid: $('#settingsGrid'),
     serverProfile: $('#serverProfile'),
     worldHighlights: $('#worldHighlights'),
@@ -102,6 +106,19 @@
       ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }
       : { hour: '2-digit', minute: '2-digit', second: '2-digit' }
     return new Intl.DateTimeFormat('it-IT', options).format(date)
+  }
+
+  function formatFullDate(value) {
+    if (!value) return 'in corso'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '--'
+    return new Intl.DateTimeFormat('it-IT', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date)
   }
 
   function formatChartDate(value, compact, timeSpan) {
@@ -428,6 +445,103 @@
     }
     if (focusedId) {
       elements.playersTable.querySelector(`[data-player-id="${focusedId}"]`)?.focus({ preventScroll: true })
+    }
+  }
+
+  function renderPlayerArchive(players) {
+    const expanded = new Set(
+      [...elements.playerArchive.querySelectorAll('details[open]')]
+        .map((details) => details.closest('[data-player-id]')?.dataset.playerId),
+    )
+    elements.playerArchive.replaceChildren()
+    if (!players.length) {
+      const empty = document.createElement('p')
+      empty.className = 'empty-copy'
+      empty.textContent = 'Nessun giocatore registrato.'
+      elements.playerArchive.appendChild(empty)
+      return
+    }
+
+    for (const player of players) {
+      const card = document.createElement('article')
+      card.className = 'player-history-card'
+      card.dataset.playerId = player.id
+
+      const header = document.createElement('header')
+      const avatar = document.createElement('i')
+      avatar.className = 'history-avatar'
+      avatar.textContent = initials(player.name)
+      const identity = document.createElement('div')
+      const name = document.createElement('strong')
+      name.textContent = player.name
+      const account = document.createElement('small')
+      account.textContent = player.accountName || 'account non disponibile'
+      identity.append(name, account)
+      const status = document.createElement('span')
+      status.className = player.online ? 'archive-status online' : 'archive-status'
+      status.textContent = player.online ? 'Online ora' : `Ultimo accesso ${formatFullDate(player.last_seen)}`
+      header.append(avatar, identity, status)
+
+      const totals = document.createElement('dl')
+      totals.className = 'player-time-grid'
+      for (const [label, value] of [
+        ['Ultimi 30 giorni', player.minutes_30d],
+        ['Ultimi 365 giorni', player.minutes_365d],
+        ['Da sempre', player.minutes_all],
+      ]) {
+        const item = document.createElement('div')
+        const term = document.createElement('dt')
+        term.textContent = label
+        const description = document.createElement('dd')
+        description.textContent = `${formatNumber(value)} min`
+        item.append(term, description)
+        totals.appendChild(item)
+      }
+
+      const meta = document.createElement('p')
+      meta.className = 'player-history-meta'
+      const sessionLabel = Number(player.session_count) === 1 ? 'sessione' : 'sessioni'
+      meta.textContent = `Prima visita ${formatFullDate(player.first_seen)} · ${formatNumber(player.session_count)} ${sessionLabel}`
+      card.append(header, totals, meta)
+
+      if (player.periods?.length) {
+        const details = document.createElement('details')
+        details.open = expanded.has(player.id)
+        const summary = document.createElement('summary')
+        summary.textContent = `Periodi online (${formatNumber(player.periods.length)})`
+        const periods = document.createElement('ol')
+        periods.className = 'session-periods'
+        for (const period of player.periods) {
+          const item = document.createElement('li')
+          const range = document.createElement('span')
+          range.textContent = period.active
+            ? `Dal ${formatFullDate(period.started_at)} · in corso`
+            : `${formatFullDate(period.started_at)} → ${formatFullDate(period.ended_at)}`
+          const duration = document.createElement('strong')
+          duration.textContent = `${formatNumber(period.duration_minutes)} min`
+          item.append(range, duration)
+          periods.appendChild(item)
+        }
+        details.append(summary, periods)
+        card.appendChild(details)
+      }
+      elements.playerArchive.appendChild(card)
+    }
+  }
+
+  async function loadPlayerArchive() {
+    try {
+      const data = await requestJson('/api/v1/players', 'playerArchive')
+      state.archivePlayers = data.players || []
+      renderPlayerArchive(state.archivePlayers)
+      setText(
+        elements.playerArchiveStatus,
+        `${formatNumber(state.archivePlayers.length)} giocatori · aggiornato ${formatDate(data.generated_at)}`,
+      )
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      setText(elements.playerArchiveStatus, 'Storico temporaneamente non disponibile.')
+      if (!state.archivePlayers.length) renderPlayerArchive([])
     }
   }
 
@@ -910,6 +1024,14 @@
     }, 60000)
   }
 
+  function scheduleArchivePoll() {
+    window.clearTimeout(state.archiveTimer)
+    state.archiveTimer = window.setTimeout(async () => {
+      await loadPlayerArchive()
+      scheduleArchivePoll()
+    }, 60000)
+  }
+
   async function snapshotLoop(initial = false) {
     await loadSnapshot(initial)
     window.setTimeout(() => snapshotLoop(false), 10000)
@@ -930,6 +1052,7 @@
     loadStaticPoints()
     snapshotLoop(true)
     loadHistory().then(scheduleHistoryPoll)
+    loadPlayerArchive().then(scheduleArchivePoll)
   }
 
   initialize()

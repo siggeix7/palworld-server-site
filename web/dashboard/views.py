@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import connection
-from django.db.models import Avg, Max, Min
+from django.db.models import Avg, Max, Min, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -40,6 +40,15 @@ def _iso(value):
 
 def _duration_seconds(start, end):
     return max(0, int((end - start).total_seconds()))
+
+
+def _session_end(session, now):
+    if session.ended_at:
+        return session.ended_at, False
+    stale_end = session.last_seen + timedelta(seconds=settings.DATA_STALE_SECONDS)
+    if stale_end < now:
+        return stale_end, False
+    return now, True
 
 
 def _dataset_map():
@@ -227,6 +236,69 @@ def history(request):
                 }
                 for row in rows
             ],
+        }
+    )
+
+
+@require_GET
+@cache_page(30)
+def players(request):
+    now = timezone.now()
+    since_30d = now - timedelta(days=30)
+    since_365d = now - timedelta(days=365)
+    queryset = Player.objects.prefetch_related(
+        Prefetch("sessions", queryset=PlayerSession.objects.order_by("-started_at"))
+    ).order_by("-last_seen", "name")
+    archive = []
+
+    for player in queryset:
+        seconds_30d = 0
+        seconds_365d = 0
+        seconds_all = 0
+        online = False
+        periods = []
+        sessions = list(player.sessions.all())
+
+        for session in sessions:
+            ended_at, active = _session_end(session, now)
+            seconds_all += _duration_seconds(session.started_at, ended_at)
+            seconds_30d += _duration_seconds(max(session.started_at, since_30d), ended_at)
+            seconds_365d += _duration_seconds(max(session.started_at, since_365d), ended_at)
+            online = online or active
+            periods.append(
+                {
+                    "started_at": _iso(session.started_at),
+                    "ended_at": None if active else _iso(ended_at),
+                    "active": active,
+                    "duration_minutes": _duration_seconds(
+                        session.started_at, ended_at
+                    )
+                    // 60,
+                }
+            )
+
+        archive.append(
+            {
+                "id": player.public_id,
+                "name": player.name,
+                "accountName": player.account_name,
+                "level": player.level,
+                "first_seen": _iso(player.first_seen),
+                "last_seen": _iso(player.last_seen),
+                "online": online,
+                "session_count": len(sessions),
+                "minutes_30d": seconds_30d // 60,
+                "minutes_365d": seconds_365d // 60,
+                "minutes_all": seconds_all // 60,
+                "periods": periods,
+            }
+        )
+
+    return JsonResponse(
+        {
+            "generated_at": _iso(now),
+            "windows": {"month_days": 30, "year_days": 365},
+            "players": archive,
         }
     )
 

@@ -1,9 +1,16 @@
 import time
 from datetime import datetime, timedelta, timezone as dt_timezone
+from unittest import mock
 
 from django.test import TestCase
 
-from dashboard.models import LatestDataset, MetricSample, Player, PositionSample
+from dashboard.models import (
+    LatestDataset,
+    MetricSample,
+    Player,
+    PlayerSession,
+    PositionSample,
+)
 
 
 class PublicApiTests(TestCase):
@@ -110,6 +117,78 @@ class PublicApiTests(TestCase):
         response = self.client.get("/api/v1/player/public-player-id/trail?range=6h")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["positions"][0]["x"], -100)
+
+    def test_player_archive_returns_periods_and_rolling_minutes(self):
+        now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
+        sessions = [
+            (now - timedelta(minutes=10), now, None),
+            (
+                now - timedelta(days=2),
+                now - timedelta(days=2) + timedelta(minutes=120),
+                now - timedelta(days=2) + timedelta(minutes=120),
+            ),
+            (
+                now - timedelta(days=30, minutes=30),
+                now - timedelta(days=30) + timedelta(minutes=30),
+                now - timedelta(days=30) + timedelta(minutes=30),
+            ),
+            (
+                now - timedelta(days=40),
+                now - timedelta(days=40) + timedelta(minutes=60),
+                now - timedelta(days=40) + timedelta(minutes=60),
+            ),
+            (
+                now - timedelta(days=400),
+                now - timedelta(days=400) + timedelta(minutes=30),
+                now - timedelta(days=400) + timedelta(minutes=30),
+            ),
+        ]
+        for started_at, last_seen, ended_at in sessions:
+            PlayerSession.objects.create(
+                player=self.player,
+                started_at=started_at,
+                last_seen=last_seen,
+                ended_at=ended_at,
+            )
+
+        stale_player = Player.objects.create(
+            public_id="stale-player-id",
+            name="Stale Explorer",
+            account_name="stale-account",
+            first_seen=now - timedelta(hours=3),
+            last_seen=now - timedelta(hours=2),
+        )
+        PlayerSession.objects.create(
+            player=stale_player,
+            started_at=now - timedelta(hours=3),
+            last_seen=now - timedelta(hours=2),
+        )
+
+        with mock.patch("dashboard.views.timezone.now", return_value=now):
+            response = self.client.get("/api/v1/players")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["windows"], {"month_days": 30, "year_days": 365})
+        player = next(
+            entry for entry in payload["players"] if entry["id"] == "public-player-id"
+        )
+        self.assertTrue(player["online"])
+        self.assertEqual(player["session_count"], 5)
+        self.assertEqual(player["minutes_30d"], 160)
+        self.assertEqual(player["minutes_365d"], 250)
+        self.assertEqual(player["minutes_all"], 280)
+        self.assertEqual(len(player["periods"]), 5)
+        self.assertTrue(player["periods"][0]["active"])
+        self.assertIsNone(player["periods"][0]["ended_at"])
+
+        stale = next(
+            entry for entry in payload["players"] if entry["id"] == "stale-player-id"
+        )
+        self.assertFalse(stale["online"])
+        self.assertEqual(stale["minutes_all"], 61)
+        self.assertFalse(stale["periods"][0]["active"])
+        self.assertIsNotNone(stale["periods"][0]["ended_at"])
 
     def test_invalid_ranges_are_rejected(self):
         self.assertEqual(self.client.get("/api/v1/history?range=forever").status_code, 400)

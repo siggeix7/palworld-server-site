@@ -212,6 +212,31 @@ td code { color: var(--teal); font-family: ui-monospace, monospace; }
 .player-link { padding: 0; border: 0; color: var(--paper); background: transparent; text-align: left; cursor: pointer; }
 .player-link:hover strong { color: var(--teal); }
 .empty-cell { color: var(--paper-dim); text-align: center; }
+.archive-heading { margin-top: 3rem; display: flex; align-items: end; justify-content: space-between; gap: 2rem; }
+.archive-heading .eyebrow { margin-bottom: .5rem; }
+.archive-heading h3 { margin: 0; font-family: Georgia, serif; font-size: clamp(1.8rem, 3vw, 3rem); font-weight: 400; }
+.archive-heading > p, .archive-note { color: var(--paper-dim); font-size: .72rem; }
+.archive-heading > p { margin: 0; text-align: right; }
+.archive-note { margin: .7rem 0 1.25rem; }
+.player-archive { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.player-history-card { min-width: 0; border: 1px solid var(--line); background: var(--panel); }
+.player-history-card > header { min-height: 78px; padding: 1rem; display: grid; grid-template-columns: auto 1fr auto; gap: .8rem; align-items: center; border-bottom: 1px solid var(--line); }
+.history-avatar { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--coral); border-radius: 50%; color: var(--coral); font-style: normal; font-size: .72rem; }
+.player-history-card header strong, .player-history-card header small { display: block; }
+.player-history-card header small { color: var(--paper-dim); }
+.archive-status { max-width: 190px; color: var(--paper-dim); font-size: .66rem; text-align: right; }
+.archive-status.online { color: var(--teal); text-transform: uppercase; letter-spacing: .08em; }
+.player-time-grid { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); }
+.player-time-grid > div { min-width: 0; padding: 1rem; background: var(--ink-soft); }
+.player-time-grid dt { min-height: 2.3em; color: var(--paper-dim); text-transform: uppercase; letter-spacing: .08em; font-size: .59rem; }
+.player-time-grid dd { margin: .65rem 0 0; color: var(--sky); font-family: Georgia, serif; font-size: clamp(1.1rem, 2vw, 1.5rem); overflow-wrap: anywhere; }
+.player-history-meta { margin: 0; padding: .75rem 1rem; border-top: 1px solid var(--line); color: var(--paper-dim); font-size: .68rem; }
+.player-history-card details { border-top: 1px solid var(--line); }
+.player-history-card summary { padding: .8rem 1rem; color: var(--teal); cursor: pointer; text-transform: uppercase; letter-spacing: .08em; font-size: .65rem; }
+.session-periods { max-height: 320px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border-top: 1px solid var(--line); }
+.session-periods li { padding: .7rem 1rem; display: grid; grid-template-columns: 1fr auto; gap: 1rem; border-bottom: 1px solid var(--line); color: var(--paper-dim); font-size: .68rem; }
+.session-periods li:last-child { border-bottom: 0; }
+.session-periods strong { color: var(--paper); font-family: ui-monospace, monospace; font-size: .68rem; font-weight: 500; white-space: nowrap; }
 
 .server-profile { margin-bottom: 1rem; display: grid; grid-template-columns: minmax(210px, .7fr) minmax(0, 2.3fr); border: 1px solid var(--line); background: var(--panel); }
 .server-profile-heading { padding: 1.25rem; border-right: 1px solid var(--line); background: linear-gradient(145deg, rgba(76,224,193,.09), transparent 70%); }
@@ -260,6 +285,7 @@ footer { width: min(calc(100% - 2rem), var(--max)); margin: 0 auto; padding: 2re
   .metric-strip article:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
   .server-profile { grid-template-columns: 1fr; }
   .server-profile-heading { border-right: 0; border-bottom: 1px solid var(--line); }
+  .player-archive { grid-template-columns: 1fr; }
   .world-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -273,6 +299,10 @@ footer { width: min(calc(100% - 2rem), var(--max)); margin: 0 auto; padding: 2re
   .readout-grid article { min-height: 116px; padding: 1rem; }
   .section-shell { padding: 4rem 0; }
   .section-heading, .section-heading.compact { grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+  .archive-heading { align-items: start; flex-direction: column; gap: .5rem; }
+  .archive-heading > p { text-align: left; }
+  .player-history-card > header { grid-template-columns: auto 1fr; }
+  .archive-status { grid-column: 2; max-width: none; text-align: left; }
   .map-toolbar { align-items: flex-start; flex-direction: column; }
   .map-viewport { touch-action: pan-y pinch-zoom; }
   .metric-strip { grid-template-columns: 1fr 1fr; }

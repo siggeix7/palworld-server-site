@@ -15,6 +15,8 @@ amministrativa del server di gioco.
 - Nome, account, livello, ping e numero di costruzioni per giocatore.
 - Storico FPS e giocatori per 6 ore, 24 ore, 7, 30 o 90 giorni.
 - Sessioni, ingressi, uscite e tempo online negli ultimi 7 giorni.
+- Archivio di tutti i giocatori con periodi online e minuti negli ultimi 30
+  giorni, 365 giorni e da sempre.
 - Scheda server con modalita', occupazione, avvio, piattaforme e funzioni attive.
 - Regole pubbliche del mondo divise per categoria, incluso il crossplay.
 - Layout responsive per desktop e mobile.
@@ -271,6 +273,7 @@ GET /                              dashboard
 GET /healthz/                      health check
 GET /api/v1/snapshot              stato pubblico corrente
 GET /api/v1/history?range=24h      storico telemetria
+GET /api/v1/players                archivio giocatori e tempi online
 GET /api/v1/player/<id>/trail      traccia pubblica sanitizzata
 ```
 
