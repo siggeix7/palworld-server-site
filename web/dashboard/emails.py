@@ -93,20 +93,20 @@ def notify_admins_of_pending_user(request, user):
             if email
         )
     if not recipients:
-        return
+        return 0
     try:
         members_url = _absolute_url(request, reverse("members"))
     except ValueError as exc:
         logger.error("Pending member notification not sent: %s", exc)
-        return
+        return 0
     message = render_to_string(
         "dashboard/emails/admin_new_member.txt",
         {"user": user, "members_url": members_url},
     )
-    send_mail(
+    return send_mail(
         "Nuovo membro in attesa di approvazione",
         message,
         settings.DEFAULT_FROM_EMAIL,
         sorted(recipients),
-        fail_silently=True,
+        fail_silently=False,
     )

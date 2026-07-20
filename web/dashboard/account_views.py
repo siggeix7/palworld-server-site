@@ -29,6 +29,23 @@ from .tokens import email_verification_token
 logger = logging.getLogger(__name__)
 
 
+def _notify_admins_if_needed(request, user, profile):
+    if (
+        not profile.email_verified
+        or profile.approved
+        or profile.admin_notified_at
+    ):
+        return
+    try:
+        sent = notify_admins_of_pending_user(request, user)
+    except Exception:
+        logger.exception("Unable to notify admins for user_id=%s", user.pk)
+        return
+    if sent:
+        profile.admin_notified_at = timezone.now()
+        profile.save(update_fields=["admin_notified_at"])
+
+
 @method_decorator(login_required, name="dispatch")
 @method_decorator(never_cache, name="dispatch")
 class SitePasswordChangeView(auth_views.PasswordChangeView):
@@ -113,8 +130,7 @@ def verify_email(request, uidb64, token):
     if not profile.email_verified:
         profile.email_verified = True
         profile.save(update_fields=["email_verified"])
-        if not profile.approved:
-            notify_admins_of_pending_user(request, user)
+        _notify_admins_if_needed(request, user, profile)
     login(request, user, backend="dashboard.auth_backends.EmailOrUsernameBackend")
     messages.success(request, "Email confermata correttamente.")
     return redirect("home" if has_site_access(user) else "pending-approval")
@@ -147,6 +163,7 @@ def pending_approval(request):
     profile = get_user_profile(request.user)
     if has_site_access(request.user):
         return redirect("home")
+    _notify_admins_if_needed(request, request.user, profile)
     return render(
         request,
         "dashboard/accounts/pending.html",
@@ -183,12 +200,38 @@ def members(request):
             profile.save(update_fields=["approved", "approved_at", "approved_by"])
             messages.success(request, f"Accesso revocato a {profile.user.username}.")
         return redirect("members")
-    profiles = UserProfile.objects.select_related("user", "approved_by")
+    profiles = list(UserProfile.objects.select_related("user", "approved_by"))
+    for profile in profiles:
+        profile.site_admin = is_site_admin(profile.user)
     return render(
         request,
         "dashboard/accounts/members.html",
         {
-            "pending_profiles": profiles.filter(approved=False),
-            "approved_profiles": profiles.filter(approved=True),
+            "pending_profiles": [profile for profile in profiles if not profile.approved],
+            "approved_profiles": [profile for profile in profiles if profile.approved],
         },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+@never_cache
+def delete_member(request, profile_id):
+    if not is_site_admin(request.user) or not has_site_access(request.user):
+        raise PermissionDenied
+    profile = get_object_or_404(
+        UserProfile.objects.select_related("user"),
+        pk=profile_id,
+    )
+    if is_site_admin(profile.user):
+        raise PermissionDenied
+    if request.method == "POST":
+        username = profile.user.username
+        profile.user.delete()
+        messages.success(request, f"L'account {username} è stato eliminato.")
+        return redirect("members")
+    return render(
+        request,
+        "dashboard/accounts/member_confirm_delete.html",
+        {"member_profile": profile},
     )

@@ -24,8 +24,8 @@ amministrativa del server di gioco.
 - Ricerca impostazioni e giocatori, preferiti locali e colori giocatore stabili.
 - Sette temi visuali persistenti, senza dipendenze frontend esterne.
 - Layout responsive per desktop e mobile.
-- Registrazione con verifica email, approvazione amministrativa e recupero
-  password.
+- Registrazione con verifica email, notifica agli amministratori, approvazione,
+  revoca, eliminazione account e recupero password.
 - Credenziali di gioco e guida di collegamento visibili soltanto ai membri
   verificati e approvati.
 - Sanitizzazione prima della persistenza: IP, `userId`, `playerId`, password e
@@ -237,6 +237,12 @@ ha effetto dalla richiesta successiva. Il pannello non consente di revocare un
 amministratore configurato. Il gate della dashboard non è disattivabile tramite
 variabili d'ambiente. Pagine e API protette inviano header `Cache-Control` che
 ne vietano la memorizzazione.
+
+Quando un utente verifica l'email, tutti gli amministratori configurati ricevono
+una notifica con il collegamento al pannello membri. Un invio riuscito viene
+registrato; in caso di errore SMTP il sito ritenta dalla pagina di attesa. Dal
+pannello un amministratore può revocare l'accesso oppure eliminare definitivamente
+un account non amministrativo dopo una seconda conferma.
 
 Preparazione del volume e avvio, da eseguire soltanto quando si vuole realmente
 pubblicare il servizio:

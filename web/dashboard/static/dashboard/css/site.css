@@ -368,6 +368,10 @@ footer a { color: var(--teal); }
 .member-row strong, .member-row small { display: block; }
 .member-row small { color: var(--paper-dim); overflow-wrap: anywhere; }
 .member-row button[value="revoke"] { border-color: var(--coral); color: var(--coral); background: transparent; }
+.member-actions { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; flex-wrap: wrap; }
+.destructive-link { min-height: 42px; padding: .65rem .9rem; display: inline-flex; align-items: center; border: 1px solid var(--coral); color: var(--coral); text-decoration: none; font-size: .78rem; }
+.destructive-link:hover { color: var(--ink); background: var(--coral); }
+.destructive-form button { border-color: var(--coral); background: var(--coral); }
 
 @media (max-width: 1050px) {
   .masthead { height: auto; min-height: 78px; grid-template-columns: 1fr auto; padding-top: .75rem; }

@@ -1,0 +1,12 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Elimina membro{% endblock %}
+{% block content %}
+  <p class="eyebrow">Operazione definitiva</p>
+  <h1>Elimina {{ member_profile.user.username }}?</h1>
+  <p class="auth-copy">L'account <strong>{{ member_profile.user.email }}</strong> e il relativo profilo verranno eliminati definitivamente. Questa operazione non può essere annullata.</p>
+  <form method="post" class="auth-form destructive-form">
+    {% csrf_token %}
+    <button type="submit">Elimina definitivamente</button>
+  </form>
+  <div class="auth-links"><a href="{% url 'members' %}">Annulla e torna ai membri</a></div>
+{% endblock %}

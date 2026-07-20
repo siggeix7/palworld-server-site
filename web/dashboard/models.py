@@ -101,6 +101,7 @@ class UserProfile(models.Model):
     email_verified = models.BooleanField(default=False)
     approved = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
+    admin_notified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(

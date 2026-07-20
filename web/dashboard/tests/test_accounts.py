@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.db import IntegrityError, transaction
@@ -246,8 +248,12 @@ class AccountAccessTests(TestCase):
         user.site_profile.refresh_from_db()
         self.assertTrue(user.site_profile.email_verified)
         self.assertFalse(user.site_profile.approved)
+        self.assertIsNotNone(user.site_profile.admin_notified_at)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["admin@example.com"])
+
+        self.client.get(reverse("pending-approval"))
+        self.assertEqual(len(mail.outbox), 1)
 
         response = self.client.get(verification_url)
         self.assertEqual(response.status_code, 400)
@@ -300,6 +306,73 @@ class AccountAccessTests(TestCase):
         self.assertFalse(member.site_profile.approved)
         self.assertIsNone(member.site_profile.approved_by)
 
+    def test_admin_can_delete_a_member_after_confirmation(self):
+        admin = self.create_admin()
+        member = self.create_user(username="delete-me", email="delete@example.com")
+        self.client.force_login(admin)
+        delete_url = reverse("member-delete", kwargs={"profile_id": member.site_profile.pk})
+
+        response = self.client.get(delete_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "delete-me")
+        self.assertTrue(get_user_model().objects.filter(pk=member.pk).exists())
+
+        response = self.client.post(delete_url)
+        self.assertRedirects(response, reverse("members"))
+        self.assertFalse(get_user_model().objects.filter(pk=member.pk).exists())
+
+    def test_configured_admin_cannot_be_deleted(self):
+        admin = self.create_admin()
+        self.client.force_login(admin)
+        delete_url = reverse("member-delete", kwargs={"profile_id": admin.site_profile.pk})
+
+        self.assertEqual(self.client.get(delete_url).status_code, 403)
+        self.assertEqual(self.client.post(delete_url).status_code, 403)
+        self.assertTrue(get_user_model().objects.filter(pk=admin.pk).exists())
+
+    @override_settings(SITE_ADMIN_USERS={"administrator"})
+    def test_pending_notification_resolves_username_admin_email(self):
+        self.create_user(
+            username="Administrator",
+            email="admin-by-username@example.com",
+            verified=True,
+            approved=True,
+        )
+        member = self.create_user(username="pending-member", email="pending@example.com")
+        uid = urlsafe_base64_encode(force_bytes(member.pk))
+        token = email_verification_token.make_token(member)
+
+        self.client.post(
+            reverse("verify-email", kwargs={"uidb64": uid, "token": token})
+        )
+
+        member.site_profile.refresh_from_db()
+        self.assertIsNotNone(member.site_profile.admin_notified_at)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["admin-by-username@example.com"])
+
+    def test_pending_page_retries_failed_admin_notification(self):
+        member = self.create_user(verified=True)
+        self.client.force_login(member)
+
+        with mock.patch(
+            "dashboard.account_views.notify_admins_of_pending_user",
+            side_effect=RuntimeError("smtp unavailable"),
+        ):
+            response = self.client.get(reverse("pending-approval"))
+        self.assertEqual(response.status_code, 200)
+        member.site_profile.refresh_from_db()
+        self.assertIsNone(member.site_profile.admin_notified_at)
+
+        with mock.patch(
+            "dashboard.account_views.notify_admins_of_pending_user",
+            return_value=1,
+        ):
+            response = self.client.get(reverse("pending-approval"))
+        self.assertEqual(response.status_code, 200)
+        member.site_profile.refresh_from_db()
+        self.assertIsNotNone(member.site_profile.admin_notified_at)
+
     def test_admin_cannot_approve_an_unverified_member(self):
         admin = self.create_admin()
         member = self.create_user()
@@ -316,8 +389,20 @@ class AccountAccessTests(TestCase):
 
     def test_non_admin_cannot_open_member_management(self):
         member = self.create_user(verified=True, approved=True)
+        target = self.create_user(
+            username="target",
+            email="target@example.com",
+            verified=True,
+            approved=True,
+        )
         self.client.force_login(member)
         self.assertEqual(self.client.get(reverse("members")).status_code, 403)
+        self.assertEqual(
+            self.client.get(
+                reverse("member-delete", kwargs={"profile_id": target.site_profile.pk})
+            ).status_code,
+            403,
+        )
 
     def test_login_accepts_email_case_insensitively(self):
         self.create_user(verified=True, approved=True)

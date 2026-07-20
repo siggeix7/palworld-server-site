@@ -9,7 +9,10 @@
     {% for profile in pending_profiles %}
       <article class="member-row">
         <div><strong>{{ profile.user.username }}</strong><small>{{ profile.user.email }} · {% if profile.email_verified %}email verificata{% else %}email non verificata{% endif %}</small></div>
-        <form method="post">{% csrf_token %}<input type="hidden" name="profile_id" value="{{ profile.pk }}"><button type="submit" name="action" value="approve" {% if not profile.email_verified %}disabled{% endif %}>Approva</button></form>
+        <div class="member-actions">
+          <form method="post">{% csrf_token %}<input type="hidden" name="profile_id" value="{{ profile.pk }}"><button type="submit" name="action" value="approve" {% if not profile.email_verified %}disabled{% endif %}>Approva</button></form>
+          {% if not profile.site_admin %}<a class="destructive-link" href="{% url 'member-delete' profile.pk %}">Elimina</a>{% endif %}
+        </div>
       </article>
     {% empty %}<p class="empty-copy">Nessun membro in attesa.</p>{% endfor %}
   </div>
@@ -18,7 +21,7 @@
     {% for profile in approved_profiles %}
       <article class="member-row">
         <div><strong>{{ profile.user.username }}</strong><small>{{ profile.user.email }}</small></div>
-        {% if profile.user != request.user %}<form method="post">{% csrf_token %}<input type="hidden" name="profile_id" value="{{ profile.pk }}"><button type="submit" name="action" value="revoke">Revoca</button></form>{% endif %}
+        {% if not profile.site_admin %}<div class="member-actions"><form method="post">{% csrf_token %}<input type="hidden" name="profile_id" value="{{ profile.pk }}"><button type="submit" name="action" value="revoke">Revoca</button></form><a class="destructive-link" href="{% url 'member-delete' profile.pk %}">Elimina</a></div>{% endif %}
       </article>
     {% empty %}<p class="empty-copy">Nessun membro abilitato.</p>{% endfor %}
   </div>

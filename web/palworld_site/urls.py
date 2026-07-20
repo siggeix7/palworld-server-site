@@ -40,6 +40,11 @@ urlpatterns = [
     path("accounts/pending/", account_views.pending_approval, name="pending-approval"),
     path("accounts/members/", account_views.members, name="members"),
     path(
+        "accounts/members/<int:profile_id>/delete/",
+        account_views.delete_member,
+        name="member-delete",
+    ),
+    path(
         "accounts/password-reset/",
         auth_views.PasswordResetView.as_view(
             template_name="dashboard/accounts/password_reset.html",
