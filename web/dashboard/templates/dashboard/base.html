@@ -24,6 +24,8 @@
       <a href="{% url 'map' %}" {% if active_nav == 'map' %}aria-current="page"{% endif %}>Mappa</a>
       <a href="{% url 'telemetry' %}" {% if active_nav == 'telemetry' %}aria-current="page"{% endif %}>Telemetria</a>
       <a href="{% url 'players' %}" {% if active_nav == 'players' %}aria-current="page"{% endif %}>Giocatori</a>
+      <a href="{% url 'leaderboard' %}" {% if active_nav == 'leaderboard' %}aria-current="page"{% endif %}>Classifica</a>
+      <a href="{% url 'peak-hours' %}" {% if active_nav == 'peak-hours' %}aria-current="page"{% endif %}>Orari</a>
       <a href="{% url 'access' %}" {% if active_nav == 'access' %}aria-current="page"{% endif %}>Accesso</a>
       <a href="{% url 'world' %}" {% if active_nav == 'world' %}aria-current="page"{% endif %}>Mondo</a>
       <a href="{% url 'activity' %}" {% if active_nav == 'activity' %}aria-current="page"{% endif %}>Attività</a>

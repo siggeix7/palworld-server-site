@@ -1,0 +1,45 @@
+{% extends "dashboard/base.html" %}
+{% load static %}
+
+{% block title %}Orari di punta · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Orari di punta del server Palworld: heatmap attività per giorno e ora{% endblock %}
+{% block page_key %}peak-hours{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pagePeakTitle">
+  <div>
+    <p class="eyebrow">Quando il server è vivo</p>
+    <h1 id="pagePeakTitle">Orari di punta</h1>
+    <p>Minuti di gioco aggregati per giorno della settimana e ora del giorno. Le finestre aiutano a capire quando gli esploratori si connettono.</p>
+  </div>
+</section>
+
+<section class="section-shell">
+  <div class="section-heading compact">
+    <div><p class="eyebrow">Mappa di attività</p><h2>Presenze per ora</h2></div>
+    <label class="range-control">Intervallo
+      <select id="peakRange">
+        <option value="7d">7 giorni</option>
+        <option value="30d" selected>30 giorni</option>
+        <option value="90d">90 giorni</option>
+      </select>
+    </label>
+  </div>
+  <div class="data-notice" id="peakNotice" role="status" aria-live="polite" hidden></div>
+  <div class="peak-stats" id="peakStats">
+    <article><span>Ora di punta</span><strong id="peakHour">--</strong></article>
+    <article><span>Giorno di punta</span><strong id="peakDay">--</strong></article>
+    <article><span>Sessioni</span><strong id="peakSessions">--</strong></article>
+    <article><span>Minuti totali</span><strong id="peakTotal">--</strong></article>
+  </div>
+  <div class="chart-card peak-heatmap-card">
+    <p class="sr-only" id="peakSummary">Mappa di attività non ancora disponibile.</p>
+    <canvas id="peakHeatmap" height="320" tabindex="0" aria-label="Heatmap attività per giorno e ora" aria-describedby="peakSummary"></canvas>
+    <p class="chart-empty" id="peakEmpty" role="status">L'attività inizierà a comparire con le sessioni registrate.</p>
+  </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{% static 'dashboard/js/peak_hours.js' %}" defer></script>
+{% endblock %}

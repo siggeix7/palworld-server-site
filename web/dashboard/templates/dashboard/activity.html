@@ -16,7 +16,15 @@
 <section class="activity-section section-shell">
   <div class="section-heading compact">
     <div><p class="eyebrow">Eventi recenti</p><h2>Attività recente</h2></div>
+    <label class="range-control">Filtro
+      <select id="eventFilter">
+        <option value="all">Tutti</option>
+        <option value="join">Entrate</option>
+        <option value="leave">Uscite</option>
+      </select>
+    </label>
   </div>
+  <p class="archive-note" id="eventCounts" role="status">Caricamento...</p>
   <ol class="event-list" id="eventList"><li class="empty-copy">Nessun evento registrato.</li></ol>
 </section>
 {% endblock %}

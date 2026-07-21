@@ -18,8 +18,9 @@
   const state = {
     snapshot: null,
     selectedPlayer: null,
-    map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null },
+    map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false },
     points: { fast_travel: [], boss_tower: [] },
+    heatmap: { cells: [], maxCount: 0, grid: 48, range: '24h', loaded: false, enabled: false },
     historySamples: [],
     historyWindow: null,
     chartPoints: [],
@@ -70,6 +71,12 @@
     fastTravelLayer: $('#fastTravelLayer'),
     towerLayer: $('#towerLayer'),
     trailLayer: $('#trailLayer'),
+    heatmapLayer: $('#heatmapLayer'),
+    heatmapRange: $('#heatmapRange'),
+    showHeatmap: $('#showHeatmap'),
+    followPlayer: $('#followPlayer'),
+    copyCoordinate: $('#copyCoordinate'),
+    fullscreenMap: $('#fullscreenMap'),
     mapRoster: $('#mapRoster'),
     rosterCount: $('#rosterCount'),
     mapSelection: $('#mapSelection'),
@@ -85,7 +92,10 @@
     settingsSearch: $('#settingsSearch'),
     serverProfile: $('#serverProfile'),
     worldHighlights: $('#worldHighlights'),
+    worldDiff: $('#worldDiff'),
     eventList: $('#eventList'),
+    eventFilter: $('#eventFilter'),
+    eventCounts: $('#eventCounts'),
     historyRange: $('#historyRange'),
     historyChart: $('#historyChart'),
     chartEmpty: $('#chartEmpty'),
@@ -95,6 +105,19 @@
     healthLabel: $('#healthLabel'),
     healthScore: $('#healthScore'),
     healthDetail: $('#healthDetail'),
+    telemetryStats: $('#telemetryStats'),
+    uptime24h: $('#uptime24h'),
+    uptime7d: $('#uptime7d'),
+    fpsStability: $('#fpsStability'),
+    dataGaps: $('#dataGaps'),
+    worldDay: $('#worldDay'),
+    onlineNow: $('#onlineNow'),
+    onlineAverage: $('#onlineAverage'),
+    heroDayHome: $('#heroDayHome'),
+    heroFpsHome: $('#heroFpsHome'),
+    heroUptimeHome: $('#heroUptimeHome'),
+    lastUpdateHome: $('#lastUpdateHome'),
+    homeRecentActivity: $('#homeRecentActivity'),
     dataNotice: $('#dataNotice'),
     connectionToast: $('#connectionToast'),
   }
@@ -377,9 +400,23 @@
     state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
     state.selectedPlayer = player.id
     elements.trailLayer.style.setProperty('--trail-color', playerColor(player.id))
+    if (elements.followPlayer) {
+      state.map.follow = elements.followPlayer.checked
+    }
     applyMapTransform()
     renderMap(state.snapshot?.players || [])
-    if ($('#showTrail').checked) loadTrail(player.id)
+    if ($('#showTrail')?.checked) loadTrail(player.id)
+  }
+
+  function followSelectedPlayer(players) {
+    if (!state.map.follow || !state.selectedPlayer || !elements.mapViewport) return
+    const player = players.find((entry) => entry.id === state.selectedPlayer)
+    if (!player || !hasMapLocation(player)) return
+    const position = worldToPercent(player.location_x, player.location_y)
+    const rect = elements.mapViewport.getBoundingClientRect()
+    state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
+    state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
+    applyMapTransform()
   }
 
   function marker(type, point, label = '') {
@@ -554,6 +591,7 @@
     }
 
     renderSelection(players)
+    followSelectedPlayer(players)
     if (focusedId && focusedLayer) {
       const layer = focusedLayer === 'marker' ? elements.playerLayer : elements.mapRoster
       layer.querySelector(`[data-player-id="${focusedId}"]`)?.focus({ preventScroll: true })
@@ -561,14 +599,14 @@
   }
 
   async function loadTrail(playerId) {
-    if (!playerId || !$('#showTrail').checked) {
+    if (!playerId || !$('#showTrail')?.checked) {
       clearTrail()
       return
     }
     try {
       const range = $('#trailRange').value
       const data = await requestJson(`/api/v1/player/${encodeURIComponent(playerId)}/trail?range=${encodeURIComponent(range)}`, 'trail')
-      if (state.selectedPlayer !== playerId || !$('#showTrail').checked) return
+      if (state.selectedPlayer !== playerId || !$('#showTrail')?.checked) return
       const points = (data.positions || [])
         .filter((position) => Number(position.x) !== 0 || Number(position.y) !== 0)
         .map((position) => {
@@ -580,6 +618,61 @@
     } catch (error) {
       if (error.name !== 'AbortError' && state.selectedPlayer === playerId) clearTrail()
     }
+  }
+
+  function drawHeatmapLayer() {
+    const canvas = elements.heatmapLayer
+    if (!canvas) return
+    const rect = elements.mapViewport?.getBoundingClientRect()
+    if (!rect) return
+    const ratio = Math.min(2, window.devicePixelRatio || 1)
+    canvas.width = Math.floor(rect.width * ratio)
+    canvas.height = Math.floor(rect.height * ratio)
+    canvas.style.width = `${rect.width}px`
+    canvas.style.height = `${rect.height}px`
+    const context = canvas.getContext('2d')
+    context.setTransform(ratio, 0, 0, ratio, 0, 0)
+    context.clearRect(0, 0, rect.width, rect.height)
+    if (!state.heatmap.enabled || !state.heatmap.cells.length) return
+    const grid = state.heatmap.grid
+    const cellW = rect.width / grid
+    const cellH = rect.height / grid
+    const maxCount = state.heatmap.maxCount || 1
+    const styles = getComputedStyle(document.documentElement)
+    const heat = styles.getPropertyValue('--coral').trim() || '#ff735c'
+    const hex = heat.replace('#', '')
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    for (const cell of state.heatmap.cells) {
+      const intensity = Math.min(1, cell.count / maxCount)
+      if (intensity <= 0) continue
+      const alpha = 0.08 + intensity * 0.5
+      context.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`
+      context.fillRect(cell.x * cellW, cell.y * cellH, cellW + 1, cellH + 1)
+    }
+  }
+
+  async function loadHeatmap() {
+    if (!elements.heatmapLayer) return
+    const range = elements.heatmapRange?.value || '24h'
+    state.heatmap.range = range
+    try {
+      const data = await requestJson(`/api/v1/map/heatmap?range=${encodeURIComponent(range)}`, 'heatmap')
+      if (state.heatmap.range !== range) return
+      state.heatmap.cells = Array.isArray(data.cells) ? data.cells : []
+      state.heatmap.maxCount = data.max_count || 0
+      state.heatmap.grid = data.grid_size || 48
+      state.heatmap.loaded = true
+      drawHeatmapLayer()
+    } catch (error) {
+      if (error.name !== 'AbortError') return
+    }
+  }
+
+  function scheduleHeatmapRender() {
+    if (!elements.heatmapLayer) return
+    drawHeatmapLayer()
   }
 
   function renderPlayersTable(players) {
@@ -736,7 +829,15 @@
       identity.append(name, account)
       const status = document.createElement('span')
       status.className = player.online ? 'archive-status online' : 'archive-status'
-      status.textContent = player.online ? 'Online ora' : `Ultimo accesso ${formatFullDate(player.last_seen)}`
+      const firstSeenDate = new Date(player.first_seen)
+      const isNew = Number.isFinite(firstSeenDate.getTime()) && (Date.now() - firstSeenDate.getTime()) < 7 * 86400 * 1000
+      if (player.online) {
+        status.textContent = 'Online ora'
+      } else if (isNew) {
+        status.textContent = 'Nuovo esploratore'
+      } else {
+        status.textContent = `Ultimo accesso ${formatFullDate(player.last_seen)}`
+      }
       const favorite = document.createElement('button')
       const isFavorite = state.favoritePlayers.has(player.id)
       favorite.type = 'button'
@@ -1005,12 +1106,19 @@
     setText(elements.metricPlayersAverage, formatNumber(data.summary_24h?.average_players, 1))
     setText(elements.metricBases, formatNumber(metrics.basecampnum))
 
+    setText(elements.heroDayHome, formatNumber(metrics.days))
+    setText(elements.heroFpsHome, formatNumber(metrics.serverfps, 1))
+    setText(elements.heroUptimeHome, formatDuration(metrics.uptime))
+    setText(elements.lastUpdateHome, formatDate(data.status?.last_updated))
+    if (elements.lastUpdateHome) elements.lastUpdateHome.dateTime = data.status?.last_updated || ''
+
     renderMap(players)
     renderPlayersTable(players)
     renderMobilePlayers(players)
     renderServerProfile(data)
     renderSettings(data.settings || {})
-    renderEvents(data.events || [])
+    renderFilteredEvents()
+    renderOnlineComparison(data)
 
     const staleMessage = data.status?.reachable
       ? 'Il collegamento è attivo, ma la telemetria è aggiornata in ritardo.'
@@ -1228,6 +1336,150 @@
     }
   }
 
+  function formatPercent(value, digits = 1) {
+    const number = finiteNumber(value)
+    return number === null ? '--' : `${formatNumber(number, digits)}%`
+  }
+
+  function finiteNumber(value) {
+    if (value === null || value === undefined || value === '') return null
+    const number = Number(value)
+    return Number.isFinite(number) ? number : null
+  }
+
+  function stabilityLabel(cv) {
+    const value = finiteNumber(cv)
+    if (value === null) return '--'
+    if (value <= 0.05) return 'Molto stabile'
+    if (value <= 0.12) return 'Stabile'
+    if (value <= 0.25) return 'Variabile'
+    return 'Instabile'
+  }
+
+  async function loadTelemetryStats() {
+    if (!elements.telemetryStats) return
+    try {
+      const data = await requestJson('/api/v1/telemetry/stats', 'telemetryStats', 10000)
+      const uptime = data.uptime || {}
+      const fps = data.fps || {}
+      const players = data.players || {}
+      const world = data.world || {}
+      setText(elements.uptime24h, uptime.pct_24h == null ? '--' : formatPercent(uptime.pct_24h))
+      setText(elements.uptime7d, uptime.pct_7d == null ? '--' : formatPercent(uptime.pct_7d))
+      setText(elements.fpsStability, stabilityLabel(fps.stability_cv_24h))
+      setText(elements.worldDay, world.day == null ? '--' : formatNumber(world.day))
+      setText(elements.telemetryFpsAvg, fps.mean_24h == null ? '--' : formatNumber(fps.mean_24h, 1))
+      setText(elements.telemetryPlayersAvg, players.average_24h == null ? '--' : formatNumber(players.average_24h, 1))
+      const gaps = Array.isArray(uptime.gaps_24h) ? uptime.gaps_24h : []
+      const gapsCount = elements.dataGaps?.querySelector('#dataGapsCount') || document.getElementById('dataGapsCount')
+      if (gapsCount) setText(gapsCount, `${formatNumber(uptime.gap_count_24h || gaps.length)} interruzioni`)
+      if (elements.dataGaps) {
+        elements.dataGaps.replaceChildren()
+        if (!gaps.length) {
+          const item = document.createElement('li')
+          item.className = 'complete'
+          item.textContent = 'Nessuna interruzione rilevata'
+          elements.dataGaps.appendChild(item)
+        } else {
+          for (const gap of gaps) {
+            const item = document.createElement('li')
+            const minutes = Math.round((gap.seconds || 0) / 60)
+            item.textContent = `${formatDate(gap.from, true)} · ${formatNumber(minutes)} min`
+            elements.dataGaps.appendChild(item)
+          }
+        }
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') return
+    }
+  }
+
+  async function loadWorldDiff() {
+    if (!elements.worldDiff) return
+    try {
+      const data = await requestJson('/api/v1/world/diff', 'worldDiff', 10000)
+      elements.worldDiff.replaceChildren()
+      if (!data.has_settings) {
+        const note = document.createElement('p')
+        note.className = 'empty-copy'
+        note.textContent = 'Configurazione non ancora ricevuta.'
+        elements.worldDiff.appendChild(note)
+        return
+      }
+      if (!data.total) {
+        const note = document.createElement('p')
+        note.className = 'empty-copy'
+        note.textContent = 'Nessuna differenza rispetto ai valori vanilla.'
+        elements.worldDiff.appendChild(note)
+        return
+      }
+      for (const diff of data.diffs) {
+        const row = document.createElement('div')
+        row.className = 'setting-row diff-row'
+        const label = document.createElement('span')
+        label.textContent = settingLabel(diff.key)
+        const value = document.createElement('strong')
+        value.textContent = `${settingValue(diff.current)} (vanilla: ${settingValue(diff.vanilla)})`
+        row.append(label, value)
+        elements.worldDiff.appendChild(row)
+      }
+      const heading = document.createElement('p')
+      heading.className = 'archive-note'
+      heading.textContent = `${formatNumber(data.total)} impostazioni differiscono dai valori vanilla.`
+      elements.worldDiff.appendChild(heading)
+    } catch (error) {
+      if (error.name === 'AbortError') return
+    }
+  }
+
+  let eventFilterValue = 'all'
+  function renderFilteredEvents() {
+    if (!state.snapshot) return
+    const events = state.snapshot.events || []
+    const filtered = eventFilterValue === 'all' ? events : events.filter((event) => event.type === eventFilterValue)
+    renderEvents(filtered)
+    if (elements.eventCounts) {
+      const joins = events.filter((event) => event.type === 'join').length
+      const leaves = events.filter((event) => event.type === 'leave').length
+      setText(elements.eventCounts, `${formatNumber(joins)} entrate · ${formatNumber(leaves)} uscite · ${formatNumber(events.length)} totali`)
+    }
+  }
+
+  function renderOnlineComparison(data) {
+    const onlineNow = Number(data.metrics?.currentplayernum ?? data.players?.length ?? 0)
+    const average = Number(data.summary_24h?.average_players ?? 0)
+    if (elements.onlineNow) setText(elements.onlineNow, formatNumber(onlineNow))
+    if (elements.onlineAverage) setText(elements.onlineAverage, formatNumber(average, 1))
+    if (elements.homeRecentActivity) {
+      const events = data.events || []
+      elements.homeRecentActivity.replaceChildren()
+      if (!events.length) {
+        const item = document.createElement('p')
+        item.className = 'empty-copy'
+        item.textContent = 'Nessun evento recente.'
+        elements.homeRecentActivity.appendChild(item)
+      } else {
+        const list = document.createElement('ol')
+        list.className = 'event-list compact'
+        for (const event of events.slice(0, 6)) {
+          const item = document.createElement('li')
+          item.className = event.type
+          const dot = document.createElement('i')
+          const copy = document.createElement('span')
+          const player = document.createElement('strong')
+          player.textContent = event.player
+          copy.append(player, document.createTextNode(event.type === 'join' ? ' è entrato' : ' è uscito'))
+          const time = document.createElement('time')
+          time.dateTime = event.timestamp
+          time.textContent = formatDate(event.timestamp, true)
+          item.append(dot, copy, time)
+          list.appendChild(item)
+        }
+        elements.homeRecentActivity.appendChild(list)
+      }
+    }
+  }
+
   function showToast(message, error = false) {
     if (!elements.connectionToast) return
     setText(elements.connectionToast, message)
@@ -1319,6 +1571,7 @@
     ]
     for (const [inputId, layer, key, defaultVisible] of layerPreferences) {
       const input = $(`#${inputId}`)
+      if (!input) continue
       input.checked = readStorage(`observatory.map.${key}`, defaultVisible ? '1' : '0') === '1'
       if (key === 'players') layer.hidden = !input.checked
       else layer.classList.toggle('visible', input.checked)
@@ -1329,22 +1582,93 @@
       })
     }
     const trailToggle = $('#showTrail')
-    trailToggle.checked = readStorage('observatory.map.trail', '1') !== '0'
-    const storedTrailRange = readStorage('observatory.map.trailRange', '6h')
-    $('#trailRange').value = ['1h', '6h', '24h', '7d'].includes(storedTrailRange) ? storedTrailRange : '6h'
-    $('#zoomIn').addEventListener('click', () => setZoom(state.map.scale + 0.45))
-    $('#zoomOut').addEventListener('click', () => setZoom(state.map.scale - 0.45))
-    $('#resetMap').addEventListener('click', resetMap)
-    $('#clearSelection').addEventListener('click', () => clearSelection())
-    trailToggle.addEventListener('change', (event) => {
-      writeStorage('observatory.map.trail', event.target.checked ? '1' : '0')
-      if (!event.target.checked) clearTrail()
-      else if (state.selectedPlayer) loadTrail(state.selectedPlayer)
-    })
-    $('#trailRange').addEventListener('change', (event) => {
-      writeStorage('observatory.map.trailRange', event.target.value)
-      if (state.selectedPlayer && trailToggle.checked) loadTrail(state.selectedPlayer)
-    })
+    if (trailToggle) {
+      trailToggle.checked = readStorage('observatory.map.trail', '1') !== '0'
+      const storedTrailRange = readStorage('observatory.map.trailRange', '6h')
+      const trailRange = $('#trailRange')
+      if (trailRange) trailRange.value = ['1h', '6h', '24h', '7d'].includes(storedTrailRange) ? storedTrailRange : '6h'
+      trailToggle.addEventListener('change', (event) => {
+        writeStorage('observatory.map.trail', event.target.checked ? '1' : '0')
+        if (!event.target.checked) clearTrail()
+        else if (state.selectedPlayer) loadTrail(state.selectedPlayer)
+      })
+      if (trailRange) {
+        trailRange.addEventListener('change', (event) => {
+          writeStorage('observatory.map.trailRange', event.target.value)
+          if (state.selectedPlayer && trailToggle.checked) loadTrail(state.selectedPlayer)
+        })
+      }
+    }
+    const heatmapToggle = elements.showHeatmap
+    if (heatmapToggle && elements.heatmapLayer) {
+      heatmapToggle.checked = readStorage('observatory.map.heatmap', '0') === '1'
+      state.heatmap.enabled = heatmapToggle.checked
+      elements.heatmapLayer.classList.toggle('visible', heatmapToggle.checked)
+      if (elements.heatmapRange) {
+        elements.heatmapRange.disabled = !heatmapToggle.checked
+        const storedHeatRange = readStorage('observatory.map.heatmapRange', '24h')
+        elements.heatmapRange.value = ['6h', '24h', '7d'].includes(storedHeatRange) ? storedHeatRange : '24h'
+        elements.heatmapRange.addEventListener('change', (event) => {
+          writeStorage('observatory.map.heatmapRange', event.target.value)
+          if (heatmapToggle.checked) loadHeatmap()
+        })
+      }
+      heatmapToggle.addEventListener('change', (event) => {
+        state.heatmap.enabled = event.target.checked
+        elements.heatmapLayer.classList.toggle('visible', event.target.checked)
+        if (elements.heatmapRange) elements.heatmapRange.disabled = !event.target.checked
+        writeStorage('observatory.map.heatmap', event.target.checked ? '1' : '0')
+        if (event.target.checked) {
+          if (!state.heatmap.loaded) loadHeatmap()
+          else drawHeatmapLayer()
+        } else {
+          drawHeatmapLayer()
+        }
+      })
+      if (heatmapToggle.checked) loadHeatmap()
+    }
+    const followToggle = elements.followPlayer
+    if (followToggle) {
+      followToggle.checked = false
+      followToggle.addEventListener('change', (event) => {
+        state.map.follow = event.target.checked
+        if (event.target.checked && state.selectedPlayer && state.snapshot) {
+          followSelectedPlayer(state.snapshot.players || [])
+        }
+      })
+    }
+    const copyButton = elements.copyCoordinate
+    if (copyButton) {
+      copyButton.addEventListener('click', async () => {
+        const text = elements.mapCoordinate?.textContent || ''
+        const match = text.match(/X (-?[\d.]+) \/ Y (-?[\d.]+)/)
+        if (!match) return
+        try {
+          await navigator.clipboard.writeText(`${match[1]}, ${match[2]}`)
+          const previous = copyButton.textContent
+          copyButton.textContent = 'Copiato'
+          window.setTimeout(() => { copyButton.textContent = previous }, 1500)
+        } catch (_error) {
+          showToast('Copia non disponibile in questo browser', true)
+        }
+      })
+    }
+    const fullscreenButton = elements.fullscreenMap
+    if (fullscreenButton) {
+      fullscreenButton.addEventListener('click', () => {
+        const url = new URL(window.location.href)
+        if (fullscreenButton.dataset.fullscreen === '1') {
+          url.searchParams.delete('fullscreen')
+        } else {
+          url.searchParams.set('fullscreen', '1')
+        }
+        window.location.href = url.toString()
+      })
+    }
+    $('#zoomIn')?.addEventListener('click', () => setZoom(state.map.scale + 0.45))
+    $('#zoomOut')?.addEventListener('click', () => setZoom(state.map.scale - 0.45))
+    $('#resetMap')?.addEventListener('click', resetMap)
+    $('#clearSelection')?.addEventListener('click', () => clearSelection())
 
     elements.mapViewport.addEventListener('wheel', (event) => {
       const rect = elements.mapViewport.getBoundingClientRect()
@@ -1476,6 +1800,12 @@
     if (elements.settingsSearch) {
       elements.settingsSearch.addEventListener('input', () => renderSettings(state.snapshot?.settings || {}))
     }
+    if (elements.eventFilter) {
+      elements.eventFilter.addEventListener('change', (event) => {
+        eventFilterValue = event.target.value
+        renderFilteredEvents()
+      })
+    }
     if (elements.historyRange) {
       elements.historyRange.addEventListener('change', async () => {
         await loadHistory()
@@ -1497,6 +1827,7 @@
         applyMapTransform()
         if (state.snapshot) renderMap(state.snapshot.players || [])
         drawChart()
+        drawHeatmapLayer()
       })
     })
     document.addEventListener('visibilitychange', () => {
@@ -1504,11 +1835,15 @@
       snapshotLoop(false)
       if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
       if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)
+      if (elements.telemetryStats) loadTelemetryStats()
+      if (elements.worldDiff) loadWorldDiff()
     })
     if (elements.mapViewport) loadStaticPoints()
     snapshotLoop(true)
     if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
     if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)
+    if (elements.telemetryStats) loadTelemetryStats()
+    if (elements.worldDiff) loadWorldDiff()
   }
 
   initialize()

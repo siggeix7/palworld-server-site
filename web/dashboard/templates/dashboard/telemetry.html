@@ -1,7 +1,7 @@
 {% extends "dashboard/base.html" %}
 
 {% block title %}Telemetria · Palworld Server Observatory{% endblock %}
-{% block meta_description %}Archivio prestazioni del server Palworld: FPS, frame time e giocatori{% endblock %}
+{% block meta_description %}Archivio prestazioni del server Palworld: FPS, frame time, uptime e giocatori{% endblock %}
 {% block page_key %}telemetry{% endblock %}
 
 {% block content %}
@@ -9,7 +9,7 @@
   <div>
     <p class="eyebrow">Archivio prestazioni</p>
     <h1 id="pageTelemetryTitle">Telemetria</h1>
-    <p>Andamento di FPS, frame time e presenze nelle ultime trasmissioni del connector.</p>
+    <p>Andamento di FPS, frame time, continuità del flusso e presenze nelle ultime trasmissioni del connector.</p>
   </div>
 </section>
 
@@ -50,6 +50,28 @@
     <div class="chart-tooltip" id="chartTooltip" role="status" hidden></div>
     <p class="sr-only" id="chartSummary">Nessun campione storico disponibile.</p>
     <p class="chart-empty" id="chartEmpty" role="status">Lo storico inizierà a popolarsi con le trasmissioni del connector.</p>
+  </div>
+</section>
+
+<section class="section-shell" id="telemetryStats" aria-labelledby="telemetryStatsTitle">
+  <div class="section-heading">
+    <div><p class="eyebrow">Continuità e stabilità</p><h2 id="telemetryStatsTitle">Salute del flusso</h2></div>
+    <p>Tempo di attività, interruzioni rilevate e stabilità del frame rate nelle ultime 24 ore.</p>
+  </div>
+  <div class="vm-diagnostic-counts telemetry-stats-grid">
+    <article><span>Uptime 24h</span><strong id="uptime24h">--</strong></article>
+    <article><span>Uptime 7g</span><strong id="uptime7d">--</strong></article>
+    <article><span>Stabilità FPS</span><strong id="fpsStability">--</strong></article>
+    <article><span>Giorno mondo</span><strong id="worldDay">--</strong></article>
+    <article><span>FPS medio 24h</span><strong id="telemetryFpsAvg">--</strong></article>
+    <article><span>Media online 24h</span><strong id="telemetryPlayersAvg">--</strong></article>
+  </div>
+  <div class="vm-diagnostic-grid telemetry-gaps-grid">
+    <article class="vm-diagnostic-card">
+      <header><h3>Interruzioni del flusso (24h)</h3><span id="dataGapsCount">--</span></header>
+      <p>Gap tra campioni superiori a 60 secondi</p>
+      <ul class="vm-missing-list" id="dataGaps"><li>In attesa</li></ul>
+    </article>
   </div>
 </section>
 {% endblock %}

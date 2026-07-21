@@ -33,49 +33,74 @@
     <div><p class="eyebrow">Pannelli dell'osservatorio</p><h2>Sezioni</h2></div>
     <p>Scegli un pannello per consultare mappa, prestazioni, giocatori, credenziali, regole del mondo e attività recente.</p>
   </div>
-  <nav class="section-nav-grid" aria-label="Sezioni del sito">
-    <a class="section-nav-card" href="{% url 'map' %}">
-      <span class="eyebrow">Cartografia Palpagos</span>
-      <strong>Mappa</strong>
-      <p>Posizioni live degli esploratori, viaggi rapidi e torri.</p>
-      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-    </a>
-    <a class="section-nav-card" href="{% url 'telemetry' %}">
-      <span class="eyebrow">Archivio prestazioni</span>
-      <strong>Telemetria</strong>
-      <p>Andamento FPS, frame time e presenze nel tempo.</p>
-      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-    </a>
-    <a class="section-nav-card" href="{% url 'players' %}">
-      <span class="eyebrow">Manifesto esploratori</span>
-      <strong>Giocatori</strong>
-      <p>Giocatori online e archivio delle presenze.</p>
-      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-    </a>
-    <a class="section-nav-card" href="{% url 'access' %}">
-      <span class="eyebrow">Accesso riservato</span>
-      <strong>Accesso</strong>
-      <p>Credenziali del server e guida rapida di connessione.</p>
-      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-    </a>
-    <a class="section-nav-card" href="{% url 'world' %}">
-      <span class="eyebrow">Configurazione mondo</span>
-      <strong>Mondo</strong>
-      <p>Regole attive, modalità e scheda operativa del server.</p>
-      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-    </a>
-    <a class="section-nav-card" href="{% url 'activity' %}">
-      <span class="eyebrow">Registro trasmissioni</span>
-      <strong>Attività</strong>
-      <p>Entrate e uscite recenti degli esploratori.</p>
-      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-    </a>
-    <a class="section-nav-card" href="{% url 'vm-dashboard' %}">
-      <span class="eyebrow">Nodo host</span>
-      <strong>Stato VM</strong>
-      <p>Risorse di sistema, Docker e diagnostica connector.</p>
-      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-    </a>
-  </nav>
+
+  <div class="metric-strip home-stats-strip">
+    <article><span>Online ora</span><strong id="onlineNow">--</strong><small>esploratori connessi</small></article>
+    <article><span>Media 24h</span><strong id="onlineAverage">--</strong><small>presenza media</small></article>
+    <article><span>Giorno mondo</span><strong id="heroDayHome">--</strong><small>giorno di gioco</small></article>
+    <article><span>Server FPS</span><strong id="heroFpsHome">--</strong><small>frame al secondo</small></article>
+    <article><span>Uptime</span><strong id="heroUptimeHome">--</strong><small>tempo di attività</small></article>
+    <article><span>Ultimo dato</span><strong><time id="lastUpdateHome">mai</time></strong><small>trasmissione</small></article>
+  </div>
+
+  <div class="home-columns">
+    <section class="home-recent" aria-labelledby="homeRecentTitle">
+      <div class="section-heading compact">
+        <div><p class="eyebrow">Registro trasmissioni</p><h2 id="homeRecentTitle">Attività recente</h2></div>
+        <a class="section-nav-cta" href="{% url 'activity' %}">Vai all'attività <span aria-hidden="true">↘</span></a>
+      </div>
+      <div id="homeRecentActivity"><p class="empty-copy">Caricamento...</p></div>
+    </section>
+    <nav class="section-nav-grid" aria-label="Sezioni del sito">
+      <a class="section-nav-card" href="{% url 'map' %}">
+        <span class="eyebrow">Cartografia Palpagos</span>
+        <strong>Mappa</strong>
+        <p>Posizioni live degli esploratori, viaggi rapidi e torri.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+      <a class="section-nav-card" href="{% url 'telemetry' %}">
+        <span class="eyebrow">Archivio prestazioni</span>
+        <strong>Telemetria</strong>
+        <p>Andamento FPS, frame time, uptime e presenze nel tempo.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+      <a class="section-nav-card" href="{% url 'players' %}">
+        <span class="eyebrow">Manifesto esploratori</span>
+        <strong>Giocatori</strong>
+        <p>Giocatori online e archivio delle presenze.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+      <a class="section-nav-card" href="{% url 'leaderboard' %}">
+        <span class="eyebrow">Classifica esploratori</span>
+        <strong>Classifica</strong>
+        <p>Più attivi per tempo di gioco e livello.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+      <a class="section-nav-card" href="{% url 'peak-hours' %}">
+        <span class="eyebrow">Quando il server è vivo</span>
+        <strong>Orari di punta</strong>
+        <p>Heatmap delle presenze per giorno e ora.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+      <a class="section-nav-card" href="{% url 'access' %}">
+        <span class="eyebrow">Accesso riservato</span>
+        <strong>Accesso</strong>
+        <p>Credenziali del server e guida rapida di connessione.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+      <a class="section-nav-card" href="{% url 'world' %}">
+        <span class="eyebrow">Configurazione mondo</span>
+        <strong>Mondo</strong>
+        <p>Regole attive, modalità e differenze vs vanilla.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+      <a class="section-nav-card" href="{% url 'vm-dashboard' %}">
+        <span class="eyebrow">Nodo host</span>
+        <strong>Stato VM</strong>
+        <p>Risorse di sistema, Docker e diagnostica connector.</p>
+        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+      </a>
+    </nav>
+  </div>
 </section>
 {% endblock %}

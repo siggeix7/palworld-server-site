@@ -1,0 +1,51 @@
+{% extends "dashboard/base.html" %}
+{% load static %}
+
+{% block title %}Classifica · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Classifica dei giocatori del server Palworld per tempo di gioco e livello{% endblock %}
+{% block page_key %}leaderboard{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageLeaderboardTitle">
+  <div>
+    <p class="eyebrow">Classifica esploratori</p>
+    <h1 id="pageLeaderboardTitle">Classifica</h1>
+    <p>I tempi di gioco usano finestre mobili di 30 e 365 giorni; il totale storico parte dall'attivazione del monitoraggio.</p>
+  </div>
+</section>
+
+<section class="section-shell">
+  <div class="section-heading compact">
+    <div><p class="eyebrow">Tempo di gioco</p><h2>Più attivi</h2></div>
+    <div class="tabs" id="leaderboardTabs" role="tablist">
+      <button type="button" role="tab" data-range="30d" aria-selected="true">30 giorni</button>
+      <button type="button" role="tab" data-range="365d">365 giorni</button>
+      <button type="button" role="tab" data-range="all">Da sempre</button>
+    </div>
+  </div>
+  <div class="data-notice" id="leaderboardNotice" role="status" aria-live="polite" hidden></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Giocatore</th><th>Livello</th><th>Tempo</th><th>Ultimo accesso</th><th>Stato</th></tr></thead>
+      <tbody id="leaderboardPlaytimeBody"><tr><td colspan="6" class="empty-cell">Caricamento...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section-shell">
+  <div class="section-heading">
+    <div><p class="eyebrow">Progressione</p><h2>Livelli più alti</h2></div>
+    <p>I giocatori con il livello più alto registrato dall'attivazione del monitoraggio.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Giocatore</th><th>Livello</th><th>Tempo 365g</th><th>Ultimo accesso</th></tr></thead>
+      <tbody id="leaderboardLevelBody"><tr><td colspan="5" class="empty-cell">Caricamento...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{% static 'dashboard/js/leaderboard.js' %}" defer></script>
+{% endblock %}

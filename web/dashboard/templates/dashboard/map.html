@@ -16,23 +16,34 @@
 
 <section class="map-section section-shell">
   <div class="map-layout">
-    <div class="map-card">
+    <div class="map-card{% if request.GET.fullscreen == '1' %} map-fullscreen{% endif %}" id="mapCard">
       <div class="map-toolbar" aria-label="Controlli mappa">
         <div class="map-tools">
           <button type="button" id="zoomIn" aria-label="Aumenta zoom">+</button>
           <button type="button" id="zoomOut" aria-label="Riduci zoom">−</button>
           <button type="button" id="resetMap" aria-label="Ripristina posizione e zoom della mappa">Centra</button>
+          <button type="button" id="copyCoordinate" aria-label="Copia le coordinate correnti">Copia</button>
+          <button type="button" id="fullscreenMap" aria-label="Attiva modalità schermo intero" data-fullscreen="{% if request.GET.fullscreen == '1' %}1{% else %}0{% endif %}">{% if request.GET.fullscreen == '1' %}Esci schermo intero{% else %}Schermo intero{% endif %}</button>
         </div>
         <div class="layer-tools">
           <label><input type="checkbox" id="showPlayers" checked> Giocatori</label>
           <label><input type="checkbox" id="showFastTravel"> Viaggi rapidi</label>
           <label><input type="checkbox" id="showTowers"> Torri</label>
           <label><input type="checkbox" id="showTrail" checked> Traccia</label>
+          <label><input type="checkbox" id="showHeatmap"> Calore presenze</label>
+          <label><input type="checkbox" id="followPlayer" disabled> Segui</label>
           <label class="trail-range">Intervallo
             <select id="trailRange">
               <option value="1h">1 ora</option>
               <option value="6h" selected>6 ore</option>
               <option value="24h">24 ore</option>
+              <option value="7d">7 giorni</option>
+            </select>
+          </label>
+          <label class="trail-range">Calore
+            <select id="heatmapRange" disabled>
+              <option value="6h">6 ore</option>
+              <option value="24h" selected>24 ore</option>
               <option value="7d">7 giorni</option>
             </select>
           </label>
@@ -43,6 +54,7 @@
         <div class="map-plane" id="mapPlane">
           <img id="mapImage" src="{% static 'dashboard/images/palworld-map.webp' %}" alt="Mappa aggiornata del mondo di Palworld" draggable="false" decoding="async">
           <svg class="trail-layer" id="trailLayer" viewBox="0 0 1000 1000" aria-hidden="true"><polyline></polyline></svg>
+          <canvas class="heatmap-layer" id="heatmapLayer" aria-hidden="true"></canvas>
           <div class="poi-layer fast-travel-layer" id="fastTravelLayer" aria-hidden="true"></div>
           <div class="poi-layer tower-layer" id="towerLayer" aria-hidden="true"></div>
           <div class="player-layer" id="playerLayer"></div>
@@ -50,6 +62,11 @@
         <div class="map-coordinate" id="mapCoordinate">X -- / Y --</div>
         <div class="map-empty" id="mapEmpty"><strong>Nessun giocatore online</strong><span>La cartografia resta operativa.</span></div>
         <div class="map-error" id="mapImageError" role="status" hidden><strong>Mappa non disponibile</strong><span>L'immagine cartografica non è stata caricata.</span></div>
+      </div>
+      <div class="map-external-links" aria-label="Mappe esterne di Palworld">
+        <span>Mappe esterne</span>
+        <a href="https://mapgenie.io/palworld/maps/palpagos-islands" target="_blank" rel="noopener noreferrer">MapGenie <span aria-hidden="true">↗</span></a>
+        <a href="https://palworld.gg/map" target="_blank" rel="noopener noreferrer">palworld.gg <span aria-hidden="true">↗</span></a>
       </div>
     </div>
 
@@ -66,6 +83,7 @@
         <span><i class="legend-player"></i> Giocatore</span>
         <span><i class="legend-fast"></i> Viaggio rapido</span>
         <span><i class="legend-tower"></i> Torre</span>
+        <span><i class="legend-heat"></i> Calore presenze</span>
       </div>
     </aside>
   </div>
