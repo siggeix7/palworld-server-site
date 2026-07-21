@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import (
+    ConnectorBatch,
     LatestDataset,
     MetricSample,
     Player,
@@ -17,7 +18,9 @@ from .models import (
     PositionSample,
     RuntimeState,
     ServerEvent,
+    VmMetricSample,
 )
+from .vm_metrics import VM_METRICS
 
 
 logger = logging.getLogger(__name__)
@@ -143,19 +146,27 @@ def _source_time(record):
     return value
 
 
-def _record_dataset(record):
+def _record_route(record):
+    item_tags = record.get("item_tags")
+    if not isinstance(item_tags, list):
+        return None, None
     tags = {
         str(entry.get("tag", "")): str(entry.get("value", ""))
-        for entry in record.get("item_tags", [])
+        for entry in item_tags
         if isinstance(entry, dict)
     }
     dataset = tags.get("dataset")
     host = record.get("host") if isinstance(record.get("host"), dict) else {}
     if settings.ZABBIX_SOURCE_HOST and host.get("host") != settings.ZABBIX_SOURCE_HOST:
-        return None
-    if tags.get("integration") != "palworld-site" or dataset not in DATASETS:
-        return None
-    return dataset
+        return None, None
+    if tags.get("integration") != "palworld-site":
+        return None, None
+    if dataset in DATASETS:
+        return dataset, None
+    metric = tags.get("metric")
+    if dataset == "vm" and metric in VM_METRICS:
+        return "vm", metric
+    return None, None
 
 
 def _player_id(raw):
@@ -289,6 +300,23 @@ def _save_metrics(payload, source_clock):
     )
 
 
+def _save_vm_metric(record, metric, source_clock):
+    try:
+        value_type = int(record.get("type"))
+        value = float(record.get("value"))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise IngestError(f"VM metric {metric} must be numeric") from exc
+    if value_type not in {0, 3}:
+        raise IngestError(f"VM metric {metric} has unsupported value type")
+    if not math.isfinite(value) or abs(value) > 1e18:
+        raise IngestError(f"VM metric {metric} is outside the supported range")
+    VmMetricSample.objects.update_or_create(
+        metric=metric,
+        source_clock=source_clock,
+        defaults={"value": value},
+    )
+
+
 def _save_players(payload, source_clock):
     incoming = {}
     for data in payload["players"]:
@@ -364,7 +392,7 @@ def _save_players(payload, source_clock):
         )
 
 
-def _cleanup_if_due():
+def cleanup_if_due():
     now = timezone.now()
     state, _ = RuntimeState.objects.get_or_create(
         key="retention-cleanup", defaults={"value": {"last": 0}}
@@ -381,6 +409,13 @@ def _cleanup_if_due():
     ).delete()
     ServerEvent.objects.filter(
         source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
+    ).delete()
+    VmMetricSample.objects.filter(
+        source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
+    ).delete()
+    ConnectorBatch.objects.filter(
+        received_at__lt=now
+        - timedelta(days=settings.CONNECTOR_AUDIT_RETENTION_DAYS)
     ).delete()
     state.value = {"last": int(now.timestamp())}
     state.save(update_fields=["value", "updated_at"])
@@ -406,11 +441,14 @@ def _close_stale_sessions(now):
 def _process_record(record):
     if not isinstance(record, dict):
         raise IngestError("each NDJSON line must contain an object")
-    dataset = _record_dataset(record)
+    dataset, metric = _record_route(record)
     if not dataset:
         return None
 
     source_clock = _source_time(record)
+    if dataset == "vm":
+        _save_vm_metric(record, metric, source_clock)
+        return dataset
     payload = SANITIZERS[dataset](record.get("value"))
     current = LatestDataset.objects.select_for_update().filter(key=dataset).first()
     if current and source_clock < current.source_clock:
@@ -433,9 +471,17 @@ def process_records(records):
     rejected = 0
     errors = []
     datasets = set()
+    source_hosts = set()
+    ignored_items = []
 
     _close_stale_sessions(timezone.now())
     for index, record in enumerate(records, start=1):
+        source_allowed = False
+        if isinstance(record, dict) and isinstance(record.get("host"), dict):
+            source_host = _clean_text(record["host"].get("host"), 128)
+            source_allowed = source_host == settings.ZABBIX_SOURCE_HOST
+            if source_allowed:
+                source_hosts.add(source_host)
         try:
             dataset = _process_record(record)
         except IngestError as exc:
@@ -444,11 +490,13 @@ def process_records(records):
             continue
         if dataset is None:
             ignored += 1
+            if source_allowed and len(ignored_items) < 10 and isinstance(record, dict):
+                ignored_items.append(_clean_text(record.get("name"), 160))
             continue
         datasets.add(dataset)
         accepted += 1
 
-    _cleanup_if_due()
+    cleanup_if_due()
     logger.info(
         "Zabbix batch accepted=%s ignored=%s rejected=%s datasets=%s",
         accepted,
@@ -462,4 +510,18 @@ def process_records(records):
         "rejected": rejected,
         "errors": errors[:10],
         "datasets": sorted(datasets),
+        "source_hosts": sorted(source_hosts)[:8],
+        "ignored_items": [name for name in ignored_items if name],
     }
+
+
+def record_connector_batch(result, record_count):
+    ConnectorBatch.objects.create(
+        record_count=max(0, int(record_count)),
+        accepted=max(0, int(result.get("accepted", 0))),
+        ignored=max(0, int(result.get("ignored", 0))),
+        rejected=max(0, int(result.get("rejected", 0))),
+        datasets=list(result.get("datasets", []))[:16],
+        source_hosts=list(result.get("source_hosts", []))[:8],
+        ignored_items=list(result.get("ignored_items", []))[:10],
+    )

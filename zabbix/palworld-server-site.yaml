@@ -247,6 +247,263 @@ zabbix_export:
               value: settings
             - tag: integration
               value: palworld-site
+        - uuid: 41000000000000000000000000000001
+          name: 'Site VM: CPU utilization'
+          type: CALCULATED
+          key: palworld.site.vm.cpu.util
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          units: '%'
+          params: 'last(//system.cpu.util)/(1-nodata(//system.cpu.util,3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: cpu.util_pct
+        - uuid: 41000000000000000000000000000002
+          name: 'Site VM: Memory utilization'
+          type: CALCULATED
+          key: palworld.site.vm.memory.util
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          units: '%'
+          params: 'last(//vm.memory.util)/(1-nodata(//vm.memory.util,3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: memory.util_pct
+        - uuid: 41000000000000000000000000000003
+          name: 'Site VM: Available memory'
+          type: CALCULATED
+          key: palworld.site.vm.memory.available
+          delay: 1m
+          history: 1h
+          units: B
+          params: 'last(//vm.memory.size[available])/(1-nodata(//vm.memory.size[available],3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: memory.available_bytes
+        - uuid: 41000000000000000000000000000004
+          name: 'Site VM: Load average 1 minute'
+          type: CALCULATED
+          key: palworld.site.vm.load.avg1
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          params: 'last(//system.cpu.load[all,avg1])/(1-nodata(//system.cpu.load[all,avg1],3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: load.1m
+        - uuid: 41000000000000000000000000000005
+          name: 'Site VM: Load average 5 minutes'
+          type: CALCULATED
+          key: palworld.site.vm.load.avg5
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          params: 'last(//system.cpu.load[all,avg5])/(1-nodata(//system.cpu.load[all,avg5],3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: load.5m
+        - uuid: 41000000000000000000000000000006
+          name: 'Site VM: Load average 15 minutes'
+          type: CALCULATED
+          key: palworld.site.vm.load.avg15
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          params: 'last(//system.cpu.load[all,avg15])/(1-nodata(//system.cpu.load[all,avg15],3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: load.15m
+        - uuid: 41000000000000000000000000000007
+          name: 'Site VM: System uptime'
+          type: CALCULATED
+          key: palworld.site.vm.uptime
+          delay: 1m
+          history: 1h
+          units: uptime
+          params: 'last(//system.uptime)/(1-nodata(//system.uptime,3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: uptime_seconds
+        - uuid: 41000000000000000000000000000008
+          name: 'Site VM: Root filesystem utilization'
+          type: CALCULATED
+          key: palworld.site.vm.filesystem.root.util
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          units: '%'
+          params: 'last(//vfs.fs.dependent.size[/,pused])/(1-nodata(//vfs.fs.dependent.size[/,pused],3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: filesystem.root.util_pct
+        - uuid: 41000000000000000000000000000009
+          name: 'Site VM: Aggregate network receive rate'
+          type: CALCULATED
+          key: palworld.site.vm.network.rx
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          units: bps
+          params: 'sum(last_foreach(//net.if.in[*],5m))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: network.rx_bps
+        - uuid: 4100000000000000000000000000000a
+          name: 'Site VM: Aggregate network transmit rate'
+          type: CALCULATED
+          key: palworld.site.vm.network.tx
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          units: bps
+          params: 'sum(last_foreach(//net.if.out[*],5m))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: network.tx_bps
+        - uuid: 4100000000000000000000000000000b
+          name: 'Site VM: Docker ping'
+          type: CALCULATED
+          key: palworld.site.vm.docker.ping
+          delay: 1m
+          history: 1h
+          params: 'last(//docker.ping)/(1-nodata(//docker.ping,11m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: docker.ping
+        - uuid: 4100000000000000000000000000000c
+          name: 'Site VM: Docker containers total'
+          type: CALCULATED
+          key: palworld.site.vm.docker.containers.total
+          delay: 1m
+          history: 1h
+          params: 'last(//docker.containers.total)/(1-nodata(//docker.containers.total,3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: docker.containers.total
+        - uuid: 4100000000000000000000000000000d
+          name: 'Site VM: Docker containers running'
+          type: CALCULATED
+          key: palworld.site.vm.docker.containers.running
+          delay: 1m
+          history: 1h
+          params: 'last(//docker.containers.running)/(1-nodata(//docker.containers.running,3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: docker.containers.running
+        - uuid: 4100000000000000000000000000000e
+          name: 'Site VM: Docker containers stopped'
+          type: CALCULATED
+          key: palworld.site.vm.docker.containers.stopped
+          delay: 1m
+          history: 1h
+          params: 'last(//docker.containers.stopped)/(1-nodata(//docker.containers.stopped,3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: docker.containers.stopped
+        - uuid: 4100000000000000000000000000000f
+          name: 'Site VM: Docker containers paused'
+          type: CALCULATED
+          key: palworld.site.vm.docker.containers.paused
+          delay: 1m
+          history: 1h
+          params: 'last(//docker.containers.paused)/(1-nodata(//docker.containers.paused,3m,"strict"))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: docker.containers.paused
+        - uuid: 41000000000000000000000000000010
+          name: 'Site VM: Aggregate Docker CPU utilization'
+          type: CALCULATED
+          key: palworld.site.vm.docker.cpu.util
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          units: '%'
+          params: 'sum(last_foreach(//docker.container_stats.cpu_pct_usage[*],3m))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: docker.cpu_pct_sum
+        - uuid: 41000000000000000000000000000011
+          name: 'Site VM: Aggregate Docker active memory'
+          type: CALCULATED
+          key: palworld.site.vm.docker.memory.active
+          delay: 1m
+          history: 1h
+          value_type: FLOAT
+          units: B
+          params: 'sum(last_foreach(//docker.container_stats.memory.usage_active[*],3m))'
+          tags:
+            - tag: dataset
+              value: vm
+            - tag: integration
+              value: palworld-site
+            - tag: metric
+              value: docker.memory_active_bytes
       discovery_rules:
         - uuid: 3ff245a983ca43a6a4d4776c6a43bb2c
           name: 'Palworld: Player Discovery'

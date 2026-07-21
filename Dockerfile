@@ -31,6 +31,7 @@ RUN chmod +x /app/docker/entrypoint.sh \
     && DJANGO_SECRET_KEY=build-collectstatic-key \
        PUBLIC_SITE_URL=https://build.invalid \
        SITE_ADMIN_USERS=build-admin@example.invalid \
+       ZABBIX_SOURCE_HOST=build-host \
        python3 web/manage.py collectstatic --noinput
 
 VOLUME ["/data"]

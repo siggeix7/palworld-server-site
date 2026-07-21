@@ -1,9 +1,20 @@
 import json
 import time
+from datetime import timedelta
 
 from django.test import Client, TestCase, override_settings
+from django.utils import timezone
 
-from dashboard.models import LatestDataset, MetricSample, Player, PlayerSession, PositionSample, ServerEvent
+from dashboard.models import (
+    ConnectorBatch,
+    LatestDataset,
+    MetricSample,
+    Player,
+    PlayerSession,
+    PositionSample,
+    ServerEvent,
+    VmMetricSample,
+)
 from palworld_site import ingest_settings
 
 
@@ -28,9 +39,17 @@ def ndjson(*records):
     return "\n".join(json.dumps(value) for value in records)
 
 
+def vm_record(metric, value, value_type=0, clock=None):
+    value_record = record("vm", value, clock, name=f"Site VM: {metric}")
+    value_record["item_tags"].append({"tag": "metric", "value": metric})
+    value_record["type"] = value_type
+    return value_record
+
+
 @override_settings(
     ROOT_URLCONF="palworld_site.ingest_urls",
     ZABBIX_CONNECTOR_TOKEN="test-connector-token",
+    ZABBIX_SOURCE_HOST="palworld",
     PLAYER_HASH_SECRET="test-player-secret",
     SITE_AUTH_REQUIRED=False,
 )
@@ -113,6 +132,104 @@ class IngestTests(TestCase):
         self.assertEqual(MetricSample.objects.count(), 1)
         self.assertEqual(LatestDataset.objects.get(key="metrics").payload["serverfpsaverage"], 59.2)
         self.assertTrue(LatestDataset.objects.get(key="status").payload["reachable"])
+
+    def test_ingests_allowlisted_numeric_vm_metrics_and_audits_batch(self):
+        clock = int(time.time())
+        unknown = vm_record("not.allowlisted", 9, clock=clock)
+        wrong_type = vm_record("memory.util_pct", "42", value_type=4, clock=clock)
+
+        response = self.post(
+            ndjson(
+                vm_record("cpu.util_pct", 17.5, clock=clock),
+                vm_record("uptime_seconds", 86400, value_type=3, clock=clock),
+                unknown,
+                wrong_type,
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["accepted"], 2)
+        self.assertEqual(response.json()["ignored"], 1)
+        self.assertEqual(response.json()["rejected"], 1)
+        self.assertEqual(VmMetricSample.objects.count(), 2)
+        self.assertEqual(
+            VmMetricSample.objects.get(metric="cpu.util_pct").value,
+            17.5,
+        )
+        batch = ConnectorBatch.objects.get()
+        self.assertEqual(batch.record_count, 4)
+        self.assertEqual(batch.datasets, ["vm"])
+        self.assertEqual(batch.source_hosts, ["palworld"])
+        self.assertEqual(batch.accepted, 2)
+        self.assertEqual(batch.ignored, 1)
+        self.assertEqual(batch.rejected, 1)
+        self.assertEqual(batch.ignored_items, ["Site VM: not.allowlisted"])
+
+    def test_host_tag_does_not_route_untagged_item_values(self):
+        value_record = vm_record("cpu.util_pct", 10)
+        value_record["item_tags"] = []
+        value_record["host_tags"] = [
+            {"tag": "integration", "value": "palworld-site"}
+        ]
+
+        response = self.post(ndjson(value_record))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["accepted"], 0)
+        self.assertEqual(response.json()["ignored"], 1)
+        self.assertFalse(VmMetricSample.objects.exists())
+
+    def test_null_item_tags_are_ignored_without_failing_the_batch(self):
+        value_record = vm_record("docker.containers.running", 2)
+        value_record["item_tags"] = None
+
+        response = self.post(ndjson(value_record))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ignored"], 1)
+        self.assertFalse(VmMetricSample.objects.exists())
+
+    def test_invalid_utf8_is_included_in_diagnostics(self):
+        response = self.post(b"\xff")
+
+        self.assertEqual(response.status_code, 422)
+        batch = ConnectorBatch.objects.get()
+        self.assertEqual(batch.record_count, 1)
+        self.assertEqual(batch.rejected, 1)
+
+    def test_parse_error_details_are_bounded(self):
+        invalid_lines = "\n".join("{invalid" for _ in range(20))
+
+        response = self.post(ndjson(record("status", 1)) + "\n" + invalid_lines)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["rejected"], 20)
+        self.assertEqual(len(response.json()["errors"]), 10)
+        self.assertEqual(ConnectorBatch.objects.get().record_count, 21)
+
+    def test_completely_invalid_ndjson_is_included_in_diagnostics(self):
+        old_batch = ConnectorBatch.objects.create(record_count=1, rejected=1)
+        ConnectorBatch.objects.filter(pk=old_batch.pk).update(
+            received_at=timezone.now() - timedelta(days=8)
+        )
+
+        response = self.post("{invalid")
+
+        self.assertEqual(response.status_code, 422)
+        batch = ConnectorBatch.objects.get()
+        self.assertEqual(batch.record_count, 1)
+        self.assertEqual(batch.rejected, 1)
+
+    def test_foreign_host_metadata_is_not_retained(self):
+        value_record = vm_record("not.allowlisted", 10)
+        value_record["host"] = {"host": "foreign-host", "name": "Foreign host"}
+
+        response = self.post(ndjson(value_record))
+
+        self.assertEqual(response.status_code, 200)
+        batch = ConnectorBatch.objects.get()
+        self.assertEqual(batch.source_hosts, [])
+        self.assertEqual(batch.ignored_items, [])
 
     def test_server_metadata_is_sanitized(self):
         raw_settings = {

@@ -74,9 +74,13 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path("", views.home, name="home"),
+    path("vm/", views.vm_dashboard, name="vm-dashboard"),
     path("healthz/", views.health, name="health"),
     path("api/v1/snapshot", views.snapshot, name="snapshot"),
     path("api/v1/history", views.history, name="history"),
     path("api/v1/players", views.players, name="players"),
+    path("api/v1/vm/snapshot", views.vm_snapshot, name="vm-snapshot"),
+    path("api/v1/vm/history", views.vm_history, name="vm-history"),
+    path("api/v1/connector/status", views.connector_status, name="connector-status"),
     path("api/v1/player/<str:public_id>/trail", views.player_trail, name="player-trail"),
 ]

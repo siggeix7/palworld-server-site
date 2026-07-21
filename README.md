@@ -28,6 +28,9 @@ amministrativa del server di gioco.
   revoca, eliminazione account e recupero password.
 - Credenziali di gioco e guida di collegamento visibili soltanto ai membri
   verificati e approvati.
+- Pagina VM con CPU, memoria, load, disco, rete, uptime e stato Docker.
+- Diagnostica amministrativa dei batch connector, dataset mancanti, record
+  ignorati/rifiutati e freschezza delle metriche.
 - Sanitizzazione prima della persistenza: IP, `userId`, `playerId`, password e
   porte amministrative non vengono conservati.
 - Identificativi pubblici derivati con HMAC e non reversibili.
@@ -127,7 +130,7 @@ services:
       DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY}"
       PLAYER_HASH_SECRET: "${PLAYER_HASH_SECRET}"
       ZABBIX_CONNECTOR_TOKEN: "${ZABBIX_CONNECTOR_TOKEN}"
-      ZABBIX_SOURCE_HOST: "${ZABBIX_SOURCE_HOST:-}"
+      ZABBIX_SOURCE_HOST: "${ZABBIX_SOURCE_HOST:?ZABBIX_SOURCE_HOST is required}"
       SITE_ADMIN_USERS: "${SITE_ADMIN_USERS}"
       AUTH_TRUSTED_PROXY_ADDRESSES: "${AUTH_TRUSTED_PROXY_ADDRESSES:-127.0.0.1,::1}"
       PALWORLD_PUBLIC_HOST: "${PALWORLD_PUBLIC_HOST}"
@@ -146,6 +149,8 @@ services:
       DATA_STALE_SECONDS: "90"
       POSITION_RETENTION_DAYS: "7"
       METRIC_RETENTION_DAYS: "90"
+      CONNECTOR_AUDIT_RETENTION_DAYS: "7"
+      VM_DATA_STALE_SECONDS: "180"
       TIME_ZONE: "Europe/Rome"
     volumes:
       - "${DATA_PATH:-/opt/palworld-server-site/data}:/data"
@@ -172,7 +177,7 @@ DJANGO_ALLOWED_HOSTS=palworld.example.com,localhost,127.0.0.1
 DJANGO_SECRET_KEY=generare-un-segreto-lungo-e-casuale
 PLAYER_HASH_SECRET=generare-un-secondo-segreto-lungo-e-casuale
 ZABBIX_CONNECTOR_TOKEN=generare-un-token-bearer-lungo-e-casuale
-ZABBIX_SOURCE_HOST=nome-tecnico-host-zabbix
+ZABBIX_SOURCE_HOST=vm-palworld
 
 SITE_ADMIN_USERS=admin@example.com
 AUTH_TRUSTED_PROXY_ADDRESSES=127.0.0.1,::1
@@ -324,7 +329,8 @@ Procedura sintetica:
 8. Filtra `integration Equals palworld-site`.
 9. Abilita entrambe le verifiche TLS.
 
-Il connector manda batch NDJSON contenenti solo i cinque master item taggati:
+Il connector manda batch NDJSON contenenti i cinque master item Palworld e gli
+item calcolati numerici VM definiti nello stesso template:
 
 ```text
 dataset=status
@@ -332,7 +338,13 @@ dataset=info
 dataset=metrics
 dataset=players
 dataset=settings
+dataset=vm, metric=<metrica canonica>
 ```
+
+Un tag `integration` applicato soltanto all'host non viene ereditato dai valori
+item del connector. Reimporta il template aggiornato: gli item `Site VM: ...`
+leggono soltanto valori sorgente recenti dai template `Linux by Zabbix agent
+active` e `Docker by Zabbix agent 2` e possiedono direttamente i tag richiesti.
 
 Consulta [zabbix/connector.md](zabbix/connector.md) per retry, timeout e primo
 caricamento dei dati.
@@ -342,9 +354,9 @@ password amministrativa: il collegamento fra Zabbix e Palworld deve quindi
 restare su LAN/VPN fidata. In alternativa anteponi un proxy TLS e imposta
 `{$PALAPISCHEME}=https`. Non pubblicare mai la porta REST API su Internet.
 
-`ZABBIX_SOURCE_HOST` e' opzionale ma consigliato: deve corrispondere al campo
-tecnico `host` dell'host Zabbix e impedisce a un secondo server taggato nello
-stesso modo di sovrascrivere la dashboard.
+`ZABBIX_SOURCE_HOST` e' obbligatorio: deve corrispondere esattamente al campo
+tecnico `host` dell'host Zabbix. I record provenienti da host diversi vengono
+ignorati e i relativi metadati non vengono conservati.
 
 ## Persistenza e retention
 
@@ -355,8 +367,9 @@ Il database SQLite usa modalita' WAL e vive in:
 ```
 
 Il container puo' essere ricreato senza perdere storico. Le posizioni vengono
-conservate per 7 giorni e metriche/eventi per 90 giorni. La pulizia avviene al
-massimo una volta all'ora durante l'ingest.
+conservate per 7 giorni e metriche/eventi, incluse quelle VM, per 90 giorni. La
+diagnostica dei batch connector viene conservata per 7 giorni. La pulizia
+avviene al massimo una volta all'ora durante l'ingest.
 
 I dati storici iniziano dal momento in cui il connector viene attivato. Il sito
 non esegue backfill dalla Zabbix API.
@@ -367,11 +380,15 @@ Porta web, container `8000`:
 
 ```text
 GET /                              dashboard protetta
+GET /vm/                           telemetria VM protetta
 GET /healthz/                      health check
 GET /api/v1/snapshot              stato corrente protetto
 GET /api/v1/history?range=24h      storico telemetria protetto
 GET /api/v1/players                archivio giocatori protetto
 GET /api/v1/player/<id>/trail      traccia sanitizzata protetta
+GET /api/v1/vm/snapshot            stato VM corrente protetto
+GET /api/v1/vm/history?range=24h   storico VM protetto
+GET /api/v1/connector/status       diagnostica connector, solo admin
 ```
 
 `/healthz/`, registrazione, login, verifica email e recupero password restano

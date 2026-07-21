@@ -2,8 +2,9 @@ from datetime import timedelta
 from statistics import median
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.db import connection
-from django.db.models import Avg, Max, Min, Prefetch
+from django.db.models import Avg, Count, Max, Min, Prefetch, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -11,14 +12,18 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
 from .models import (
+    ConnectorBatch,
     LatestDataset,
     MetricSample,
     Player,
     PlayerSession,
     PositionSample,
     ServerEvent,
+    VmMetricSample,
 )
 from .accounts import is_site_admin
+from .services import DATASETS
+from .vm_metrics import VM_HISTORY_METRICS, VM_METRICS
 
 
 RANGES = {
@@ -30,6 +35,11 @@ RANGES = {
 }
 TRAIL_RANGES = {
     "1h": timedelta(hours=1),
+    "6h": timedelta(hours=6),
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+}
+VM_RANGES = {
     "6h": timedelta(hours=6),
     "24h": timedelta(hours=24),
     "7d": timedelta(days=7),
@@ -528,5 +538,170 @@ def player_trail(request, public_id):
                 }
                 for row in rows
             ],
+        }
+    )
+
+
+def _latest_vm_metrics(now):
+    latest = {}
+    for metric in sorted(VM_METRICS):
+        sample = (
+            VmMetricSample.objects.filter(metric=metric)
+            .only("metric", "source_clock", "value")
+            .order_by("-source_clock")
+            .first()
+        )
+        if not sample:
+            continue
+        latest[metric] = {
+            "value": sample.value,
+            "timestamp": _iso(sample.source_clock),
+            "age_seconds": max(0, int((now - sample.source_clock).total_seconds())),
+        }
+    return latest
+
+
+@require_GET
+@never_cache
+def vm_dashboard(request):
+    return render(
+        request,
+        "dashboard/vm.html",
+        {
+            "app_version": settings.APP_VERSION,
+            "site_admin": is_site_admin(request.user),
+        },
+    )
+
+
+@require_GET
+@never_cache
+def vm_snapshot(request):
+    now = timezone.now()
+    metrics = _latest_vm_metrics(now)
+    last_updated = max(
+        (sample["timestamp"] for sample in metrics.values()),
+        default=None,
+    )
+    newest_age = min(
+        (sample["age_seconds"] for sample in metrics.values()),
+        default=None,
+    )
+    fresh_metrics = {
+        metric
+        for metric, sample in metrics.items()
+        if sample["age_seconds"] <= settings.VM_DATA_STALE_SECONDS
+    }
+    return JsonResponse(
+        {
+            "generated_at": _iso(now),
+            "status": {
+                "available": bool(metrics),
+                "stale": not fresh_metrics,
+                "partial": bool(fresh_metrics) and fresh_metrics != VM_METRICS,
+                "last_updated": last_updated,
+            },
+            "metrics": metrics,
+            "missing": sorted(VM_METRICS - fresh_metrics),
+        }
+    )
+
+
+@require_GET
+@never_cache
+def vm_history(request):
+    range_name = request.GET.get("range", "24h")
+    duration = VM_RANGES.get(range_name)
+    if not duration:
+        return JsonResponse({"error": "unsupported range"}, status=400)
+    now = timezone.now()
+    since = now - duration
+    series = {}
+    for metric in sorted(VM_HISTORY_METRICS):
+        queryset = VmMetricSample.objects.filter(
+            metric=metric,
+            source_clock__gte=since,
+            source_clock__lte=now,
+        ).order_by("source_clock")
+        rows = _sample_queryset(
+            queryset,
+            ("source_clock", "value"),
+            max_points=480,
+        )
+        series[metric] = [
+            {"timestamp": _iso(timestamp), "value": value}
+            for timestamp, value in rows
+        ]
+    return JsonResponse(
+        {
+            "range": range_name,
+            "window": {"from": _iso(since), "to": _iso(now)},
+            "series": series,
+        }
+    )
+
+
+@require_GET
+@never_cache
+def connector_status(request):
+    if not is_site_admin(request.user):
+        raise PermissionDenied
+    now = timezone.now()
+    since = now - timedelta(hours=24)
+    recent = ConnectorBatch.objects.filter(received_at__gte=since)
+    totals = recent.aggregate(
+        batches=Count("id"),
+        records=Sum("record_count"),
+        accepted=Sum("accepted"),
+        ignored=Sum("ignored"),
+        rejected=Sum("rejected"),
+    )
+    last_batch = ConnectorBatch.objects.first()
+    datasets = {
+        key: {"received": False, "timestamp": None, "age_seconds": None}
+        for key in sorted(DATASETS)
+    }
+    for dataset in LatestDataset.objects.filter(key__in=DATASETS):
+        datasets[dataset.key] = {
+            "received": True,
+            "timestamp": _iso(dataset.source_clock),
+            "age_seconds": max(0, int((now - dataset.source_clock).total_seconds())),
+        }
+    vm_metrics = _latest_vm_metrics(now)
+    fresh_vm_metrics = {
+        metric
+        for metric, sample in vm_metrics.items()
+        if sample["age_seconds"] <= settings.VM_DATA_STALE_SECONDS
+    }
+    batches = [
+        {
+            "received_at": _iso(batch.received_at),
+            "record_count": batch.record_count,
+            "accepted": batch.accepted,
+            "ignored": batch.ignored,
+            "rejected": batch.rejected,
+            "datasets": batch.datasets,
+            "source_hosts": batch.source_hosts,
+            "ignored_items": batch.ignored_items,
+        }
+        for batch in ConnectorBatch.objects.all()[:30]
+    ]
+    return JsonResponse(
+        {
+            "generated_at": _iso(now),
+            "summary": {
+                "last_received_at": _iso(last_batch.received_at) if last_batch else None,
+                "batches_24h": totals["batches"] or 0,
+                "records_24h": totals["records"] or 0,
+                "accepted_24h": totals["accepted"] or 0,
+                "ignored_24h": totals["ignored"] or 0,
+                "rejected_24h": totals["rejected"] or 0,
+            },
+            "datasets": datasets,
+            "vm": {
+                "received": sorted(fresh_vm_metrics),
+                "missing": sorted(VM_METRICS - fresh_vm_metrics),
+            },
+            "batches": batches,
         }
     )

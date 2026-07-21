@@ -7,6 +7,7 @@ TMP_IMAGE ?= /tmp/$(IMAGE_BASENAME)-$(TAG).tar
 PYTHON ?= python3
 TEST_ENV := DJANGO_SECRET_KEY=test-key PLAYER_HASH_SECRET=test-player-key \
 	PUBLIC_SITE_URL=https://testserver SITE_ADMIN_USERS=admin@example.com \
+	ZABBIX_SOURCE_HOST=palworld \
 	DATABASE_PATH=/tmp/palworld-server-site-test.sqlite3
 
 .PHONY: all build save run shell test clean
@@ -27,6 +28,7 @@ run: build
 		-e DJANGO_SECRET_KEY=local-development-secret \
 		-e PLAYER_HASH_SECRET=local-player-hash-secret \
 		-e ZABBIX_CONNECTOR_TOKEN=local-connector-token \
+		-e ZABBIX_SOURCE_HOST=palworld \
 		-e PUBLIC_SITE_URL=https://localhost \
 		-e SITE_ADMIN_USERS=admin@example.com \
 		-v palworld-site-data:/data \
@@ -36,6 +38,7 @@ shell: build
 	docker run --rm -it \
 		-e DJANGO_SECRET_KEY=local-development-secret \
 		-e ZABBIX_CONNECTOR_TOKEN=local-connector-token \
+		-e ZABBIX_SOURCE_HOST=palworld \
 		-e PUBLIC_SITE_URL=https://localhost \
 		-e SITE_ADMIN_USERS=admin@example.com \
 		-v palworld-site-data:/data \

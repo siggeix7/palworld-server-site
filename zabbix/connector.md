@@ -60,10 +60,31 @@ Operator:  Equals
 Value:     palworld-site
 ```
 
-Il template applica questo tag soltanto ai cinque master item `status`, `info`,
-`metrics`, `players` e `settings`. Il campo `dataset` presente in ogni item
-permette al receiver di riconoscere il contenuto senza dipendere da item ID o
-nomi localizzati.
+Il template applica questo tag ai cinque master item `status`, `info`, `metrics`,
+`players` e `settings` e agli item calcolati `Site VM: ...`. I tag `dataset` e
+`metric` presenti negli item permettono al receiver di riconoscere il contenuto
+senza dipendere da item ID o nomi localizzati.
+
+I tag configurati sull'host non vengono copiati in `item_tags` nei record di un
+connector di tipo `Item values`: aggiungere `integration=palworld-site` soltanto
+all'host non esporta quindi i template Linux e Docker. Reimporta invece
+`zabbix/palworld-server-site.yaml` e aggiorna il template già collegato. Gli item
+calcolati con chiave `palworld.site.vm.*` leggono le metriche dai template
+ufficiali già presenti su `vm-palworld` e hanno direttamente:
+
+```text
+integration=palworld-site
+dataset=vm
+metric=<identificatore canonico>
+```
+
+Sono esportati esclusivamente valori numerici allowlisted: CPU, memoria, load,
+uptime, filesystem root, rete aggregata, raggiungibilità Docker, conteggi dei
+container e uso aggregato CPU/memoria dei container. Il receiver rifiuta valori
+testuali, log, metriche sconosciute e numeri non finiti. Payload grezzi Docker,
+nomi container e valori arbitrari dei template non vengono conservati. La sola
+diagnostica amministrativa conserva per 7 giorni fino a 10 nomi item ignorati
+per batch, troncati e soltanto se provengono da `ZABBIX_SOURCE_HOST`.
 
 I quattro master HTTP conservano un'ora di history. Zabbix non inoltra ai
 connector gli item configurati con `History: Do not store`, quindi questo
@@ -76,8 +97,10 @@ Dopo aver salvato il connector, esegui sul server Zabbix:
 zabbix_server -R config_cache_reload
 ```
 
-Usa `Execute now` sugli item `Palworld: Info` e `Palworld: Settings` per evitare
-di attendere rispettivamente 30 minuti e 4 ore al primo avvio.
+Usa `Execute now` sugli item `Palworld: Info`, `Palworld: Settings` e sugli item
+`Site VM: ...` per evitare di attendere il primo intervallo. La pagina **Stato
+VM** mostra agli amministratori batch ricevuti, host sorgente, dataset,
+accettati, ignorati, rifiutati e metriche ancora mancanti.
 
 ## Protocollo
 
