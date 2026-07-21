@@ -264,6 +264,32 @@ main { overflow: hidden; }
 .event-list.compact { grid-template-columns: 1fr; }
 .event-list.compact li { padding: .75rem 1rem; }
 
+.action-btn { min-height: 36px; padding: .4rem .8rem; border: 1px solid var(--line); color: var(--teal); background: transparent; cursor: pointer; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
+.action-btn:hover { border-color: var(--teal); }
+.action-btn.warn { color: var(--gold); border-color: var(--gold); }
+.action-btn.warn:hover { background: rgba(229,184,92,.1); }
+.action-btn.danger { color: var(--coral); border-color: var(--coral); }
+.action-btn.danger:hover { background: rgba(255,115,92,.1); }
+.admin-actions { display: flex; gap: .5rem; }
+.announce-form { display: flex; gap: 1rem; flex-wrap: wrap; max-width: 800px; }
+.announce-form input { flex: 1; min-height: 46px; padding: .65rem .8rem; border: 1px solid var(--line); color: var(--paper); background: var(--ink-soft); }
+.announce-form input:focus { border-color: var(--teal); }
+.announce-form button { min-height: 46px; padding: .65rem 1.5rem; border: 1px solid var(--teal); color: var(--ink); background: var(--teal); cursor: pointer; font-weight: 700; }
+.announce-form button:hover { background: var(--paper); }
+#announceResult { margin-top: 1rem; color: var(--teal); font-size: .8rem; min-height: 1.2em; }
+
+.guild-card { margin-bottom: 1rem; padding: 1.5rem; border: 1px solid var(--line); background: var(--panel); }
+.guild-card > header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.guild-card h3 { margin: 0; font-family: Georgia, serif; font-size: 1.6rem; font-weight: 400; }
+.guild-meta { color: var(--paper-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
+.guild-players { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1px; background: var(--line); }
+.guild-players > div { padding: .75rem 1rem; background: var(--ink-soft); }
+.guild-players dt { color: var(--paper); font-size: .82rem; }
+.guild-players dd { margin: .3rem 0 0; color: var(--teal); font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; }
+.guild-bases { margin-top: 1rem; }
+.guild-bases ul { margin: .5rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .5rem; }
+.guild-bases li { padding: .3rem .55rem; border: 1px solid var(--line); color: var(--paper-dim); font-family: ui-monospace, monospace; font-size: .62rem; }
+
 .range-control { display: flex; align-items: center; gap: .75rem; color: var(--paper-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; }
 .data-notice { margin: -1rem 0 1.25rem; padding: .7rem 1rem; border-left: 2px solid var(--gold); color: var(--paper); background: rgba(229,184,92,.08); font-size: .78rem; }
 .data-notice.error { border-color: var(--coral); background: rgba(255,115,92,.08); }

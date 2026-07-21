@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from dashboard import account_views, views
+from dashboard import account_views, admin_views, views
 from dashboard.forms import CanonicalPasswordResetForm, SiteAuthenticationForm
 
 
@@ -83,6 +83,8 @@ urlpatterns = [
     path("attivita/", views.activity_page, name="activity"),
     path("classifica/", views.leaderboard_page, name="leaderboard"),
     path("orari/", views.peak_hours_page, name="peak-hours"),
+    path("gilde/", admin_views.guild_data_page, name="guilds"),
+    path("admin-panel/", admin_views.admin_panel, name="admin-panel"),
     path("healthz/", views.health, name="health"),
     path("api/v1/snapshot", views.snapshot, name="snapshot"),
     path("api/v1/history", views.history, name="history"),
@@ -96,4 +98,12 @@ urlpatterns = [
     path("api/v1/vm/history", views.vm_history, name="vm-history"),
     path("api/v1/connector/status", views.connector_status, name="connector-status"),
     path("api/v1/player/<str:public_id>/trail", views.player_trail, name="player-trail"),
+    path("api/v1/palworld/players", admin_views.palworld_players, name="palworld-players"),
+    path("api/v1/palworld/info", admin_views.palworld_info, name="palworld-info"),
+    path("api/v1/palworld/announce", admin_views.palworld_announce, name="palworld-announce"),
+    path("api/v1/palworld/kick", admin_views.palworld_kick, name="palworld-kick"),
+    path("api/v1/palworld/ban", admin_views.palworld_ban, name="palworld-ban"),
+    path("api/v1/palworld/unban", admin_views.palworld_unban, name="palworld-unban"),
+    path("api/v1/guild/ingest", admin_views.guild_ingest, name="guild-ingest"),
+    path("api/v1/guild/data", admin_views.guild_data, name="guild-data"),
 ]

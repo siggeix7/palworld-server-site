@@ -1,0 +1,59 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Admin Panel · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Pannello di amministrazione per moderazione e chat del server Palworld{% endblock %}
+{% block page_key %}admin{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageAdminTitle">
+  <div>
+    <p class="eyebrow">Pannello di amministrazione</p>
+    <h1 id="pageAdminTitle">Admin</h1>
+    <p>Moderazione giocatori, chat del server e operazioni di gestione.</p>
+  </div>
+</section>
+
+<section class="section-shell">
+  <div class="section-heading">
+    <div><p class="eyebrow">Giocatori online</p><h2>Moderazione</h2></div>
+    <div class="archive-controls">
+      <button type="button" id="refreshPlayers" class="action-btn">Aggiorna</button>
+      <p id="playerListStatus" role="status">Caricamento...</p>
+    </div>
+  </div>
+  <div class="data-notice" id="adminNotice" role="status" aria-live="polite" hidden></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Giocatore</th><th>Livello</th><th>UID</th><th>Azioni</th></tr></thead>
+      <tbody id="adminPlayersTable"><tr><td colspan="4" class="empty-cell">Caricamento...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section-shell">
+  <div class="section-heading">
+    <div><p class="eyebrow">Chat del server</p><h2>Invia messaggio</h2></div>
+    <p>Il messaggio appare nella chat del gioco per tutti i giocatori online.</p>
+  </div>
+  <form id="announceForm" class="announce-form">
+    <label>
+      <span class="sr-only">Messaggio</span>
+      <input type="text" id="announceMessage" placeholder="Scrivi un messaggio per la chat del server..." maxlength="500" required>
+    </label>
+    <button type="submit">Invia</button>
+  </form>
+  <div id="announceResult" role="status" aria-live="polite"></div>
+</section>
+
+<section class="section-shell">
+  <div class="section-heading">
+    <div><p class="eyebrow">Informazioni server</p><h2>Stato Palworld</h2></div>
+    <button type="button" id="refreshInfo" class="action-btn">Aggiorna</button>
+  </div>
+  <dl class="server-profile-grid" id="adminServerInfo"><div><dt>Stato</dt><dd>In attesa</dd></div></dl>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{% static 'dashboard/js/admin.js' %}" defer></script>
+{% endblock %}

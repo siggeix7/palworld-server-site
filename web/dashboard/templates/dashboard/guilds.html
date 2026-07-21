@@ -1,0 +1,27 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Gilde · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Informazioni sulle gilde del server Palworld{% endblock %}
+{% block page_key %}guilds{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageGuildsTitle">
+  <div>
+    <p class="eyebrow">Organizzazioni del mondo</p>
+    <h1 id="pageGuildsTitle">Gilde</h1>
+    <p>Informazioni sulle gilde estratte dal salvataggio del server.</p>
+  </div>
+</section>
+
+<section class="section-shell">
+  <div class="data-notice" id="guildNotice" role="status" aria-live="polite" hidden></div>
+  <div id="guildsContent">
+    <p class="empty-copy" id="guildsEmpty">Caricamento delle informazioni gilde...</p>
+  </div>
+  <p class="archive-note" id="guildUpdated"></p>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{% static 'dashboard/js/guilds.js' %}" defer></script>
+{% endblock %}

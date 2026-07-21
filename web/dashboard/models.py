@@ -156,3 +156,9 @@ class ConnectorBatch(models.Model):
 
     class Meta:
         ordering = ["-received_at"]
+
+
+class GuildSnapshot(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)

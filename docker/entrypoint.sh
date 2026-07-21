@@ -13,11 +13,13 @@ python3 web/manage.py shell -c \
 
 public_pid=""
 ingest_pid=""
+watcher_pid=""
 
 shutdown() {
   [[ -n "${public_pid}" ]] && kill -TERM "${public_pid}" 2>/dev/null || true
   [[ -n "${ingest_pid}" ]] && kill -TERM "${ingest_pid}" 2>/dev/null || true
-  wait "${public_pid}" "${ingest_pid}" 2>/dev/null || true
+  [[ -n "${watcher_pid}" ]] && kill -TERM "${watcher_pid}" 2>/dev/null || true
+  wait "${public_pid}" "${ingest_pid}" "${watcher_pid}" 2>/dev/null || true
 }
 trap shutdown TERM INT EXIT
 
@@ -41,4 +43,9 @@ gunicorn palworld_site.wsgi:application \
   --error-logfile - &
 public_pid=$!
 
-wait -n "${public_pid}" "${ingest_pid}"
+if [[ -n "${PALWORLD_API_URL:-}" && -n "${PALWORLD_API_PASSWORD:-}" ]]; then
+  python3 web/manage.py watch_players &
+  watcher_pid=$!
+fi
+
+wait -n "${public_pid}" "${ingest_pid}" "${watcher_pid}"
