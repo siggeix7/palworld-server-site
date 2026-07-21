@@ -50,7 +50,7 @@ class Command(BaseCommand):
                     name = player.get("name", player.get("playerName", ""))
                     current_uids.add(uid)
 
-                    is_registered = name in registered_names
+                    is_registered = name.casefold() in registered_names
 
                     if uid not in seen_players:
                         seen_players[uid] = {
@@ -60,7 +60,7 @@ class Command(BaseCommand):
                         }
                         logger.info("Player joined: %s (uid=%s, registered=%s)", name, uid, is_registered)
                     else:
-                        seen_players[uid]["is_registered"] = is_registered
+                        seen_players[uid]["is_registered"] = name.casefold() in registered_names
 
                     if is_registered and uid not in welcomed:
                         try:
