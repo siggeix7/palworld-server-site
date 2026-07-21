@@ -66,7 +66,7 @@ def _consume_auth_attempt(request, scope, limit, window):
 
 class SiteAccessMiddleware:
     public_prefixes = ("/accounts/", "/static/")
-    public_paths = ("/healthz/", "/api/v1/zabbix/ingest")
+    public_paths = ("/healthz/", "/api/v1/zabbix/ingest", "/api/v1/guild/ingest")
 
     def __init__(self, get_response):
         self.get_response = get_response
