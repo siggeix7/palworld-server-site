@@ -78,6 +78,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .masthead nav { display: flex; gap: clamp(1rem, 2vw, 2rem); }
 .masthead nav a { color: var(--paper-dim); text-decoration: none; text-transform: uppercase; letter-spacing: .13em; font-size: .72rem; }
 .masthead nav a:hover, .masthead nav a:focus-visible { color: var(--teal); }
+.masthead nav a[aria-current="page"] { color: var(--teal); }
 .header-tools { justify-self: end; display: flex; align-items: center; gap: 1rem; }
 .account-tools { display: flex; align-items: center; gap: .6rem; color: var(--paper-dim); font-size: .65rem; }
 .account-tools a, .account-tools button { color: var(--teal); text-decoration: none; }
@@ -125,6 +126,18 @@ main { overflow: hidden; }
 .signal-line strong { color: var(--paper); font-size: .68rem; }
 
 .section-shell { width: min(calc(100% - 2rem), var(--max)); margin: 0 auto; padding: 6rem 0; border-top: 1px solid var(--line); }
+.page-intro { padding: clamp(3.5rem, 7vw, 6.5rem) 0 1.5rem; border-top: 0; }
+.page-intro > div { max-width: 860px; }
+.page-intro h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(3rem, 7vw, 6rem); font-weight: 400; line-height: .92; letter-spacing: -.045em; }
+.page-intro > div > p:last-of-type { margin: 1.25rem 0 0; color: var(--paper-dim); font-size: 1.05rem; }
+.section-nav-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+.section-nav-card { min-height: 210px; padding: 1.5rem; display: flex; flex-direction: column; gap: .65rem; text-decoration: none; color: var(--paper); background: var(--panel); }
+.section-nav-card:hover { background: var(--panel-light); }
+.section-nav-card .eyebrow { margin: 0; }
+.section-nav-card strong { font-family: Georgia, serif; font-size: 1.9rem; font-weight: 400; }
+.section-nav-card p { margin: 0; color: var(--paper-dim); font-size: .82rem; flex: 1; }
+.section-nav-cta { color: var(--teal); text-transform: uppercase; letter-spacing: .12em; font-size: .68rem; font-weight: 700; }
+.section-nav-card:hover .section-nav-cta { color: var(--paper); }
 .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 480px); gap: 3rem; align-items: end; margin-bottom: 2.5rem; }
 .section-heading.compact { grid-template-columns: 1fr auto; }
 .section-heading h2 { margin: 0; font-family: Georgia, serif; font-size: clamp(2.3rem, 4vw, 4.4rem); font-weight: 400; line-height: .95; letter-spacing: -.035em; }
@@ -339,6 +352,7 @@ footer a { color: var(--teal); }
 .connection-toast.error { border-color: var(--coral); }
 
 .vm-page [hidden] { display: none !important; }
+.vm-page main { overflow: visible; }
 .vm-main { overflow: visible; }
 .vm-intro { width: min(calc(100% - 2rem), var(--max)); margin: 0 auto; padding: clamp(3.5rem, 7vw, 6.5rem) 0 3rem; }
 .vm-intro h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(3rem, 7vw, 6.5rem); font-weight: 400; line-height: .92; letter-spacing: -.045em; }

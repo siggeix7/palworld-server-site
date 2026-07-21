@@ -1,194 +1,167 @@
+{% extends "dashboard/base.html" %}
 {% load static %}
-<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Telemetria riservata della macchina virtuale Palworld">
-  <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#071a1d">
-  <title>Stato VM · Palworld Server Observatory</title>
-  <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
-</head>
-<body class="vm-page">
-  <a class="skip-link" href="#main">Vai al contenuto</a>
-  <div class="noise" aria-hidden="true"></div>
 
-  <header class="masthead vm-masthead">
-    <a class="brand" href="{% url 'home' %}" aria-label="Palworld Server Observatory">
-      <span class="brand-mark" aria-hidden="true"><i></i></span>
-      <span><strong>Palworld</strong><small>Server Observatory</small></span>
-    </a>
-    <nav aria-label="Navigazione VM">
-      <a href="{% url 'home' %}"><span aria-hidden="true">←</span> Torna alla dashboard</a>
-    </nav>
-    <div class="header-tools">
-      <div class="account-tools">
-        <span>{{ request.user.username }}</span>
-        {% if site_admin %}<a href="{% url 'members' %}">Membri</a>{% endif %}
-        <a href="{% url 'password_change' %}">Password</a>
-        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Esci</button></form>
-      </div>
-    </div>
-  </header>
+{% block title %}Stato VM · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Telemetria riservata della macchina virtuale Palworld{% endblock %}
+{% block body_class %}vm-page{% endblock %}
+{% block page_key %}vm{% endblock %}
 
-  <main id="main" class="vm-main">
-    <section class="vm-intro" aria-labelledby="vmTitle">
-      <p class="eyebrow">Nodo host / telemetria autenticata</p>
-      <h1 id="vmTitle">Stato della VM</h1>
-      <p>Risorse di sistema, attività Docker e continuità del flusso dati del server Palworld.</p>
+{% block content %}
+<div class="vm-main">
+  <section class="vm-intro" aria-labelledby="vmTitle">
+    <p class="eyebrow">Nodo host / telemetria autenticata</p>
+    <h1 id="vmTitle">Stato della VM</h1>
+    <p>Risorse di sistema, attività Docker e continuità del flusso dati del server Palworld.</p>
 
-      <div class="vm-health" id="vmHealthBanner" data-state="loading" role="status" aria-live="polite">
-        <span class="vm-health-mark" aria-hidden="true"></span>
-        <div>
-          <strong id="vmHealthTitle">Collegamento in corso</strong>
-          <span id="vmHealthDetail">Attendo il primo campione dalla VM.</span>
-        </div>
-        <div class="vm-health-meta">
-          <span>Ultimo dato</span>
-          <time id="vmLastUpdated">--</time>
-        </div>
-      </div>
-    </section>
-
-    <aside class="vm-empty-state" id="vmEmptyState" aria-labelledby="vmEmptyTitle" hidden>
-      <span aria-hidden="true">VM / 00</span>
+    <div class="vm-health" id="vmHealthBanner" data-state="loading" role="status" aria-live="polite">
+      <span class="vm-health-mark" aria-hidden="true"></span>
       <div>
-        <h2 id="vmEmptyTitle">Telemetria VM non ancora disponibile</h2>
-        <p>Configura il monitoraggio della macchina e invia almeno una metrica canonica tramite il connector. Questa pagina si popolerà automaticamente alla prima trasmissione.</p>
+        <strong id="vmHealthTitle">Collegamento in corso</strong>
+        <span id="vmHealthDetail">Attendo il primo campione dalla VM.</span>
       </div>
-    </aside>
-
-    <div id="vmTelemetryContent">
-      <section class="section-shell vm-section" aria-labelledby="resourceTitle">
-        <div class="section-heading">
-          <div><p class="eyebrow">Lettura istantanea</p><h2 id="resourceTitle">Risorse host</h2></div>
-          <p>Valori più recenti ricevuti dal connector. Le schede indicano separatamente le metriche non ancora trasmesse.</p>
-        </div>
-
-        <div class="vm-metric-grid">
-          <article>
-            <span class="vm-card-label">CPU</span>
-            <strong id="vmCpu">--</strong>
-            <small id="vmCpuMeta">In attesa</small>
-          </article>
-          <article>
-            <span class="vm-card-label">Memoria</span>
-            <strong id="vmMemory">--</strong>
-            <p>Disponibile <b id="vmMemoryAvailable">--</b></p>
-            <small id="vmMemoryMeta">In attesa</small>
-          </article>
-          <article>
-            <span class="vm-card-label">Carico medio</span>
-            <div class="vm-value-row">
-              <span><b id="vmLoad1">--</b><small>1 min</small></span>
-              <span><b id="vmLoad5">--</b><small>5 min</small></span>
-              <span><b id="vmLoad15">--</b><small>15 min</small></span>
-            </div>
-            <small id="vmLoadMeta">In attesa</small>
-          </article>
-          <article>
-            <span class="vm-card-label">Disco root</span>
-            <strong id="vmDisk">--</strong>
-            <small id="vmDiskMeta">In attesa</small>
-          </article>
-          <article>
-            <span class="vm-card-label">Uptime</span>
-            <strong id="vmUptime">--</strong>
-            <small id="vmUptimeMeta">In attesa</small>
-          </article>
-          <article>
-            <span class="vm-card-label">Rete</span>
-            <div class="vm-value-row vm-network-values">
-              <span><b id="vmNetworkRx">--</b><small>Ricezione</small></span>
-              <span><b id="vmNetworkTx">--</b><small>Trasmissione</small></span>
-            </div>
-            <small id="vmNetworkMeta">In attesa</small>
-          </article>
-        </div>
-      </section>
-
-      <section class="section-shell vm-section" aria-labelledby="vmHistoryTitle">
-        <div class="section-heading compact">
-          <div><p class="eyebrow">Andamento risorse</p><h2 id="vmHistoryTitle">CPU e memoria</h2></div>
-          <label class="range-control" for="vmHistoryRange">Intervallo
-            <select id="vmHistoryRange">
-              <option value="6h">6 ore</option>
-              <option value="24h" selected>24 ore</option>
-              <option value="7d">7 giorni</option>
-            </select>
-          </label>
-        </div>
-        <div class="data-notice vm-notice" id="vmHistoryNotice" role="status" aria-live="polite" hidden></div>
-        <div class="chart-card vm-chart-card">
-          <div class="chart-legend" aria-hidden="true"><span><i class="vm-cpu-line"></i> CPU</span><span><i class="vm-memory-line"></i> Memoria</span></div>
-          <canvas id="vmHistoryChart" height="300" tabindex="0" aria-label="Grafico storico di utilizzo CPU e memoria" aria-describedby="vmChartSummary"></canvas>
-          <p class="sr-only" id="vmChartSummary">Nessun campione storico disponibile.</p>
-          <p class="chart-empty" id="vmChartEmpty" role="status">Lo storico si popolerà con le trasmissioni del connector.</p>
-        </div>
-      </section>
-
-      <section class="section-shell vm-section" aria-labelledby="dockerTitle">
-        <div class="section-heading">
-          <div><p class="eyebrow">Runtime applicativo</p><h2 id="dockerTitle">Docker</h2></div>
-          <p>Stato del daemon, distribuzione dei container e consumo aggregato dei processi attivi.</p>
-        </div>
-        <div class="vm-docker-grid">
-          <article><span>Daemon</span><strong id="dockerPing">--</strong><small id="dockerPingMeta">In attesa</small></article>
-          <article><span>Container totali</span><strong id="dockerTotal">--</strong><small id="dockerTotalMeta">In attesa</small></article>
-          <article><span>In esecuzione</span><strong id="dockerRunning">--</strong><small id="dockerRunningMeta">In attesa</small></article>
-          <article><span>Fermi</span><strong id="dockerStopped">--</strong><small id="dockerStoppedMeta">In attesa</small></article>
-          <article><span>In pausa</span><strong id="dockerPaused">--</strong><small id="dockerPausedMeta">In attesa</small></article>
-          <article><span>CPU aggregata</span><strong id="dockerCpu">--</strong><small id="dockerCpuMeta">In attesa</small></article>
-          <article><span>Memoria attiva</span><strong id="dockerMemory">--</strong><small id="dockerMemoryMeta">In attesa</small></article>
-        </div>
-      </section>
+      <div class="vm-health-meta">
+        <span>Ultimo dato</span>
+        <time id="vmLastUpdated">--</time>
+      </div>
     </div>
+  </section>
 
-    {% if site_admin %}
-    <section class="section-shell vm-section vm-diagnostics" id="connectorDiagnostics" aria-labelledby="connectorTitle">
+  <aside class="vm-empty-state" id="vmEmptyState" aria-labelledby="vmEmptyTitle" hidden>
+    <span aria-hidden="true">VM / 00</span>
+    <div>
+      <h2 id="vmEmptyTitle">Telemetria VM non ancora disponibile</h2>
+      <p>Configura il monitoraggio della macchina e invia almeno una metrica canonica tramite il connector. Questa pagina si popolerà automaticamente alla prima trasmissione.</p>
+    </div>
+  </aside>
+
+  <div id="vmTelemetryContent">
+    <section class="section-shell vm-section" aria-labelledby="resourceTitle">
       <div class="section-heading">
-        <div><p class="eyebrow">Visibilità amministrativa</p><h2 id="connectorTitle">Diagnostica connector</h2></div>
-        <p>Copertura delle ultime 24 ore, freschezza dei dataset e risultato delle trasmissioni più recenti.</p>
+        <div><p class="eyebrow">Lettura istantanea</p><h2 id="resourceTitle">Risorse host</h2></div>
+        <p>Valori più recenti ricevuti dal connector. Le schede indicano separatamente le metriche non ancora trasmesse.</p>
       </div>
-      <div class="data-notice vm-notice" id="connectorNotice" role="status" aria-live="polite" hidden></div>
-      <div class="vm-diagnostic-counts">
-        <article><span>Ultima ricezione</span><strong id="connectorLastReceived">--</strong></article>
-        <article><span>Batch / 24h</span><strong id="connectorBatches">--</strong></article>
-        <article><span>Record / 24h</span><strong id="connectorRecords">--</strong></article>
-        <article><span>Accettati</span><strong id="connectorAccepted">--</strong></article>
-        <article><span>Ignorati</span><strong id="connectorIgnored">--</strong></article>
-        <article><span>Rifiutati</span><strong id="connectorRejected">--</strong></article>
-      </div>
-      <div class="vm-diagnostic-grid">
-        <article class="vm-diagnostic-card">
-          <header><h3>Freschezza dataset</h3><span id="connectorGenerated">--</span></header>
-          <dl class="vm-dataset-list" id="connectorDatasets"><div><dt>Dataset</dt><dd>In attesa</dd></div></dl>
+
+      <div class="vm-metric-grid">
+        <article>
+          <span class="vm-card-label">CPU</span>
+          <strong id="vmCpu">--</strong>
+          <small id="vmCpuMeta">In attesa</small>
         </article>
-        <article class="vm-diagnostic-card">
-          <header><h3>Copertura metriche VM</h3><span id="connectorCoverage">--</span></header>
-          <p>Metriche canoniche mancanti</p>
-          <ul class="vm-missing-list" id="connectorMissing"><li>In attesa</li></ul>
+        <article>
+          <span class="vm-card-label">Memoria</span>
+          <strong id="vmMemory">--</strong>
+          <p>Disponibile <b id="vmMemoryAvailable">--</b></p>
+          <small id="vmMemoryMeta">In attesa</small>
         </article>
-      </div>
-      <div class="vm-batch-heading">
-        <h3>Batch recenti</h3>
-        <p>Esito e dataset inclusi nelle trasmissioni più recenti.</p>
-      </div>
-      <div class="table-wrap vm-batch-table">
-        <table>
-          <thead><tr><th>Ricevuto</th><th>Host</th><th>Record</th><th>Accettati</th><th>Ignorati</th><th>Rifiutati</th><th>Dataset</th><th>Elementi ignorati</th></tr></thead>
-          <tbody id="connectorBatchesTable"><tr><td colspan="8" class="empty-cell">Nessun batch disponibile.</td></tr></tbody>
-        </table>
+        <article>
+          <span class="vm-card-label">Carico medio</span>
+          <div class="vm-value-row">
+            <span><b id="vmLoad1">--</b><small>1 min</small></span>
+            <span><b id="vmLoad5">--</b><small>5 min</small></span>
+            <span><b id="vmLoad15">--</b><small>15 min</small></span>
+          </div>
+          <small id="vmLoadMeta">In attesa</small>
+        </article>
+        <article>
+          <span class="vm-card-label">Disco root</span>
+          <strong id="vmDisk">--</strong>
+          <small id="vmDiskMeta">In attesa</small>
+        </article>
+        <article>
+          <span class="vm-card-label">Uptime</span>
+          <strong id="vmUptime">--</strong>
+          <small id="vmUptimeMeta">In attesa</small>
+        </article>
+        <article>
+          <span class="vm-card-label">Rete</span>
+          <div class="vm-value-row vm-network-values">
+            <span><b id="vmNetworkRx">--</b><small>Ricezione</small></span>
+            <span><b id="vmNetworkTx">--</b><small>Trasmissione</small></span>
+          </div>
+          <small id="vmNetworkMeta">In attesa</small>
+        </article>
       </div>
     </section>
-    {% endif %}
-  </main>
 
-  <footer>
-    <span>Palworld Server Observatory</span>
-    <span>Telemetria VM riservata</span>
-  </footer>
-  <script src="{% static 'dashboard/js/vm.js' %}" defer></script>
-</body>
-</html>
+    <section class="section-shell vm-section" aria-labelledby="vmHistoryTitle">
+      <div class="section-heading compact">
+        <div><p class="eyebrow">Andamento risorse</p><h2 id="vmHistoryTitle">CPU e memoria</h2></div>
+        <label class="range-control" for="vmHistoryRange">Intervallo
+          <select id="vmHistoryRange">
+            <option value="6h">6 ore</option>
+            <option value="24h" selected>24 ore</option>
+            <option value="7d">7 giorni</option>
+          </select>
+        </label>
+      </div>
+      <div class="data-notice vm-notice" id="vmHistoryNotice" role="status" aria-live="polite" hidden></div>
+      <div class="chart-card vm-chart-card">
+        <div class="chart-legend" aria-hidden="true"><span><i class="vm-cpu-line"></i> CPU</span><span><i class="vm-memory-line"></i> Memoria</span></div>
+        <canvas id="vmHistoryChart" height="300" tabindex="0" aria-label="Grafico storico di utilizzo CPU e memoria" aria-describedby="vmChartSummary"></canvas>
+        <p class="sr-only" id="vmChartSummary">Nessun campione storico disponibile.</p>
+        <p class="chart-empty" id="vmChartEmpty" role="status">Lo storico si popolerà con le trasmissioni del connector.</p>
+      </div>
+    </section>
+
+    <section class="section-shell vm-section" aria-labelledby="dockerTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">Runtime applicativo</p><h2 id="dockerTitle">Docker</h2></div>
+        <p>Stato del daemon, distribuzione dei container e consumo aggregato dei processi attivi.</p>
+      </div>
+      <div class="vm-docker-grid">
+        <article><span>Daemon</span><strong id="dockerPing">--</strong><small id="dockerPingMeta">In attesa</small></article>
+        <article><span>Container totali</span><strong id="dockerTotal">--</strong><small id="dockerTotalMeta">In attesa</small></article>
+        <article><span>In esecuzione</span><strong id="dockerRunning">--</strong><small id="dockerRunningMeta">In attesa</small></article>
+        <article><span>Fermi</span><strong id="dockerStopped">--</strong><small id="dockerStoppedMeta">In attesa</small></article>
+        <article><span>In pausa</span><strong id="dockerPaused">--</strong><small id="dockerPausedMeta">In attesa</small></article>
+        <article><span>CPU aggregata</span><strong id="dockerCpu">--</strong><small id="dockerCpuMeta">In attesa</small></article>
+        <article><span>Memoria attiva</span><strong id="dockerMemory">--</strong><small id="dockerMemoryMeta">In attesa</small></article>
+      </div>
+    </section>
+  </div>
+
+  {% if site_admin %}
+  <section class="section-shell vm-section vm-diagnostics" id="connectorDiagnostics" aria-labelledby="connectorTitle">
+    <div class="section-heading">
+      <div><p class="eyebrow">Visibilità amministrativa</p><h2 id="connectorTitle">Diagnostica connector</h2></div>
+      <p>Copertura delle ultime 24 ore, freschezza dei dataset e risultato delle trasmissioni più recenti.</p>
+    </div>
+    <div class="data-notice vm-notice" id="connectorNotice" role="status" aria-live="polite" hidden></div>
+    <div class="vm-diagnostic-counts">
+      <article><span>Ultima ricezione</span><strong id="connectorLastReceived">--</strong></article>
+      <article><span>Batch / 24h</span><strong id="connectorBatches">--</strong></article>
+      <article><span>Record / 24h</span><strong id="connectorRecords">--</strong></article>
+      <article><span>Accettati</span><strong id="connectorAccepted">--</strong></article>
+      <article><span>Ignorati</span><strong id="connectorIgnored">--</strong></article>
+      <article><span>Rifiutati</span><strong id="connectorRejected">--</strong></article>
+    </div>
+    <div class="vm-diagnostic-grid">
+      <article class="vm-diagnostic-card">
+        <header><h3>Freschezza dataset</h3><span id="connectorGenerated">--</span></header>
+        <dl class="vm-dataset-list" id="connectorDatasets"><div><dt>Dataset</dt><dd>In attesa</dd></div></dl>
+      </article>
+      <article class="vm-diagnostic-card">
+        <header><h3>Copertura metriche VM</h3><span id="connectorCoverage">--</span></header>
+        <p>Metriche canoniche mancanti</p>
+        <ul class="vm-missing-list" id="connectorMissing"><li>In attesa</li></ul>
+      </article>
+    </div>
+    <div class="vm-batch-heading">
+      <h3>Batch recenti</h3>
+      <p>Esito e dataset inclusi nelle trasmissioni più recenti.</p>
+    </div>
+    <div class="table-wrap vm-batch-table">
+      <table>
+        <thead><tr><th>Ricevuto</th><th>Host</th><th>Record</th><th>Accettati</th><th>Ignorati</th><th>Rifiutati</th><th>Dataset</th><th>Elementi ignorati</th></tr></thead>
+        <tbody id="connectorBatchesTable"><tr><td colspan="8" class="empty-cell">Nessun batch disponibile.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{% static 'dashboard/js/site.js' %}" defer></script>
+<script src="{% static 'dashboard/js/vm.js' %}" defer></script>
+{% endblock %}

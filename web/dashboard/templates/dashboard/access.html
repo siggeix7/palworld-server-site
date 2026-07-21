@@ -1,0 +1,38 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Accesso · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Credenziali di accesso al server Palworld riservate ai membri{% endblock %}
+{% block page_key %}access{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageAccessTitle">
+  <div>
+    <p class="eyebrow">Accesso riservato ai membri</p>
+    <h1 id="pageAccessTitle">Entra nel server</h1>
+    <p>Queste credenziali sono visibili soltanto agli account verificati e approvati. Non condividerle pubblicamente.</p>
+  </div>
+</section>
+
+<section class="access-section section-shell">
+  <div class="access-layout">
+    <article class="credentials-card">
+      <div class="credential-row"><span>Indirizzo pubblico</span><code id="palworldHost">{{ palworld_access.host|default:"Non configurato" }}</code><button type="button" data-copy-target="palworldHost">Copia</button></div>
+      <div class="credential-row"><span>Porta di gioco</span><code id="palworldPort">{{ palworld_access.port|default:"8211" }}</code><button type="button" data-copy-target="palworldPort">Copia</button></div>
+      <div class="credential-row"><span>Password</span><code id="palworldPassword" data-secret="{{ palworld_access.password }}">{% if palworld_access.password %}••••••••{% else %}Non configurata{% endif %}</code><button type="button" id="togglePalworldPassword" {% if not palworld_access.password %}disabled{% endif %}>Mostra</button><button type="button" data-copy-secret="palworldPassword" {% if not palworld_access.password %}disabled{% endif %}>Copia</button></div>
+      <div class="credential-row connection-row"><span>Indirizzo completo</span><code id="palworldAddress">{% if palworld_access.host %}{{ palworld_access.host }}:{{ palworld_access.port }}{% else %}Non configurato{% endif %}</code><button type="button" data-copy-target="palworldAddress">Copia</button></div>
+    </article>
+    <article class="join-guide">
+      <p class="eyebrow">Guida rapida</p>
+      <h3>Come collegarsi da Palworld</h3>
+      <ol>
+        <li>Avvia Palworld e seleziona <strong>Partecipa a una partita multigiocatore</strong>.</li>
+        <li>Nel campo in basso inserisci l'indirizzo completo <strong>IP:porta</strong> mostrato qui accanto.</li>
+        <li>Premi <strong>Connetti</strong> e, quando richiesto, inserisci la password del server.</li>
+        <li>Se vuoi ritrovarlo rapidamente, aggiungilo ai server recenti o preferiti.</li>
+      </ol>
+      <p>Se la connessione fallisce, verifica di usare la porta di gioco e non la porta REST API.</p>
+    </article>
+  </div>
+  {% if not palworld_access.host or not palworld_access.password %}<p class="access-warning">Configurazione incompleta: imposta <code>PALWORLD_PUBLIC_HOST</code>, <code>PALWORLD_PUBLIC_PORT</code> e <code>PALWORLD_PUBLIC_PASSWORD</code> nel file <code>.env</code> del deployment.</p>{% endif %}
+</section>
+{% endblock %}

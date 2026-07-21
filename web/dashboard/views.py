@@ -252,22 +252,86 @@ def _session_stats(public_ids, now):
     return result
 
 
+def _shared_context(request, **extra):
+    return {
+        "app_version": settings.APP_VERSION,
+        "public_site_url": settings.PUBLIC_SITE_URL,
+        "site_admin": is_site_admin(request.user),
+        **extra,
+    }
+
+
+def _palworld_access():
+    return {
+        "host": settings.PALWORLD_PUBLIC_HOST,
+        "port": settings.PALWORLD_PUBLIC_PORT,
+        "password": settings.PALWORLD_PUBLIC_PASSWORD,
+    }
+
+
 @require_GET
 @never_cache
 def home(request):
     return render(
         request,
         "dashboard/home.html",
-        {
-            "app_version": settings.APP_VERSION,
-            "public_site_url": settings.PUBLIC_SITE_URL,
-            "site_admin": is_site_admin(request.user),
-            "palworld_access": {
-                "host": settings.PALWORLD_PUBLIC_HOST,
-                "port": settings.PALWORLD_PUBLIC_PORT,
-                "password": settings.PALWORLD_PUBLIC_PASSWORD,
-            },
-        },
+        _shared_context(request, active_nav="home"),
+    )
+
+
+@require_GET
+@never_cache
+def map_page(request):
+    return render(request, "dashboard/map.html", _shared_context(request, active_nav="map"))
+
+
+@require_GET
+@never_cache
+def telemetry_page(request):
+    return render(
+        request,
+        "dashboard/telemetry.html",
+        _shared_context(request, active_nav="telemetry"),
+    )
+
+
+@require_GET
+@never_cache
+def players_page(request):
+    return render(
+        request,
+        "dashboard/players.html",
+        _shared_context(request, active_nav="players"),
+    )
+
+
+@require_GET
+@never_cache
+def access_page(request):
+    return render(
+        request,
+        "dashboard/access.html",
+        _shared_context(
+            request,
+            active_nav="access",
+            palworld_access=_palworld_access(),
+        ),
+    )
+
+
+@require_GET
+@never_cache
+def world_page(request):
+    return render(request, "dashboard/world.html", _shared_context(request, active_nav="world"))
+
+
+@require_GET
+@never_cache
+def activity_page(request):
+    return render(
+        request,
+        "dashboard/activity.html",
+        _shared_context(request, active_nav="activity"),
     )
 
 
@@ -567,10 +631,7 @@ def vm_dashboard(request):
     return render(
         request,
         "dashboard/vm.html",
-        {
-            "app_version": settings.APP_VERSION,
-            "site_admin": is_site_admin(request.user),
-        },
+        _shared_context(request, active_nav="vm"),
     )
 
 

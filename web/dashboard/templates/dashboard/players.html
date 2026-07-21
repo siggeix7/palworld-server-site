@@ -1,0 +1,39 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Giocatori · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Giocatori online e archivio presenze del server Palworld{% endblock %}
+{% block page_key %}players{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pagePlayersTitle">
+  <div>
+    <p class="eyebrow">Manifesto esploratori</p>
+    <h1 id="pagePlayersTitle">Giocatori</h1>
+    <p>Il sito non memorizza IP e identificativi interni. Nome e account di piattaforma sono visibili soltanto ai membri.</p>
+  </div>
+</section>
+
+<section class="players-section section-shell">
+  <div class="section-heading">
+    <div><p class="eyebrow">In tempo reale</p><h2>Giocatori online</h2></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Giocatore</th><th>Livello</th><th>Ping</th><th>Costruzioni</th><th>Sessione</th><th>Coordinate</th></tr></thead>
+      <tbody id="playersTable"><tr><td colspan="6" class="empty-cell">Nessun giocatore online.</td></tr></tbody>
+    </table>
+  </div>
+  <div class="mobile-player-list" id="mobilePlayers"><p class="empty-copy">Nessun giocatore online.</p></div>
+
+  <div class="archive-heading">
+    <div><p class="eyebrow">Archivio presenze</p><h3>Tutti i giocatori</h3></div>
+    <div class="archive-controls">
+      <label><span class="sr-only">Cerca giocatore</span><input type="search" id="playerSearch" placeholder="Cerca nome o account"></label>
+      <label><input type="checkbox" id="favoritesOnly"> Solo preferiti</label>
+      <p id="playerArchiveStatus" role="status">Caricamento dello storico...</p>
+    </div>
+  </div>
+  <p class="archive-note">I conteggi usano finestre mobili di 30 e 365 giorni. Il totale storico parte dall'attivazione del monitoraggio.</p>
+  <div class="player-archive" id="playerArchive"><p class="empty-copy">Storico giocatori in caricamento.</p></div>
+</section>
+{% endblock %}

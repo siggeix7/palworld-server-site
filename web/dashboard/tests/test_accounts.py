@@ -93,7 +93,7 @@ class AccountAccessTests(TestCase):
         user = self.create_user(verified=True, approved=True)
         self.client.force_login(user)
 
-        response = self.client.get(reverse("home"))
+        response = self.client.get(reverse("access"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "play.example.com")

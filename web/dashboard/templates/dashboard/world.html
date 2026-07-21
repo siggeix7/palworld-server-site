@@ -1,0 +1,35 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Mondo · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Regole del mondo e impostazioni pubbliche del server Palworld{% endblock %}
+{% block page_key %}world{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageWorldTitle">
+  <div>
+    <p class="eyebrow">Configurazione mondo</p>
+    <h1 id="pageWorldTitle">Mondo</h1>
+    <p>Una selezione sicura delle impostazioni pubbliche attive sul server.</p>
+  </div>
+</section>
+
+<section class="world-section section-shell">
+  <div class="section-heading">
+    <div><p class="eyebrow">Regole attive</p><h2>Regole del mondo</h2></div>
+    <div class="world-controls">
+      <p>Riepilogo derivato dall'ultima telemetria e dalla configurazione pubblica.</p>
+      <label><span class="sr-only">Cerca impostazione</span><input type="search" id="settingsSearch" placeholder="Cerca una regola"></label>
+    </div>
+  </div>
+  <aside class="server-profile" aria-labelledby="serverProfileTitle">
+    <div class="server-profile-heading">
+      <p class="eyebrow">Identikit operativo</p>
+      <h3 id="serverProfileTitle">Scheda server</h3>
+      <p>Riepilogo derivato dall'ultima telemetria e dalla configurazione pubblica.</p>
+    </div>
+    <dl class="server-profile-grid" id="serverProfile"><div><dt>Stato</dt><dd>In attesa</dd></div></dl>
+  </aside>
+  <div class="world-highlights" id="worldHighlights" aria-label="Regole principali del mondo"></div>
+  <div class="world-grid" id="settingsGrid"><p class="empty-copy">Configurazione non ancora ricevuta.</p></div>
+</section>
+{% endblock %}

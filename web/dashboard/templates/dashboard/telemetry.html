@@ -1,0 +1,55 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Telemetria · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Archivio prestazioni del server Palworld: FPS, frame time e giocatori{% endblock %}
+{% block page_key %}telemetry{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageTelemetryTitle">
+  <div>
+    <p class="eyebrow">Archivio prestazioni</p>
+    <h1 id="pageTelemetryTitle">Telemetria</h1>
+    <p>Andamento di FPS, frame time e presenze nelle ultime trasmissioni del connector.</p>
+  </div>
+</section>
+
+<section class="telemetry section-shell">
+  <div class="section-heading compact">
+    <div><p class="eyebrow">Grafico storico</p><h2>FPS e giocatori</h2></div>
+    <label class="range-control">Intervallo
+      <select id="historyRange">
+        <option value="6h">6 ore</option>
+        <option value="24h" selected>24 ore</option>
+        <option value="7d">7 giorni</option>
+        <option value="30d">30 giorni</option>
+        <option value="90d">90 giorni</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="data-notice" id="dataNotice" role="status" aria-live="polite" hidden></div>
+
+  <div class="metric-strip">
+    <article><span>FPS medio</span><strong id="metricFpsAverage">--</strong><small>ultime 24 ore</small></article>
+    <article><span>FPS minimo</span><strong id="metricFpsMinimum">--</strong><small>ultime 24 ore</small></article>
+    <article><span>Frame time</span><strong id="metricFrameTime">--</strong><small>millisecondi</small></article>
+    <article><span>Picco online</span><strong id="metricPeak">--</strong><small>ultime 24 ore</small></article>
+    <article><span>Media online</span><strong id="metricPlayersAverage">--</strong><small>ultime 24 ore</small></article>
+    <article><span>Campi base</span><strong id="metricBases">--</strong><small>nel mondo</small></article>
+  </div>
+
+  <div class="performance-health" id="performanceHealth" data-state="no_data">
+    <div><span>Stato FPS / ultima ora</span><strong id="healthLabel">In attesa</strong></div>
+    <div><span>Punteggio</span><strong id="healthScore">--</strong></div>
+    <p id="healthDetail">Il giudizio richiede almeno cinque minuti di campioni.</p>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-legend"><span><i class="fps-line"></i> FPS</span><span><i class="players-line"></i> Giocatori</span></div>
+    <canvas id="historyChart" height="300" tabindex="0" aria-label="Grafico storico FPS e giocatori" aria-describedby="chartSummary"></canvas>
+    <div class="chart-tooltip" id="chartTooltip" role="status" hidden></div>
+    <p class="sr-only" id="chartSummary">Nessun campione storico disponibile.</p>
+    <p class="chart-empty" id="chartEmpty" role="status">Lo storico inizierà a popolarsi con le trasmissioni del connector.</p>
+  </div>
+</section>
+{% endblock %}

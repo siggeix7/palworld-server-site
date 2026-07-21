@@ -1,268 +1,81 @@
+{% extends "dashboard/base.html" %}
 {% load static %}
-<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Telemetria riservata e mappa live del server Palworld">
-  <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#071a1d">
-  {% if public_site_url %}<link rel="canonical" href="{{ public_site_url }}">{% endif %}
-  <title>Palworld Server Observatory</title>
-  <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
-</head>
-<body>
-  <a class="skip-link" href="#main">Vai al contenuto</a>
-  <div class="noise" aria-hidden="true"></div>
 
-  <header class="masthead">
-    <a class="brand" href="#top" aria-label="Palworld Server Observatory">
-      <span class="brand-mark" aria-hidden="true"><i></i></span>
-      <span><strong>Palworld</strong><small>Server Observatory</small></span>
-    </a>
-    <nav aria-label="Navigazione principale">
-      <a href="#map">Mappa</a>
-      <a href="#telemetry">Telemetria</a>
-      <a href="#players">Giocatori</a>
-      <a href="#access">Accesso</a>
-      <a href="#world">Mondo</a>
-      <a href="#activity">Attività</a>
-      <a href="{% url 'vm-dashboard' %}">Stato VM</a>
-    </nav>
-    <div class="header-tools">
-      <label class="theme-control">Tema
-        <select id="themeSelect">
-          <option value="observatory">Osservatorio</option>
-          <option value="tron">Tron</option>
-          <option value="ares">Ares</option>
-          <option value="clu">Clu</option>
-          <option value="athena">Athena</option>
-          <option value="aphrodite">Aphrodite</option>
-          <option value="poseidon">Poseidon</option>
-        </select>
-      </label>
-      <div class="account-tools">
-        <span>{{ request.user.username }}</span>
-        {% if site_admin %}<a href="{% url 'members' %}">Membri</a>{% endif %}
-        <a href="{% url 'password_change' %}">Password</a>
-        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Esci</button></form>
-      </div>
-      <div class="live-pill" id="headerStatus" role="status" aria-live="polite"><span></span><b>IN ATTESA</b></div>
+{% block title %}Palworld Server Observatory{% endblock %}
+{% block meta_description %}Telemetria riservata e mappa live del server Palworld{% endblock %}
+{% block page_key %}home{% endblock %}
+
+{% block content %}
+<section class="hero" id="top">
+  <div class="hero-copy">
+    <p class="eyebrow">Registro spedizione / accesso membri</p>
+    <h1 id="serverName">Nichelino Palworld Server</h1>
+    <p class="hero-description" id="serverDescription">In attesa della prima trasmissione Zabbix.</p>
+    <div class="hero-actions">
+      <a class="primary-link" href="{% url 'map' %}">Esplora la mappa <span aria-hidden="true">↘</span></a>
+      <span class="update-label">Server <b id="serverVersion">--</b> · ultimo dato <time id="lastUpdate">mai</time></span>
     </div>
-  </header>
+  </div>
 
-  <main id="main">
-    <section class="hero" id="top">
-      <div class="hero-copy">
-        <p class="eyebrow">Registro spedizione / accesso membri</p>
-        <h1 id="serverName">Nichelino Palworld Server</h1>
-        <p class="hero-description" id="serverDescription">In attesa della prima trasmissione Zabbix.</p>
-        <div class="hero-actions">
-          <a class="primary-link" href="#map">Esplora la mappa <span aria-hidden="true">↘</span></a>
-          <span class="update-label">Server <b id="serverVersion">--</b> · ultimo dato <time id="lastUpdate">mai</time></span>
-        </div>
-      </div>
+  <div class="hero-readout" aria-label="Riepilogo server">
+    <div class="readout-grid">
+      <article><span>Esploratori</span><strong><b id="heroPlayers">0</b><small id="heroCapacity">/ 0</small></strong></article>
+      <article><span>Server FPS</span><strong id="heroFps">--</strong></article>
+      <article><span>Uptime</span><strong id="heroUptime">--</strong></article>
+      <article><span>Giorno mondo</span><strong id="heroDay">--</strong></article>
+    </div>
+    <div class="signal-line"><span>Segnale dati</span><i><b id="signalBar"></b></i><strong id="signalAge">--</strong></div>
+  </div>
+</section>
 
-      <div class="hero-readout" aria-label="Riepilogo server">
-        <div class="readout-grid">
-          <article><span>Esploratori</span><strong><b id="heroPlayers">0</b><small id="heroCapacity">/ 0</small></strong></article>
-          <article><span>Server FPS</span><strong id="heroFps">--</strong></article>
-          <article><span>Uptime</span><strong id="heroUptime">--</strong></article>
-          <article><span>Giorno mondo</span><strong id="heroDay">--</strong></article>
-        </div>
-        <div class="signal-line"><span>Segnale dati</span><i><b id="signalBar"></b></i><strong id="signalAge">--</strong></div>
-      </div>
-    </section>
-
-    <section class="access-section section-shell" id="access">
-      <div class="section-heading">
-        <div><p class="eyebrow">Accesso riservato ai membri</p><h2>Entra nel server</h2></div>
-        <p>Queste credenziali sono visibili soltanto agli account verificati e approvati. Non condividerle pubblicamente.</p>
-      </div>
-      <div class="access-layout">
-        <article class="credentials-card">
-          <div class="credential-row"><span>Indirizzo pubblico</span><code id="palworldHost">{{ palworld_access.host|default:"Non configurato" }}</code><button type="button" data-copy-target="palworldHost">Copia</button></div>
-          <div class="credential-row"><span>Porta di gioco</span><code id="palworldPort">{{ palworld_access.port|default:"8211" }}</code><button type="button" data-copy-target="palworldPort">Copia</button></div>
-          <div class="credential-row"><span>Password</span><code id="palworldPassword" data-secret="{{ palworld_access.password }}">{% if palworld_access.password %}••••••••{% else %}Non configurata{% endif %}</code><button type="button" id="togglePalworldPassword" {% if not palworld_access.password %}disabled{% endif %}>Mostra</button><button type="button" data-copy-secret="palworldPassword" {% if not palworld_access.password %}disabled{% endif %}>Copia</button></div>
-          <div class="credential-row connection-row"><span>Indirizzo completo</span><code id="palworldAddress">{% if palworld_access.host %}{{ palworld_access.host }}:{{ palworld_access.port }}{% else %}Non configurato{% endif %}</code><button type="button" data-copy-target="palworldAddress">Copia</button></div>
-        </article>
-        <article class="join-guide">
-          <p class="eyebrow">Guida rapida</p>
-          <h3>Come collegarsi da Palworld</h3>
-          <ol>
-            <li>Avvia Palworld e seleziona <strong>Partecipa a una partita multigiocatore</strong>.</li>
-            <li>Nel campo in basso inserisci l'indirizzo completo <strong>IP:porta</strong> mostrato qui accanto.</li>
-            <li>Premi <strong>Connetti</strong> e, quando richiesto, inserisci la password del server.</li>
-            <li>Se vuoi ritrovarlo rapidamente, aggiungilo ai server recenti o preferiti.</li>
-          </ol>
-          <p>Se la connessione fallisce, verifica di usare la porta di gioco e non la porta REST API.</p>
-        </article>
-      </div>
-      {% if not palworld_access.host or not palworld_access.password %}<p class="access-warning">Configurazione incompleta: imposta <code>PALWORLD_PUBLIC_HOST</code>, <code>PALWORLD_PUBLIC_PORT</code> e <code>PALWORLD_PUBLIC_PASSWORD</code> nel file <code>.env</code> del deployment.</p>{% endif %}
-    </section>
-
-    <section class="map-section section-shell" id="map">
-      <div class="section-heading">
-        <div><p class="eyebrow">Cartografia Palpagos</p><h2>Posizioni nel mondo</h2></div>
-        <p>Coordinate aggiornate da Zabbix ogni 20 secondi. Seleziona un giocatore per seguirne la traccia recente.</p>
-      </div>
-
-      <div class="map-layout">
-        <div class="map-card">
-          <div class="map-toolbar" aria-label="Controlli mappa">
-            <div class="map-tools">
-              <button type="button" id="zoomIn" aria-label="Aumenta zoom">+</button>
-              <button type="button" id="zoomOut" aria-label="Riduci zoom">−</button>
-              <button type="button" id="resetMap" aria-label="Ripristina posizione e zoom della mappa">Centra</button>
-            </div>
-            <div class="layer-tools">
-              <label><input type="checkbox" id="showPlayers" checked> Giocatori</label>
-              <label><input type="checkbox" id="showFastTravel"> Viaggi rapidi</label>
-              <label><input type="checkbox" id="showTowers"> Torri</label>
-              <label><input type="checkbox" id="showTrail" checked> Traccia</label>
-              <label class="trail-range">Intervallo
-                <select id="trailRange">
-                  <option value="1h">1 ora</option>
-                  <option value="6h" selected>6 ore</option>
-                  <option value="24h">24 ore</option>
-                  <option value="7d">7 giorni</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <p class="sr-only" id="mapInstructions">Usa più e meno per lo zoom, le frecce per spostare la mappa e Home per ripristinarla.</p>
-          <div class="map-viewport" id="mapViewport" tabindex="0" aria-label="Mappa interattiva di Palworld" aria-describedby="mapInstructions">
-            <div class="map-plane" id="mapPlane">
-              <img id="mapImage" src="{% static 'dashboard/images/palworld-map.webp' %}" alt="Mappa aggiornata del mondo di Palworld" draggable="false" decoding="async">
-              <svg class="trail-layer" id="trailLayer" viewBox="0 0 1000 1000" aria-hidden="true"><polyline></polyline></svg>
-              <div class="poi-layer fast-travel-layer" id="fastTravelLayer" aria-hidden="true"></div>
-              <div class="poi-layer tower-layer" id="towerLayer" aria-hidden="true"></div>
-              <div class="player-layer" id="playerLayer"></div>
-            </div>
-            <div class="map-coordinate" id="mapCoordinate">X -- / Y --</div>
-            <div class="map-empty" id="mapEmpty"><strong>Nessun giocatore online</strong><span>La cartografia resta operativa.</span></div>
-            <div class="map-error" id="mapImageError" role="status" hidden><strong>Mappa non disponibile</strong><span>L'immagine cartografica non è stata caricata.</span></div>
-          </div>
-        </div>
-
-        <aside class="roster-card">
-          <div class="roster-head"><span>Online adesso</span><strong id="rosterCount">0</strong></div>
-          <div class="selection-card" id="mapSelection" hidden>
-            <span>Esploratore seguito</span>
-            <strong id="selectedPlayerName">--</strong>
-            <small id="selectedPlayerDetail">--</small>
-            <button type="button" id="clearSelection">Interrompi traccia</button>
-          </div>
-          <div class="roster" id="mapRoster"><p class="empty-copy">Nessun esploratore rilevato.</p></div>
-          <div class="map-legend">
-            <span><i class="legend-player"></i> Giocatore</span>
-            <span><i class="legend-fast"></i> Viaggio rapido</span>
-            <span><i class="legend-tower"></i> Torre</span>
-          </div>
-        </aside>
-      </div>
-    </section>
-
-    <section class="telemetry section-shell" id="telemetry">
-      <div class="section-heading compact">
-        <div><p class="eyebrow">Archivio prestazioni</p><h2>Telemetria</h2></div>
-        <label class="range-control">Intervallo
-          <select id="historyRange">
-            <option value="6h">6 ore</option>
-            <option value="24h" selected>24 ore</option>
-            <option value="7d">7 giorni</option>
-            <option value="30d">30 giorni</option>
-            <option value="90d">90 giorni</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="data-notice" id="dataNotice" role="status" aria-live="polite" hidden></div>
-
-      <div class="metric-strip">
-        <article><span>FPS medio</span><strong id="metricFpsAverage">--</strong><small>ultime 24 ore</small></article>
-        <article><span>FPS minimo</span><strong id="metricFpsMinimum">--</strong><small>ultime 24 ore</small></article>
-        <article><span>Frame time</span><strong id="metricFrameTime">--</strong><small>millisecondi</small></article>
-        <article><span>Picco online</span><strong id="metricPeak">--</strong><small>ultime 24 ore</small></article>
-        <article><span>Media online</span><strong id="metricPlayersAverage">--</strong><small>ultime 24 ore</small></article>
-        <article><span>Campi base</span><strong id="metricBases">--</strong><small>nel mondo</small></article>
-      </div>
-
-      <div class="performance-health" id="performanceHealth" data-state="no_data">
-        <div><span>Stato FPS / ultima ora</span><strong id="healthLabel">In attesa</strong></div>
-        <div><span>Punteggio</span><strong id="healthScore">--</strong></div>
-        <p id="healthDetail">Il giudizio richiede almeno cinque minuti di campioni.</p>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-legend"><span><i class="fps-line"></i> FPS</span><span><i class="players-line"></i> Giocatori</span></div>
-        <canvas id="historyChart" height="300" tabindex="0" aria-label="Grafico storico FPS e giocatori" aria-describedby="chartSummary"></canvas>
-        <div class="chart-tooltip" id="chartTooltip" role="status" hidden></div>
-        <p class="sr-only" id="chartSummary">Nessun campione storico disponibile.</p>
-        <p class="chart-empty" id="chartEmpty" role="status">Lo storico inizierà a popolarsi con le trasmissioni del connector.</p>
-      </div>
-    </section>
-
-    <section class="players-section section-shell" id="players">
-      <div class="section-heading">
-        <div><p class="eyebrow">Manifesto esploratori</p><h2>Giocatori online</h2></div>
-        <p>Il sito non memorizza IP e identificativi interni. Nome e account di piattaforma sono visibili soltanto ai membri.</p>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Giocatore</th><th>Livello</th><th>Ping</th><th>Costruzioni</th><th>Sessione</th><th>Coordinate</th></tr></thead>
-          <tbody id="playersTable"><tr><td colspan="6" class="empty-cell">Nessun giocatore online.</td></tr></tbody>
-        </table>
-      </div>
-      <div class="mobile-player-list" id="mobilePlayers"><p class="empty-copy">Nessun giocatore online.</p></div>
-
-      <div class="archive-heading">
-        <div><p class="eyebrow">Archivio presenze</p><h3>Tutti i giocatori</h3></div>
-        <div class="archive-controls">
-          <label><span class="sr-only">Cerca giocatore</span><input type="search" id="playerSearch" placeholder="Cerca nome o account"></label>
-          <label><input type="checkbox" id="favoritesOnly"> Solo preferiti</label>
-          <p id="playerArchiveStatus" role="status">Caricamento dello storico...</p>
-        </div>
-      </div>
-      <p class="archive-note">I conteggi usano finestre mobili di 30 e 365 giorni. Il totale storico parte dall'attivazione del monitoraggio.</p>
-      <div class="player-archive" id="playerArchive"><p class="empty-copy">Storico giocatori in caricamento.</p></div>
-    </section>
-
-    <section class="world-section section-shell" id="world">
-      <div class="section-heading">
-        <div><p class="eyebrow">Configurazione mondo</p><h2>Regole del mondo</h2></div>
-        <div class="world-controls">
-          <p>Una selezione sicura delle impostazioni pubbliche attive sul server.</p>
-          <label><span class="sr-only">Cerca impostazione</span><input type="search" id="settingsSearch" placeholder="Cerca una regola"></label>
-        </div>
-      </div>
-      <aside class="server-profile" aria-labelledby="serverProfileTitle">
-        <div class="server-profile-heading">
-          <p class="eyebrow">Identikit operativo</p>
-          <h3 id="serverProfileTitle">Scheda server</h3>
-          <p>Riepilogo derivato dall'ultima telemetria e dalla configurazione pubblica.</p>
-        </div>
-        <dl class="server-profile-grid" id="serverProfile"><div><dt>Stato</dt><dd>In attesa</dd></div></dl>
-      </aside>
-      <div class="world-highlights" id="worldHighlights" aria-label="Regole principali del mondo"></div>
-      <div class="world-grid" id="settingsGrid"><p class="empty-copy">Configurazione non ancora ricevuta.</p></div>
-    </section>
-
-    <section class="activity-section section-shell" id="activity">
-      <div class="section-heading compact">
-        <div><p class="eyebrow">Registro trasmissioni</p><h2>Attività recente</h2></div>
-      </div>
-      <ol class="event-list" id="eventList"><li class="empty-copy">Nessun evento registrato.</li></ol>
-    </section>
-  </main>
-
-  <footer>
-    <span>Palworld Server Observatory</span>
-    <span>build {{ app_version }}</span>
-    <span>Palworld © Pocketpair, Inc. · <a href="{% static 'dashboard/THIRD_PARTY_NOTICES.txt' %}">Licenze e crediti RNZ01</a></span>
-  </footer>
-
-  <div class="connection-toast" id="connectionToast" role="status" aria-live="polite">Connessione ai dati in corso…</div>
-  <script src="{% static 'dashboard/js/site.js' %}" defer></script>
-</body>
-</html>
+<section class="section-shell section-nav-section">
+  <div class="section-heading">
+    <div><p class="eyebrow">Pannelli dell'osservatorio</p><h2>Sezioni</h2></div>
+    <p>Scegli un pannello per consultare mappa, prestazioni, giocatori, credenziali, regole del mondo e attività recente.</p>
+  </div>
+  <nav class="section-nav-grid" aria-label="Sezioni del sito">
+    <a class="section-nav-card" href="{% url 'map' %}">
+      <span class="eyebrow">Cartografia Palpagos</span>
+      <strong>Mappa</strong>
+      <p>Posizioni live degli esploratori, viaggi rapidi e torri.</p>
+      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+    </a>
+    <a class="section-nav-card" href="{% url 'telemetry' %}">
+      <span class="eyebrow">Archivio prestazioni</span>
+      <strong>Telemetria</strong>
+      <p>Andamento FPS, frame time e presenze nel tempo.</p>
+      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+    </a>
+    <a class="section-nav-card" href="{% url 'players' %}">
+      <span class="eyebrow">Manifesto esploratori</span>
+      <strong>Giocatori</strong>
+      <p>Giocatori online e archivio delle presenze.</p>
+      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+    </a>
+    <a class="section-nav-card" href="{% url 'access' %}">
+      <span class="eyebrow">Accesso riservato</span>
+      <strong>Accesso</strong>
+      <p>Credenziali del server e guida rapida di connessione.</p>
+      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+    </a>
+    <a class="section-nav-card" href="{% url 'world' %}">
+      <span class="eyebrow">Configurazione mondo</span>
+      <strong>Mondo</strong>
+      <p>Regole attive, modalità e scheda operativa del server.</p>
+      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+    </a>
+    <a class="section-nav-card" href="{% url 'activity' %}">
+      <span class="eyebrow">Registro trasmissioni</span>
+      <strong>Attività</strong>
+      <p>Entrate e uscite recenti degli esploratori.</p>
+      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+    </a>
+    <a class="section-nav-card" href="{% url 'vm-dashboard' %}">
+      <span class="eyebrow">Nodo host</span>
+      <strong>Stato VM</strong>
+      <p>Risorse di sistema, Docker e diagnostica connector.</p>
+      <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
+    </a>
+  </nav>
+</section>
+{% endblock %}

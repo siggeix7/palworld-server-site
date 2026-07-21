@@ -1,0 +1,73 @@
+{% extends "dashboard/base.html" %}
+{% load static %}
+
+{% block title %}Mappa · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Mappa live del server Palworld con le posizioni dei giocatori{% endblock %}
+{% block page_key %}map{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageMapTitle">
+  <div>
+    <p class="eyebrow">Cartografia Palpagos</p>
+    <h1 id="pageMapTitle">Mappa</h1>
+    <p>Posizioni aggiornate da Zabbix ogni 20 secondi. Seleziona un giocatore per seguirne la traccia recente.</p>
+  </div>
+</section>
+
+<section class="map-section section-shell">
+  <div class="map-layout">
+    <div class="map-card">
+      <div class="map-toolbar" aria-label="Controlli mappa">
+        <div class="map-tools">
+          <button type="button" id="zoomIn" aria-label="Aumenta zoom">+</button>
+          <button type="button" id="zoomOut" aria-label="Riduci zoom">−</button>
+          <button type="button" id="resetMap" aria-label="Ripristina posizione e zoom della mappa">Centra</button>
+        </div>
+        <div class="layer-tools">
+          <label><input type="checkbox" id="showPlayers" checked> Giocatori</label>
+          <label><input type="checkbox" id="showFastTravel"> Viaggi rapidi</label>
+          <label><input type="checkbox" id="showTowers"> Torri</label>
+          <label><input type="checkbox" id="showTrail" checked> Traccia</label>
+          <label class="trail-range">Intervallo
+            <select id="trailRange">
+              <option value="1h">1 ora</option>
+              <option value="6h" selected>6 ore</option>
+              <option value="24h">24 ore</option>
+              <option value="7d">7 giorni</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <p class="sr-only" id="mapInstructions">Usa più e meno per lo zoom, le frecce per spostare la mappa e Home per ripristinarla.</p>
+      <div class="map-viewport" id="mapViewport" tabindex="0" aria-label="Mappa interattiva di Palworld" aria-describedby="mapInstructions">
+        <div class="map-plane" id="mapPlane">
+          <img id="mapImage" src="{% static 'dashboard/images/palworld-map.webp' %}" alt="Mappa aggiornata del mondo di Palworld" draggable="false" decoding="async">
+          <svg class="trail-layer" id="trailLayer" viewBox="0 0 1000 1000" aria-hidden="true"><polyline></polyline></svg>
+          <div class="poi-layer fast-travel-layer" id="fastTravelLayer" aria-hidden="true"></div>
+          <div class="poi-layer tower-layer" id="towerLayer" aria-hidden="true"></div>
+          <div class="player-layer" id="playerLayer"></div>
+        </div>
+        <div class="map-coordinate" id="mapCoordinate">X -- / Y --</div>
+        <div class="map-empty" id="mapEmpty"><strong>Nessun giocatore online</strong><span>La cartografia resta operativa.</span></div>
+        <div class="map-error" id="mapImageError" role="status" hidden><strong>Mappa non disponibile</strong><span>L'immagine cartografica non è stata caricata.</span></div>
+      </div>
+    </div>
+
+    <aside class="roster-card">
+      <div class="roster-head"><span>Online adesso</span><strong id="rosterCount">0</strong></div>
+      <div class="selection-card" id="mapSelection" hidden>
+        <span>Esploratore seguito</span>
+        <strong id="selectedPlayerName">--</strong>
+        <small id="selectedPlayerDetail">--</small>
+        <button type="button" id="clearSelection">Interrompi traccia</button>
+      </div>
+      <div class="roster" id="mapRoster"><p class="empty-copy">Nessun esploratore rilevato.</p></div>
+      <div class="map-legend">
+        <span><i class="legend-player"></i> Giocatore</span>
+        <span><i class="legend-fast"></i> Viaggio rapido</span>
+        <span><i class="legend-tower"></i> Torre</span>
+      </div>
+    </aside>
+  </div>
+</section>
+{% endblock %}

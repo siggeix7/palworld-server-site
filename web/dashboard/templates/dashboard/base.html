@@ -1,0 +1,69 @@
+{% load static %}
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{% block meta_description %}Telemetria riservata e mappa live del server Palworld{% endblock %}">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#071a1d">
+  {% if public_site_url %}<link rel="canonical" href="{{ public_site_url }}">{% endif %}
+  <title>{% block title %}Palworld Server Observatory{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
+</head>
+<body class="{% block body_class %}{% endblock %}" data-page="{% block page_key %}home{% endblock %}">
+  <a class="skip-link" href="#main">Vai al contenuto</a>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <a class="brand" href="{% url 'home' %}" aria-label="Palworld Server Observatory">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span><strong>Palworld</strong><small>Server Observatory</small></span>
+    </a>
+    <nav aria-label="Navigazione principale">
+      <a href="{% url 'map' %}" {% if active_nav == 'map' %}aria-current="page"{% endif %}>Mappa</a>
+      <a href="{% url 'telemetry' %}" {% if active_nav == 'telemetry' %}aria-current="page"{% endif %}>Telemetria</a>
+      <a href="{% url 'players' %}" {% if active_nav == 'players' %}aria-current="page"{% endif %}>Giocatori</a>
+      <a href="{% url 'access' %}" {% if active_nav == 'access' %}aria-current="page"{% endif %}>Accesso</a>
+      <a href="{% url 'world' %}" {% if active_nav == 'world' %}aria-current="page"{% endif %}>Mondo</a>
+      <a href="{% url 'activity' %}" {% if active_nav == 'activity' %}aria-current="page"{% endif %}>Attività</a>
+      <a href="{% url 'vm-dashboard' %}" {% if active_nav == 'vm' %}aria-current="page"{% endif %}>Stato VM</a>
+    </nav>
+    <div class="header-tools">
+      <label class="theme-control">Tema
+        <select id="themeSelect">
+          <option value="observatory">Osservatorio</option>
+          <option value="tron">Tron</option>
+          <option value="ares">Ares</option>
+          <option value="clu">Clu</option>
+          <option value="athena">Athena</option>
+          <option value="aphrodite">Aphrodite</option>
+          <option value="poseidon">Poseidon</option>
+        </select>
+      </label>
+      <div class="account-tools">
+        <span>{{ request.user.username }}</span>
+        {% if site_admin %}<a href="{% url 'members' %}">Membri</a>{% endif %}
+        <a href="{% url 'password_change' %}">Password</a>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Esci</button></form>
+      </div>
+      <div class="live-pill" id="headerStatus" role="status" aria-live="polite"><span></span><b>IN ATTESA</b></div>
+    </div>
+  </header>
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <span>Palworld Server Observatory</span>
+    <span>build {{ app_version }}</span>
+    <span>Palworld © Pocketpair, Inc. · <a href="{% static 'dashboard/THIRD_PARTY_NOTICES.txt' %}">Licenze e crediti RNZ01</a></span>
+  </footer>
+
+  <div class="connection-toast" id="connectionToast" role="status" aria-live="polite">Connessione ai dati in corso…</div>
+  {% block page_scripts %}
+  <script src="{% static 'dashboard/js/site.js' %}" defer></script>
+  {% endblock %}
+</body>
+</html>

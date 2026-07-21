@@ -251,6 +251,7 @@
   }
 
   function renderNotice() {
+    if (!elements.dataNotice) return
     const notice = state.notices.snapshot || state.notices.history
     elements.dataNotice.hidden = !notice
     elements.dataNotice.classList.toggle('error', Boolean(notice?.error))
@@ -291,6 +292,7 @@
   }
 
   function clampMapPan() {
+    if (!elements.mapViewport) return
     const rect = elements.mapViewport.getBoundingClientRect()
     const maxX = Math.max(0, (rect.width * (state.map.scale - 1)) / 2)
     const maxY = Math.max(0, (rect.height * (state.map.scale - 1)) / 2)
@@ -299,6 +301,7 @@
   }
 
   function applyMapTransform() {
+    if (!elements.mapPlane) return
     clampMapPan()
     if (state.map.frame !== null) return
     state.map.frame = window.requestAnimationFrame(() => {
@@ -340,6 +343,7 @@
   }
 
   function clearTrail() {
+    if (!elements.trailLayer) return
     elements.trailLayer.querySelector('polyline').setAttribute('points', '')
   }
 
@@ -349,9 +353,9 @@
     state.selectedPlayer = null
     if (state.requests.trail) state.requests.trail.abort()
     clearTrail()
-    elements.mapSelection.hidden = true
+    if (elements.mapSelection) elements.mapSelection.hidden = true
     if (render && state.snapshot) renderMap(state.snapshot.players || [])
-    if (restoreFocus && previousPlayer) {
+    if (restoreFocus && previousPlayer && elements.mapRoster) {
       elements.mapRoster.querySelector(`[data-player-id="${previousPlayer}"]`)?.focus({ preventScroll: true })
     }
   }
@@ -365,7 +369,7 @@
   }
 
   function centerPlayer(player) {
-    if (!hasMapLocation(player)) return
+    if (!elements.mapViewport || !hasMapLocation(player)) return
     const position = worldToPercent(player.location_x, player.location_y)
     const rect = elements.mapViewport.getBoundingClientRect()
     state.map.scale = Math.max(2.2, state.map.scale)
@@ -449,6 +453,7 @@
   }
 
   function renderStaticPoints() {
+    if (!elements.fastTravelLayer || !elements.towerLayer) return
     elements.fastTravelLayer.replaceChildren()
     elements.towerLayer.replaceChildren()
     for (const point of state.points.fast_travel || []) {
@@ -460,6 +465,7 @@
   }
 
   function renderSelection(players) {
+    if (!elements.mapSelection) return
     const selected = players.find((player) => player.id === state.selectedPlayer)
     elements.mapSelection.hidden = !selected
     if (!selected) return
@@ -471,6 +477,7 @@
   }
 
   function renderMap(players) {
+    if (!elements.playerLayer || !elements.mapRoster) return
     const focusedElement = document.activeElement
     const focusedId = focusedElement?.dataset?.playerId
     const focusedLayer = focusedElement?.closest('#playerLayer')
@@ -576,6 +583,7 @@
   }
 
   function renderPlayersTable(players) {
+    if (!elements.playersTable) return
     const focusedId = document.activeElement?.closest('.player-link')?.dataset?.playerId
     elements.playersTable.replaceChildren()
     if (!players.length) {
@@ -593,8 +601,9 @@
       const mapped = hasMapLocation(player)
       const row = document.createElement('tr')
       const identity = document.createElement('td')
-      const playerButton = document.createElement('button')
-      playerButton.type = 'button'
+      const hasMap = Boolean(elements.mapViewport)
+      const playerButton = document.createElement(hasMap ? 'button' : 'div')
+      if (playerButton instanceof HTMLButtonElement) playerButton.type = 'button'
       playerButton.className = 'player-link'
       playerButton.dataset.playerId = player.id
       playerButton.style.setProperty('--player-color', playerColor(player.id))
@@ -603,10 +612,10 @@
       const account = document.createElement('small')
       account.textContent = player.accountName || 'account non disponibile'
       playerButton.append(name, account)
-      if (mapped) {
+      if (hasMap && mapped) {
         playerButton.setAttribute('aria-label', `Mostra ${player.name} sulla mappa`)
         playerButton.addEventListener('click', () => centerPlayer(player))
-      } else {
+      } else if (playerButton instanceof HTMLButtonElement) {
         playerButton.disabled = true
       }
       identity.appendChild(playerButton)
@@ -639,6 +648,7 @@
   }
 
   function renderMobilePlayers(players) {
+    if (!elements.mobilePlayers) return
     elements.mobilePlayers.replaceChildren()
     if (!players.length) {
       const empty = document.createElement('p')
@@ -668,7 +678,7 @@
       const stats = document.createElement('p')
       stats.textContent = `Lv.${formatNumber(player.level)} · ${formatNumber(player.building_count)} costruzioni · sessione ${formatDuration(player.session?.current_session)}`
       card.append(avatar, identity, ping, stats)
-      if (mapped) {
+      if (mapped && elements.mapViewport) {
         const locate = document.createElement('button')
         locate.type = 'button'
         locate.textContent = 'Mostra sulla mappa'
@@ -680,6 +690,7 @@
   }
 
   function renderPlayerArchive(players) {
+    if (!elements.playerArchive) return
     const expanded = new Set(
       [...elements.playerArchive.querySelectorAll('details[open]')]
         .map((details) => details.closest('[data-player-id]')?.dataset.playerId),
@@ -835,6 +846,7 @@
   }
 
   function renderServerProfile(data) {
+    if (!elements.serverProfile) return
     elements.serverProfile.replaceChildren()
     const settings = data.settings || {}
     const metrics = data.metrics || {}
@@ -863,6 +875,7 @@
   }
 
   function renderWorldHighlights(settings) {
+    if (!elements.worldHighlights) return
     elements.worldHighlights.replaceChildren()
     const highlights = [
       ['Modalità', Object.hasOwn(settings, 'bIsPvP') ? (settings.bIsPvP ? 'PvP' : 'PvE') : null],
@@ -885,6 +898,7 @@
   }
 
   function renderSettings(settings) {
+    if (!elements.settingsGrid) return
     elements.settingsGrid.replaceChildren()
     renderWorldHighlights(settings)
     if (!Object.keys(settings).length) {
@@ -930,6 +944,7 @@
   }
 
   function renderEvents(events) {
+    if (!elements.eventList) return
     elements.eventList.replaceChildren()
     if (!events.length) {
       const empty = document.createElement('li')
@@ -965,9 +980,11 @@
       clearSelection(false)
     }
 
-    elements.headerStatus.classList.toggle('online', online)
-    elements.headerStatus.classList.toggle('offline', !online)
-    setText(elements.headerStatus.querySelector('b'), online ? 'ONLINE' : (stale ? 'DATI OBSOLETI' : 'OFFLINE'))
+    if (elements.headerStatus) {
+      elements.headerStatus.classList.toggle('online', online)
+      elements.headerStatus.classList.toggle('offline', !online)
+      setText(elements.headerStatus.querySelector('b'), online ? 'ONLINE' : (stale ? 'DATI OBSOLETI' : 'OFFLINE'))
+    }
     setText(elements.serverName, data.info?.servername || 'Palworld Server')
     setText(elements.serverDescription, data.info?.description || 'Telemetria riservata del server dedicato.')
     setText(elements.serverVersion, data.info?.version || '--')
@@ -1017,6 +1034,7 @@
   }
 
   function renderFpsHealth(health = {}) {
+    if (!elements.performanceHealth) return
     elements.performanceHealth.dataset.state = health.state || 'no_data'
     setText(elements.healthLabel, health.label || 'Nessun dato')
     setText(elements.healthScore, health.score == null ? '--' : `${formatNumber(health.score)} / 100`)
@@ -1035,6 +1053,7 @@
   }
 
   function updateChartTooltip() {
+    if (!elements.chartTooltip) return
     const point = state.chartPoints[state.chartHoverIndex]
     if (!point) {
       elements.chartTooltip.hidden = true
@@ -1059,6 +1078,7 @@
 
   function drawChart(samples = state.historySamples) {
     const canvas = elements.historyChart
+    if (!canvas) return
     const context = canvas.getContext('2d')
     const rect = canvas.getBoundingClientRect()
     const ratio = window.devicePixelRatio || 1
@@ -1186,6 +1206,7 @@
   }
 
   async function loadHistory() {
+    if (!elements.historyRange) return
     const requestedRange = elements.historyRange.value
     try {
       const data = await requestJson(`/api/v1/history?range=${encodeURIComponent(requestedRange)}`, 'history')
@@ -1208,6 +1229,7 @@
   }
 
   function showToast(message, error = false) {
+    if (!elements.connectionToast) return
     setText(elements.connectionToast, message)
     elements.connectionToast.classList.toggle('error', error)
     elements.connectionToast.classList.add('visible')
@@ -1219,21 +1241,24 @@
     try {
       const data = await requestJson('/api/v1/snapshot', 'snapshot')
       renderSnapshot(data)
-      if (initial) showToast('Collegamento telemetrico stabilito')
+      if (initial && elements.serverName) showToast('Collegamento telemetrico stabilito')
       if (state.selectedPlayer) loadTrail(state.selectedPlayer)
       return true
     } catch (error) {
       if (error.name === 'AbortError') return null
-      if (initial) showToast('Dati temporaneamente non disponibili', true)
-      elements.headerStatus.classList.remove('online')
-      elements.headerStatus.classList.add('offline')
-      setText(elements.headerStatus.querySelector('b'), 'CONNESSIONE PERSA')
+      if (initial && elements.serverName) showToast('Dati temporaneamente non disponibili', true)
+      if (elements.headerStatus) {
+        elements.headerStatus.classList.remove('online')
+        elements.headerStatus.classList.add('offline')
+        setText(elements.headerStatus.querySelector('b'), 'CONNESSIONE PERSA')
+      }
       setNotice('snapshot', 'Collegamento telemetrico interrotto: i valori mostrati sono gli ultimi ricevuti.', true)
       return false
     }
   }
 
   function bindChartControls() {
+    if (!elements.historyChart) return
     elements.historyChart.addEventListener('pointermove', (event) => {
       if (!state.chartPoints.length) return
       const rect = elements.historyChart.getBoundingClientRect()
@@ -1286,6 +1311,7 @@
   }
 
   function bindMapControls() {
+    if (!elements.mapViewport) return
     const layerPreferences = [
       ['showPlayers', elements.playerLayer, 'players', true],
       ['showFastTravel', elements.fastTravelLayer, 'fastTravel', false],
@@ -1424,34 +1450,46 @@
     } catch (_error) {
       state.favoritePlayers = new Set()
     }
-    bindMapControls()
-    bindChartControls()
+    if (elements.mapViewport) bindMapControls()
+    if (elements.historyChart) bindChartControls()
     bindCredentialControls()
-    elements.themeSelect.addEventListener('change', (event) => {
-      const theme = THEMES.has(event.target.value) ? event.target.value : 'observatory'
-      document.documentElement.dataset.theme = theme
-      writeStorage('observatory.theme', theme)
-      drawChart()
-    })
-    elements.playerSearch.addEventListener('input', (event) => {
-      state.playerQuery = event.target.value
-      renderPlayerArchive(state.archivePlayers)
-    })
-    elements.favoritesOnly.addEventListener('change', (event) => {
-      state.favoritesOnly = event.target.checked
-      renderPlayerArchive(state.archivePlayers)
-    })
-    elements.settingsSearch.addEventListener('input', () => renderSettings(state.snapshot?.settings || {}))
-    elements.historyRange.addEventListener('change', async () => {
-      await loadHistory()
-      scheduleHistoryPoll()
-    })
-    const setMapImageState = (failed) => {
-      elements.mapImageError.hidden = !failed
+    if (elements.themeSelect) {
+      elements.themeSelect.addEventListener('change', (event) => {
+        const theme = THEMES.has(event.target.value) ? event.target.value : 'observatory'
+        document.documentElement.dataset.theme = theme
+        writeStorage('observatory.theme', theme)
+        drawChart()
+      })
     }
-    elements.mapImage.addEventListener('load', () => setMapImageState(false))
-    elements.mapImage.addEventListener('error', () => setMapImageState(true))
-    if (elements.mapImage.complete) setMapImageState(elements.mapImage.naturalWidth === 0)
+    if (elements.playerSearch) {
+      elements.playerSearch.addEventListener('input', (event) => {
+        state.playerQuery = event.target.value
+        renderPlayerArchive(state.archivePlayers)
+      })
+    }
+    if (elements.favoritesOnly) {
+      elements.favoritesOnly.addEventListener('change', (event) => {
+        state.favoritesOnly = event.target.checked
+        renderPlayerArchive(state.archivePlayers)
+      })
+    }
+    if (elements.settingsSearch) {
+      elements.settingsSearch.addEventListener('input', () => renderSettings(state.snapshot?.settings || {}))
+    }
+    if (elements.historyRange) {
+      elements.historyRange.addEventListener('change', async () => {
+        await loadHistory()
+        scheduleHistoryPoll()
+      })
+    }
+    if (elements.mapImage) {
+      const setMapImageState = (failed) => {
+        if (elements.mapImageError) elements.mapImageError.hidden = !failed
+      }
+      elements.mapImage.addEventListener('load', () => setMapImageState(false))
+      elements.mapImage.addEventListener('error', () => setMapImageState(true))
+      if (elements.mapImage.complete) setMapImageState(elements.mapImage.naturalWidth === 0)
+    }
     let resizeFrame = null
     window.addEventListener('resize', () => {
       window.cancelAnimationFrame(resizeFrame)
@@ -1464,13 +1502,13 @@
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) return
       snapshotLoop(false)
-      loadHistory().then(scheduleHistoryPoll)
-      loadPlayerArchive().then(scheduleArchivePoll)
+      if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
+      if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)
     })
-    loadStaticPoints()
+    if (elements.mapViewport) loadStaticPoints()
     snapshotLoop(true)
-    loadHistory().then(scheduleHistoryPoll)
-    loadPlayerArchive().then(scheduleArchivePoll)
+    if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
+    if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)
   }
 
   initialize()

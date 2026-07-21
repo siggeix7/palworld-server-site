@@ -1,0 +1,22 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Attività · Palworld Server Observatory{% endblock %}
+{% block meta_description %}Registro delle trasmissioni e degli eventi recenti del server Palworld{% endblock %}
+{% block page_key %}activity{% endblock %}
+
+{% block content %}
+<section class="page-intro section-shell" aria-labelledby="pageActivityTitle">
+  <div>
+    <p class="eyebrow">Registro trasmissioni</p>
+    <h1 id="pageActivityTitle">Attività</h1>
+    <p>Entrate e uscite degli esploratori osservate dall'ultima telemetria disponibile.</p>
+  </div>
+</section>
+
+<section class="activity-section section-shell">
+  <div class="section-heading compact">
+    <div><p class="eyebrow">Eventi recenti</p><h2>Attività recente</h2></div>
+  </div>
+  <ol class="event-list" id="eventList"><li class="empty-copy">Nessun evento registrato.</li></ol>
+</section>
+{% endblock %}
