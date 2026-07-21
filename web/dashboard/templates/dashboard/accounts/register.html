@@ -4,6 +4,11 @@
   <p class="eyebrow">Nuovo membro</p>
   <h1>Crea il tuo account</h1>
   <p class="auth-copy">Dopo la conferma email, un amministratore dovrà approvare la richiesta prima che tu possa vedere dashboard e credenziali del server.</p>
+  <div class="access-warning">
+    <strong>Importante:</strong> usa come nome utente <em>esattamente</em> lo stesso nome che usi in Palworld (maiuscole/minuscole incluse).
+    Il server kicka automaticamente i giocatori non registrati: solo chi ha un account approvato con nome utente identico a quello di gioco può restare online.
+    Se in futuro cambi nome in Palworld, puoi aggiornarlo dal tuo profilo sul sito.
+  </div>
   <form method="post" class="auth-form">
     {% csrf_token %}
     {{ form.as_p }}

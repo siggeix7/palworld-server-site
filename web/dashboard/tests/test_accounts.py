@@ -101,6 +101,35 @@ class AccountAccessTests(TestCase):
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
 
+    def test_register_page_shows_palworld_username_warning(self):
+        response = self.client.get(reverse("register"))
+        self.assertContains(response, "esattamente")
+        self.assertContains(response, "Palworld")
+
+    def test_approved_user_can_change_username(self):
+        user = self.create_user(verified=True, approved=True)
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("change-username"),
+            {"new_username": "NewPalworldName"},
+        )
+        self.assertRedirects(response, reverse("change-username"))
+        user.refresh_from_db()
+        self.assertEqual(user.username, "NewPalworldName")
+
+    def test_username_change_rejects_duplicates(self):
+        self.create_user(username="taken", email="taken@example.com", verified=True, approved=True)
+        user = self.create_user(username="other", email="other@example.com", verified=True, approved=True)
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("change-username"),
+            {"new_username": "Taken"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Esiste già")
+        user.refresh_from_db()
+        self.assertEqual(user.username, "other")
+
     def test_registration_creates_pending_profile_and_sends_verification(self):
         response = self.client.post(
             reverse("register"),

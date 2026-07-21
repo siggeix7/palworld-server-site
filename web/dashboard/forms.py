@@ -77,6 +77,41 @@ class ResendVerificationForm(forms.Form):
     )
 
 
+class UsernameChangeForm(forms.Form):
+    new_username = forms.CharField(
+        label="Nuovo nome utente",
+        max_length=150,
+        widget=forms.TextInput(attrs={"autocomplete": "username"}),
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_new_username(self):
+        username = self.cleaned_data["new_username"].strip()
+        if "@" in username:
+            raise forms.ValidationError("Lo username non può contenere il carattere @.")
+        if not username.isascii():
+            raise forms.ValidationError("Lo username può contenere soltanto caratteri ASCII.")
+        reserved_usernames = {
+            identifier
+            for identifier in settings.SITE_ADMIN_USERS
+            if "@" not in identifier
+        }
+        if username.casefold() in reserved_usernames:
+            raise forms.ValidationError("Questo username è riservato.")
+        users = get_user_model().objects
+        qs = users.filter(username__iexact=username)
+        if self.user:
+            qs = qs.exclude(pk=self.user.pk)
+        if qs.exists():
+            raise forms.ValidationError("Esiste già un account con questo username.")
+        if users.filter(email__iexact=username).exists():
+            raise forms.ValidationError("Questo username non è disponibile.")
+        return username
+
+
 class CanonicalPasswordResetForm(PasswordResetForm):
     def save(self, *args, **kwargs):
         try:

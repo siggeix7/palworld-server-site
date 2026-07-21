@@ -1,0 +1,23 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Cambia nome utente{% endblock %}
+{% block content %}
+  <p class="eyebrow">Profilo</p>
+  <h1>Cambia nome utente</h1>
+  <p class="auth-copy">Il nome utente deve essere identico a quello usato in Palworld per restare in whitelist sul server.</p>
+  <div class="access-warning">
+    <strong>Nome utente attuale:</strong> {{ current_username }}
+  </div>
+  {% if messages %}
+    <div class="auth-messages">
+      {% for message in messages %}
+        <p class="{{ message.tags }}">{{ message }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+  <form method="post" class="auth-form">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Aggiorna nome utente</button>
+  </form>
+  <div class="auth-links"><a href="{% url 'home' %}">Torna alla dashboard</a></div>
+{% endblock %}

@@ -45,6 +45,11 @@ urlpatterns = [
         name="member-delete",
     ),
     path(
+        "accounts/change-username/",
+        account_views.change_username,
+        name="change-username",
+    ),
+    path(
         "accounts/password-reset/",
         auth_views.PasswordResetView.as_view(
             template_name="dashboard/accounts/password_reset.html",

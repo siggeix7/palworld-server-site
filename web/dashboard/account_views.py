@@ -21,7 +21,7 @@ from .emails import (
     send_approval_email,
     send_verification_email,
 )
-from .forms import RegistrationForm, ResendVerificationForm
+from .forms import RegistrationForm, ResendVerificationForm, UsernameChangeForm
 from .models import UserProfile
 from .tokens import email_verification_token
 
@@ -234,4 +234,31 @@ def delete_member(request, profile_id):
         request,
         "dashboard/accounts/member_confirm_delete.html",
         {"member_profile": profile},
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+@never_cache
+def change_username(request):
+    if not has_site_access(request.user):
+        return redirect("pending-approval")
+    profile = get_user_profile(request.user)
+    form = UsernameChangeForm(request.POST or None, user=request.user)
+    if request.method == "POST" and form.is_valid():
+        old_username = request.user.username
+        new_username = form.cleaned_data["new_username"]
+        request.user.username = new_username
+        request.user.save(update_fields=["username"])
+        logger.info("User %s changed username to %s", old_username, new_username)
+        messages.success(
+            request,
+            f"Nome utente aggiornato da \"{old_username}\" a \"{new_username}\". "
+            f"Assicurati che corrisponda al nome usato in Palworld.",
+        )
+        return redirect("change-username")
+    return render(
+        request,
+        "dashboard/accounts/change_username.html",
+        {"form": form, "current_username": request.user.username},
     )
