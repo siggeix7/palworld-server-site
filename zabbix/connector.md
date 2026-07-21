@@ -70,7 +70,7 @@ connector di tipo `Item values`: aggiungere `integration=palworld-site` soltanto
 all'host non esporta quindi i template Linux e Docker. Reimporta invece
 `zabbix/palworld-server-site.yaml` e aggiorna il template già collegato. Gli item
 calcolati con chiave `palworld.site.vm.*` leggono le metriche dai template
-ufficiali già presenti su `vm-palworld` e hanno direttamente:
+ufficiali già presenti su `VM-PALWORLD` e hanno direttamente:
 
 ```text
 integration=palworld-site

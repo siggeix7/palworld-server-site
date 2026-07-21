@@ -177,7 +177,7 @@ DJANGO_ALLOWED_HOSTS=palworld.example.com,localhost,127.0.0.1
 DJANGO_SECRET_KEY=generare-un-segreto-lungo-e-casuale
 PLAYER_HASH_SECRET=generare-un-secondo-segreto-lungo-e-casuale
 ZABBIX_CONNECTOR_TOKEN=generare-un-token-bearer-lungo-e-casuale
-ZABBIX_SOURCE_HOST=vm-palworld
+ZABBIX_SOURCE_HOST=VM-PALWORLD
 
 SITE_ADMIN_USERS=admin@example.com
 AUTH_TRUSTED_PROXY_ADDRESSES=127.0.0.1,::1

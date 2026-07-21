@@ -271,7 +271,7 @@ zabbix_export:
           history: 1h
           value_type: FLOAT
           units: '%'
-          params: 'last(//vm.memory.util)/(1-nodata(//vm.memory.util,3m,"strict"))'
+          params: 'last(//vm.memory.utilization)/(1-nodata(//vm.memory.utilization,3m,"strict"))'
           tags:
             - tag: dataset
               value: vm
@@ -496,7 +496,7 @@ zabbix_export:
           history: 1h
           value_type: FLOAT
           units: B
-          params: 'sum(last_foreach(//docker.container_stats.memory.usage_active[*],3m))'
+          params: 'sum(last_foreach(//docker.container_stats.memory.usage[*],3m))'
           tags:
             - tag: dataset
               value: vm
