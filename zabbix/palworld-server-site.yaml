@@ -247,7 +247,7 @@ zabbix_export:
               value: settings
             - tag: integration
               value: palworld-site
-        - uuid: 41000000000000000000000000000001
+        - uuid: aeaf4c2c417448a9ac470ad481b4dc93
           name: 'Site VM: CPU utilization'
           type: CALCULATED
           key: palworld.site.vm.cpu.util
@@ -263,7 +263,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: cpu.util_pct
-        - uuid: 41000000000000000000000000000002
+        - uuid: fedd9dc5dee24549be56f1b42376994d
           name: 'Site VM: Memory utilization'
           type: CALCULATED
           key: palworld.site.vm.memory.util
@@ -279,7 +279,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: memory.util_pct
-        - uuid: 41000000000000000000000000000003
+        - uuid: fb7b18c26d1b464d975f97d3ea71b296
           name: 'Site VM: Available memory'
           type: CALCULATED
           key: palworld.site.vm.memory.available
@@ -294,7 +294,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: memory.available_bytes
-        - uuid: 41000000000000000000000000000004
+        - uuid: ec68f5145ab04919936a1d417455f6c9
           name: 'Site VM: Load average 1 minute'
           type: CALCULATED
           key: palworld.site.vm.load.avg1
@@ -309,7 +309,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: load.1m
-        - uuid: 41000000000000000000000000000005
+        - uuid: 0662445d21754188bea5a9954a92a4bd
           name: 'Site VM: Load average 5 minutes'
           type: CALCULATED
           key: palworld.site.vm.load.avg5
@@ -324,7 +324,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: load.5m
-        - uuid: 41000000000000000000000000000006
+        - uuid: dc9dd25245074fe295d4102d94baa771
           name: 'Site VM: Load average 15 minutes'
           type: CALCULATED
           key: palworld.site.vm.load.avg15
@@ -339,7 +339,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: load.15m
-        - uuid: 41000000000000000000000000000007
+        - uuid: 3e7c102beb0a47bc9c705aeda40053d8
           name: 'Site VM: System uptime'
           type: CALCULATED
           key: palworld.site.vm.uptime
@@ -354,7 +354,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: uptime_seconds
-        - uuid: 41000000000000000000000000000008
+        - uuid: 3e10c0ed291e4d56b1e563aa832f98ff
           name: 'Site VM: Root filesystem utilization'
           type: CALCULATED
           key: palworld.site.vm.filesystem.root.util
@@ -370,7 +370,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: filesystem.root.util_pct
-        - uuid: 41000000000000000000000000000009
+        - uuid: d6de6933832e44ffad6b34c52dca9ca5
           name: 'Site VM: Aggregate network receive rate'
           type: CALCULATED
           key: palworld.site.vm.network.rx
@@ -386,7 +386,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: network.rx_bps
-        - uuid: 4100000000000000000000000000000a
+        - uuid: d84bb7af82cc4a0194b097d95481ec64
           name: 'Site VM: Aggregate network transmit rate'
           type: CALCULATED
           key: palworld.site.vm.network.tx
@@ -402,7 +402,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: network.tx_bps
-        - uuid: 4100000000000000000000000000000b
+        - uuid: db1ff371883f48338eb288b96e3d783b
           name: 'Site VM: Docker ping'
           type: CALCULATED
           key: palworld.site.vm.docker.ping
@@ -416,7 +416,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: docker.ping
-        - uuid: 4100000000000000000000000000000c
+        - uuid: 46f2fab5e8cd4ee5a76d23bd80d2de99
           name: 'Site VM: Docker containers total'
           type: CALCULATED
           key: palworld.site.vm.docker.containers.total
@@ -430,7 +430,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: docker.containers.total
-        - uuid: 4100000000000000000000000000000d
+        - uuid: b816a9741d7744f1bd820b9b73261394
           name: 'Site VM: Docker containers running'
           type: CALCULATED
           key: palworld.site.vm.docker.containers.running
@@ -444,7 +444,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: docker.containers.running
-        - uuid: 4100000000000000000000000000000e
+        - uuid: 86b3dcf072cc40969db62150fb8c785b
           name: 'Site VM: Docker containers stopped'
           type: CALCULATED
           key: palworld.site.vm.docker.containers.stopped
@@ -458,7 +458,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: docker.containers.stopped
-        - uuid: 4100000000000000000000000000000f
+        - uuid: b34e01fb2f8d4e83bb3c1988c7763260
           name: 'Site VM: Docker containers paused'
           type: CALCULATED
           key: palworld.site.vm.docker.containers.paused
@@ -472,7 +472,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: docker.containers.paused
-        - uuid: 41000000000000000000000000000010
+        - uuid: c3a5c8156298431a8683586e1e7d8449
           name: 'Site VM: Aggregate Docker CPU utilization'
           type: CALCULATED
           key: palworld.site.vm.docker.cpu.util
@@ -488,7 +488,7 @@ zabbix_export:
               value: palworld-site
             - tag: metric
               value: docker.cpu_pct_sum
-        - uuid: 41000000000000000000000000000011
+        - uuid: edfbf829b8d34cf19f3473299be2b05f
           name: 'Site VM: Aggregate Docker active memory'
           type: CALCULATED
           key: palworld.site.vm.docker.memory.active
