@@ -989,7 +989,7 @@
     setText(elements.serverDescription, data.info?.description || 'Telemetria riservata del server dedicato.')
     setText(elements.serverVersion, data.info?.version || '--')
     setText(elements.lastUpdate, formatDate(data.status?.last_updated))
-    elements.lastUpdate.dateTime = data.status?.last_updated || ''
+    if (elements.lastUpdate) elements.lastUpdate.dateTime = data.status?.last_updated || ''
     setText(elements.heroPlayers, formatNumber(metrics.currentplayernum ?? players.length))
     setText(elements.heroCapacity, `/ ${formatNumber(metrics.maxplayernum)}`)
     setText(elements.heroFps, formatNumber(metrics.serverfps, 1))
@@ -997,7 +997,7 @@
     setText(elements.heroDay, formatNumber(metrics.days))
     const dataAge = data.status?.data_age_seconds
     setText(elements.signalAge, dataAge == null ? '--' : `${dataAge}s`)
-    elements.signalBar.style.width = dataAge == null ? '0%' : `${Math.max(0, 100 - Math.min(100, dataAge / 1.2))}%`
+    if (elements.signalBar) elements.signalBar.style.width = dataAge == null ? '0%' : `${Math.max(0, 100 - Math.min(100, dataAge / 1.2))}%`
     setText(elements.metricFpsAverage, formatNumber(data.summary_24h?.average_fps, 1))
     setText(elements.metricFpsMinimum, formatNumber(data.summary_24h?.minimum_fps, 1))
     setText(elements.metricFrameTime, formatNumber(metrics.serverframetime, 2))
