@@ -94,7 +94,7 @@
     const context = canvas.getContext('2d')
     const rect = canvas.getBoundingClientRect()
     const width = Math.max(1, rect.width)
-    const height = 320
+    const height = Math.max(1, rect.height)
     const ratio = Math.min(2, window.devicePixelRatio || 1)
     canvas.width = Math.floor(width * ratio)
     canvas.height = Math.floor(height * ratio)
@@ -215,7 +215,7 @@
         const cols = 24
         const rows = 7
         const plotW = rect.width - pad.left - pad.right
-        const plotH = 320 - pad.top - pad.bottom
+        const plotH = rect.height - pad.top - pad.bottom
         const col = Math.floor((x - pad.left) / (plotW / cols))
         const row = Math.floor((y - pad.top) / (plotH / rows))
         if (col < 0 || col >= cols || row < 0 || row >= rows) {

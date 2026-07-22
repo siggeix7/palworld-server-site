@@ -7,6 +7,8 @@
   <meta name="description" content="{% block meta_description %}Telemetria riservata e mappa live del server Palworld{% endblock %}">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#071a1d">
+  <link rel="icon" type="image/svg+xml" href="{% static 'dashboard/images/favicon.svg' %}">
+  <link rel="apple-touch-icon" href="{% static 'dashboard/images/favicon.svg' %}">
   {% if public_site_url %}<link rel="canonical" href="{{ public_site_url }}">{% endif %}
   <title>{% block title %}Palworld Server Observatory{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
