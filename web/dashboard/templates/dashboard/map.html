@@ -16,14 +16,14 @@
 
 <section class="map-section section-shell">
   <div class="map-layout">
-    <div class="map-card{% if request.GET.fullscreen == '1' %} map-fullscreen{% endif %}" id="mapCard">
+    <div class="map-card" id="mapCard">
       <div class="map-toolbar" aria-label="Controlli mappa">
         <div class="map-tools">
           <button type="button" id="zoomIn" aria-label="Aumenta zoom">+</button>
           <button type="button" id="zoomOut" aria-label="Riduci zoom">−</button>
           <button type="button" id="resetMap" aria-label="Ripristina posizione e zoom della mappa">Centra</button>
           <button type="button" id="copyCoordinate" aria-label="Copia le coordinate correnti">Copia</button>
-          <button type="button" id="fullscreenMap" aria-label="Attiva modalità schermo intero" data-fullscreen="{% if request.GET.fullscreen == '1' %}1{% else %}0{% endif %}">{% if request.GET.fullscreen == '1' %}Esci schermo intero{% else %}Schermo intero{% endif %}</button>
+          <button type="button" id="fullscreenMap" aria-label="Attiva modalità schermo intero">Schermo intero</button>
         </div>
         <div class="layer-tools">
           <label><input type="checkbox" id="showPlayers" checked> Giocatori</label>

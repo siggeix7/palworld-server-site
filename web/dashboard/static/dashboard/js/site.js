@@ -18,7 +18,7 @@
   const state = {
     snapshot: null,
     selectedPlayer: null,
-    map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false },
+    map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false, pointers: new Map(), pinchDistance: 0, pinchScale: 1 },
     points: { fast_travel: [], boss_tower: [] },
     heatmap: { cells: [], maxCount: 0, grid: 48, range: '24h', loaded: false, enabled: false },
     historySamples: [],
@@ -62,6 +62,7 @@
     metricBases: $('#metricBases'),
     themeSelect: $('#themeSelect'),
     mapViewport: $('#mapViewport'),
+    mapCard: $('#mapCard'),
     mapPlane: $('#mapPlane'),
     mapImage: $('#mapImage'),
     mapImageError: $('#mapImageError'),
@@ -1656,13 +1657,30 @@
     const fullscreenButton = elements.fullscreenMap
     if (fullscreenButton) {
       fullscreenButton.addEventListener('click', () => {
-        const url = new URL(window.location.href)
-        if (fullscreenButton.dataset.fullscreen === '1') {
-          url.searchParams.delete('fullscreen')
-        } else {
-          url.searchParams.set('fullscreen', '1')
+        const card = elements.mapCard
+        if (!card) return
+        const isFs = card.classList.toggle('fullscreen')
+        fullscreenButton.textContent = isFs ? 'Esci schermo intero' : 'Schermo intero'
+        fullscreenButton.setAttribute('aria-label', isFs ? 'Esci da schermo intero' : 'Attiva schermo intero')
+        resetMap()
+        window.requestAnimationFrame(() => {
+          applyMapTransform()
+          if (state.snapshot) renderMap(state.snapshot.players || [])
+          drawHeatmapLayer()
+        })
+      })
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && elements.mapCard?.classList.contains('fullscreen')) {
+          elements.mapCard.classList.remove('fullscreen')
+          fullscreenButton.textContent = 'Schermo intero'
+          fullscreenButton.setAttribute('aria-label', 'Attiva schermo intero')
+          resetMap()
+          window.requestAnimationFrame(() => {
+            applyMapTransform()
+            if (state.snapshot) renderMap(state.snapshot.players || [])
+            drawHeatmapLayer()
+          })
         }
-        window.location.href = url.toString()
       })
     }
     $('#zoomIn')?.addEventListener('click', () => setZoom(state.map.scale + 0.45))
@@ -1680,29 +1698,58 @@
     }, { passive: false })
     elements.mapViewport.addEventListener('pointerdown', (event) => {
       if (event.target.closest('.map-marker')) return
-      state.map.dragging = true
-      state.map.pointerX = event.clientX
-      state.map.pointerY = event.clientY
-      elements.mapViewport.classList.add('dragging')
+      state.map.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       elements.mapViewport.setPointerCapture(event.pointerId)
+      if (state.map.pointers.size === 1) {
+        state.map.dragging = true
+        state.map.pointerX = event.clientX
+        state.map.pointerY = event.clientY
+        elements.mapViewport.classList.add('dragging')
+      } else if (state.map.pointers.size === 2) {
+        state.map.dragging = false
+        const [p1, p2] = [...state.map.pointers.values()]
+        state.map.pinchDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+        state.map.pinchScale = state.map.scale
+      }
     })
     elements.mapViewport.addEventListener('pointermove', (event) => {
+      if (state.map.pointers.has(event.pointerId)) {
+        state.map.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      }
       const local = mapLocalFromPointer(event)
       const world = percentToWorld((local.x / local.width) * 100, (local.y / local.height) * 100)
       setText(elements.mapCoordinate, `X ${formatNumber(world.x, 0)} / Y ${formatNumber(world.y, 0)}`)
-      if (!state.map.dragging) return
-      state.map.panX += event.clientX - state.map.pointerX
-      state.map.panY += event.clientY - state.map.pointerY
-      state.map.pointerX = event.clientX
-      state.map.pointerY = event.clientY
-      applyMapTransform()
+      if (state.map.pointers.size >= 2 && state.map.pinchDistance > 0) {
+        const [p1, p2] = [...state.map.pointers.values()]
+        const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+        const nextScale = state.map.pinchScale * (distance / state.map.pinchDistance)
+        const cx = (p1.x + p2.x) / 2
+        const cy = (p1.y + p2.y) / 2
+        const rect = elements.mapViewport.getBoundingClientRect()
+        setZoom(nextScale, { x: cx - rect.left, y: cy - rect.top })
+      } else if (state.map.dragging) {
+        state.map.panX += event.clientX - state.map.pointerX
+        state.map.panY += event.clientY - state.map.pointerY
+        state.map.pointerX = event.clientX
+        state.map.pointerY = event.clientY
+        applyMapTransform()
+      }
     })
-    const stopDragging = () => {
-      state.map.dragging = false
-      elements.mapViewport.classList.remove('dragging')
+    const releasePointer = (event) => {
+      state.map.pointers.delete(event.pointerId)
+      if (state.map.pointers.size < 2) state.map.pinchDistance = 0
+      if (state.map.pointers.size === 0) {
+        state.map.dragging = false
+        elements.mapViewport.classList.remove('dragging')
+      } else if (state.map.pointers.size === 1) {
+        const [p] = [...state.map.pointers.values()]
+        state.map.dragging = true
+        state.map.pointerX = p.x
+        state.map.pointerY = p.y
+      }
     }
-    elements.mapViewport.addEventListener('pointerup', stopDragging)
-    elements.mapViewport.addEventListener('pointercancel', stopDragging)
+    elements.mapViewport.addEventListener('pointerup', releasePointer)
+    elements.mapViewport.addEventListener('pointercancel', releasePointer)
     elements.mapViewport.addEventListener('dblclick', (event) => {
       const rect = elements.mapViewport.getBoundingClientRect()
       setZoom(state.map.scale + .5, { x: event.clientX - rect.left, y: event.clientY - rect.top })
@@ -1821,7 +1868,7 @@
       if (elements.mapImage.complete) setMapImageState(elements.mapImage.naturalWidth === 0)
     }
     let resizeFrame = null
-    window.addEventListener('resize', () => {
+    const onResize = () => {
       window.cancelAnimationFrame(resizeFrame)
       resizeFrame = window.requestAnimationFrame(() => {
         applyMapTransform()
@@ -1829,7 +1876,12 @@
         drawChart()
         drawHeatmapLayer()
       })
-    })
+    }
+    window.addEventListener('resize', onResize)
+    if (elements.mapViewport && typeof ResizeObserver !== 'undefined') {
+      const mapObserver = new ResizeObserver(onResize)
+      mapObserver.observe(elements.mapViewport)
+    }
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) return
       snapshotLoop(false)

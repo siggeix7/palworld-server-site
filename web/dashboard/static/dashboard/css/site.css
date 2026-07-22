@@ -236,8 +236,10 @@ main { overflow: hidden; }
 .map-external-links span { color: var(--paper-dim); }
 .map-external-links a { color: var(--teal); text-decoration: none; display: inline-flex; gap: .25rem; align-items: center; }
 .map-external-links a:hover { color: var(--paper); }
-.map-fullscreen { position: fixed; inset: 0; z-index: 200; margin: 0; max-width: none; border: 0; }
-.map-fullscreen .map-viewport { aspect-ratio: auto; height: calc(100vh - 220px); min-height: 400px; }
+.map-card.fullscreen { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; border: 0; background: var(--ink); }
+.map-card.fullscreen .map-toolbar { flex-shrink: 0; }
+.map-card.fullscreen .map-external-links { display: none; }
+.map-card.fullscreen .map-viewport { flex: 1; min-height: 0; aspect-ratio: 1; width: auto; max-width: 100%; max-height: 100%; margin: 0 auto; }
 
 .tabs { display: inline-flex; gap: 1px; border: 1px solid var(--line); background: var(--line); }
 .tabs button { min-height: 38px; padding: .5rem 1rem; border: 0; color: var(--paper-dim); background: var(--ink-soft); cursor: pointer; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
@@ -565,10 +567,14 @@ footer a { color: var(--teal); }
   .players-section > .table-wrap { display: none; }
   .mobile-player-list { display: grid; gap: .75rem; }
   .map-toolbar { align-items: flex-start; flex-direction: column; }
+  .map-tools, .layer-tools { overflow-x: auto; max-width: 100%; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  .map-tools button { min-height: 44px; min-width: 44px; }
+  .map-tools button:first-child, .map-tools button:nth-child(2) { width: 44px; }
+  .layer-tools label { min-height: 44px; }
   .credential-row { grid-template-columns: 1fr auto auto; }
   .credential-row > span { grid-column: 1 / -1; }
   .credential-row code { grid-column: 1; }
-  .map-viewport { touch-action: pan-y pinch-zoom; }
+  .map-viewport { touch-action: none; }
   .metric-strip { grid-template-columns: 1fr 1fr; }
   .metric-strip article:nth-child(3n) { border-right: 1px solid var(--line); }
   .metric-strip article:nth-child(even) { border-right: 0; }
