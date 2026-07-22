@@ -375,9 +375,14 @@
     const previousPlayer = state.selectedPlayer
     const restoreFocus = document.activeElement === $('#clearSelection')
     state.selectedPlayer = null
+    state.map.follow = false
     if (state.requests.trail) state.requests.trail.abort()
     clearTrail()
     if (elements.mapSelection) elements.mapSelection.hidden = true
+    if (elements.followPlayer) {
+      elements.followPlayer.disabled = true
+      elements.followPlayer.checked = false
+    }
     if (render && state.snapshot) renderMap(state.snapshot.players || [])
     if (restoreFocus && previousPlayer && elements.mapRoster) {
       elements.mapRoster.querySelector(`[data-player-id="${previousPlayer}"]`)?.focus({ preventScroll: true })
@@ -402,7 +407,7 @@
     state.selectedPlayer = player.id
     elements.trailLayer.style.setProperty('--trail-color', playerColor(player.id))
     if (elements.followPlayer) {
-      state.map.follow = elements.followPlayer.checked
+      elements.followPlayer.disabled = false
     }
     applyMapTransform()
     renderMap(state.snapshot?.players || [])
@@ -421,7 +426,9 @@
   }
 
   function marker(type, point, label = '') {
-    const position = worldToPercent(point[0], point[1])
+    const px = Array.isArray(point) ? point[0] : point.x
+    const py = Array.isArray(point) ? point[1] : point.y
+    const position = worldToPercent(px, py)
     const node = document.createElement(type === 'player' || type === 'cluster' ? 'button' : 'span')
     node.className = `map-marker ${type}`
     node.style.left = `${position.left}%`
@@ -495,10 +502,61 @@
     elements.fastTravelLayer.replaceChildren()
     elements.towerLayer.replaceChildren()
     for (const point of state.points.fast_travel || []) {
-      elements.fastTravelLayer.appendChild(marker('fast', point))
+      const node = marker('fast', point, point.name || '')
+      node.dataset.name = point.name || 'Viaggio rapido'
+      node.addEventListener('pointerenter', () => showMapTooltip(node, point.name || 'Viaggio rapido'))
+      node.addEventListener('pointerleave', hideMapTooltip)
+      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, point.name || 'Viaggio rapido') })
+      elements.fastTravelLayer.appendChild(node)
     }
     for (const point of state.points.boss_tower || []) {
-      elements.towerLayer.appendChild(marker('tower', point))
+      const node = marker('tower', point, point.name || '')
+      node.dataset.name = point.name || 'Torre'
+      node.addEventListener('pointerenter', () => showMapTooltip(node, point.name || 'Torre'))
+      node.addEventListener('pointerleave', hideMapTooltip)
+      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, point.name || 'Torre') })
+      elements.towerLayer.appendChild(node)
+    }
+  }
+
+  let mapTooltip = null
+  let mapTooltipTimer = null
+
+  function showMapTooltip(node, text) {
+    if (mapTooltipTimer) window.clearTimeout(mapTooltipTimer)
+    if (mapTooltip) mapTooltip.remove()
+    mapTooltip = document.createElement('div')
+    mapTooltip.className = 'map-tooltip'
+    mapTooltip.textContent = text
+    elements.mapViewport?.appendChild(mapTooltip)
+    const rect = node.getBoundingClientRect()
+    const vpRect = elements.mapViewport?.getBoundingClientRect()
+    if (!vpRect) return
+    const left = rect.left - vpRect.left + rect.width / 2
+    const top = rect.top - vpRect.top - 8
+    mapTooltip.style.left = `${left}px`
+    mapTooltip.style.top = `${top}px`
+    requestAnimationFrame(() => mapTooltip?.classList.add('visible'))
+  }
+
+  function hideMapTooltip() {
+    if (mapTooltipTimer) window.clearTimeout(mapTooltipTimer)
+    mapTooltipTimer = window.setTimeout(() => {
+      if (mapTooltip) {
+        mapTooltip.classList.remove('visible')
+        const el = mapTooltip
+        mapTooltip = null
+        window.setTimeout(() => el.remove(), 200)
+      }
+    }, 150)
+  }
+
+  function toggleMapTooltip(node, text) {
+    if (mapTooltip && mapTooltip.dataset.target === node.dataset.name) {
+      hideMapTooltip()
+    } else {
+      showMapTooltip(node, text)
+      if (mapTooltip) mapTooltip.dataset.target = node.dataset.name
     }
   }
 
@@ -541,10 +599,13 @@
         const player = group[0].player
         const node = marker('player', [player.location_x, player.location_y], `Lv.${player.level} ${player.name}`)
         node.dataset.playerId = player.id
+        node.dataset.name = `${player.name} · Lv.${player.level} · ${formatNumber(player.ping)} ms`
         node.style.setProperty('--player-color', playerColor(player.id))
         node.classList.toggle('selected', player.id === state.selectedPlayer)
         node.setAttribute('aria-label', `Centra ${player.name} sulla mappa`)
         node.setAttribute('aria-pressed', String(player.id === state.selectedPlayer))
+        node.addEventListener('pointerenter', () => showMapTooltip(node, `${player.name} · Lv.${player.level} · ${formatNumber(player.ping)} ms`))
+        node.addEventListener('pointerleave', hideMapTooltip)
         node.addEventListener('click', () => centerPlayer(player))
         elements.playerLayer.appendChild(node)
       } else {
@@ -1815,6 +1876,30 @@
 
   function initialize() {
     initializeTheme()
+    const navToggle = $('#navToggle')
+    const navMenu = $('#navMenu')
+    if (navToggle && navMenu) {
+      navToggle.addEventListener('click', () => {
+        const open = navMenu.classList.toggle('open')
+        navToggle.setAttribute('aria-expanded', String(open))
+        navToggle.setAttribute('aria-label', open ? 'Chiudi menu' : 'Apri menu')
+      })
+      navMenu.addEventListener('click', (event) => {
+        if (event.target.tagName === 'A' || event.target.tagName === 'BUTTON') {
+          navMenu.classList.remove('open')
+          navToggle.setAttribute('aria-expanded', 'false')
+          navToggle.setAttribute('aria-label', 'Apri menu')
+        }
+      })
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && navMenu.classList.contains('open')) {
+          navMenu.classList.remove('open')
+          navToggle.setAttribute('aria-expanded', 'false')
+          navToggle.setAttribute('aria-label', 'Apri menu')
+          navToggle.focus()
+        }
+      })
+    }
     try {
       const favorites = JSON.parse(readStorage('observatory.favoritePlayers', '[]'))
       if (Array.isArray(favorites)) state.favoritePlayers = new Set(favorites.filter((value) => typeof value === 'string'))

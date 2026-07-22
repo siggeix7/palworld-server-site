@@ -1,4 +1,446 @@
 {
-  "boss_tower": [[-321597,209085],[-361696,-112009],[-109960,241300],[81363,90183],[29975,413324],[-29428,-115901],[-889806,-435828]],
-  "fast_travel": [[-327532,-70411],[-50301,287392],[35588,321331],[117624,400134],[-119038,138340],[-80507,141464],[-39403,159611],[8000,111770],[102159,48527],[89644,94542],[-342035,236885],[-314840,186850],[-358785,267940],[-346618,191706],[-326404,55136],[-349536,-4036],[-278469,212679],[-302825,241060],[-283781,59352],[-367708,-114951],[-218637,58528],[-257952,151247],[-167685,167519],[-221230,165130],[-237611,190609],[-151784,213200],[-125290,201720],[-103435,234761],[-115430,289090],[-177771,265009],[-414447,-24604],[-219173,226394],[-248771,126205],[-338560,107660],[-215389,8854],[-195237,36718],[-317778,212103],[-137210,-91340],[-465895,-62138],[-88646,-3923],[-170400,-29240],[-450320,112630],[-376750,124630],[-374180,63960],[-265980,268690],[-282110,355570],[-170719,409753],[-221400,330684],[-130061,-53407],[-416558,-90013],[-250507,341109],[-294830,152240],[-319000,127170],[-117216,446689],[-63521,-55006],[-86710,-140442],[-25523,-118366],[-25916,-78927],[32787,-81421],[-383184,-210791],[-2189,-148546],[-503990,-214380],[-588140,-253780],[-792350,-251110],[-698515,-322881],[-760286,-354967],[-888080,-433080],[-699510,-389030],[-591120,-484261],[-236774,-100043],[-671902,-172408],[-572462,-287225],[-798777,-479575],[-335854,335361],[-33883,564292],[168488,221797],[-558411,121112],[-209327,-249228],[-197916,438001],[29780,406913],[-488719,-35725]]
+  "boss_tower": [
+    {
+      "x": -321597,
+      "y": 209085,
+      "name": "Torre della Syndicate di Rayne"
+    },
+    {
+      "x": -361696,
+      "y": -112009,
+      "name": "Torre della Fiamma Eterna"
+    },
+    {
+      "x": -109960,
+      "y": 241300,
+      "name": "Torre della Libera Alleanza dei Pal"
+    },
+    {
+      "x": 81363,
+      "y": 90183,
+      "name": "Torre dell'Unità di Ricerca Genetica"
+    },
+    {
+      "x": 29975,
+      "y": 413324,
+      "name": "Torre della Forza di Autodifesa"
+    },
+    {
+      "x": -29428,
+      "y": -115901,
+      "name": "Regno Sigillato"
+    },
+    {
+      "x": -889806,
+      "y": -435828,
+      "name": "Santuario Naturalistico"
+    }
+  ],
+  "fast_travel": [
+    {
+      "x": -327532,
+      "y": -70411,
+      "name": "Statua della Pianura d'Inizio"
+    },
+    {
+      "x": -50301,
+      "y": 287392,
+      "name": "Statua della Spiaggia dei Pesci Volanti"
+    },
+    {
+      "x": 35588,
+      "y": 321331,
+      "name": "Statua dell'Isola Paludosa"
+    },
+    {
+      "x": 117624,
+      "y": 400134,
+      "name": "Statua della Chiesa dell'Isola Paludosa"
+    },
+    {
+      "x": -119038,
+      "y": 138340,
+      "name": "Statua dell'Isola della Brezza Marina"
+    },
+    {
+      "x": -80507,
+      "y": 141464,
+      "name": "Statua della Chiesa dell'Isola della Brezza Marina"
+    },
+    {
+      "x": -39403,
+      "y": 159611,
+      "name": "Statua della Valle dei Bambù"
+    },
+    {
+      "x": 8000,
+      "y": 111770,
+      "name": "Statua del Forte Abbandonato"
+    },
+    {
+      "x": 102159,
+      "y": 48527,
+      "name": "Statua dell'Entrata della Torre di Rayne"
+    },
+    {
+      "x": 89644,
+      "y": 94542,
+      "name": "Statua della Piccola Baia"
+    },
+    {
+      "x": -342035,
+      "y": 236885,
+      "name": "Statua della Spiaggia del Drago Azzurro"
+    },
+    {
+      "x": -314840,
+      "y": 186850,
+      "name": "Statua delle Rovine della Chiesa dell'Isola Dimenticata"
+    },
+    {
+      "x": -358785,
+      "y": 267940,
+      "name": "Statua ai Piedi del Vulcano"
+    },
+    {
+      "x": -346618,
+      "y": 191706,
+      "name": "Statua del Regno Sigillato dell'Uccello di Ghiaccio"
+    },
+    {
+      "x": -326404,
+      "y": 55136,
+      "name": "Statua del Regno Sigillato del Drago Tuono"
+    },
+    {
+      "x": -349536,
+      "y": -4036,
+      "name": "Statua dell'Isola Dimenticata"
+    },
+    {
+      "x": -278469,
+      "y": 212679,
+      "name": "Statua della Chiesa Abbandonata"
+    },
+    {
+      "x": -302825,
+      "y": 241060,
+      "name": "Statua dell'Isola del Vento Ghiacciato"
+    },
+    {
+      "x": -283781,
+      "y": 59352,
+      "name": "Statua della Cascata dell'Asceta"
+    },
+    {
+      "x": -367708,
+      "y": -114951,
+      "name": "Statua del Piccolo Villaggio"
+    },
+    {
+      "x": -218637,
+      "y": 58528,
+      "name": "Statua del Regno Sigillato del Maestro di Spada"
+    },
+    {
+      "x": -257952,
+      "y": 151247,
+      "name": "Statua dell'Entrata della Gola"
+    },
+    {
+      "x": -167685,
+      "y": 167519,
+      "name": "Statua della Foresta di Mossanda"
+    },
+    {
+      "x": -221230,
+      "y": 165130,
+      "name": "Statua dell'Isola della Palude"
+    },
+    {
+      "x": -237611,
+      "y": 190609,
+      "name": "Statua delle Rovine della Chiesa dell'Isola della Palude"
+    },
+    {
+      "x": -151784,
+      "y": 213200,
+      "name": "Statua del Ponte Naturale"
+    },
+    {
+      "x": -125290,
+      "y": 201720,
+      "name": "Statua dell'Isola Selvaggia Orientale"
+    },
+    {
+      "x": -103435,
+      "y": 234761,
+      "name": "Statua della Costa dell'Isola"
+    },
+    {
+      "x": -115430,
+      "y": 289090,
+      "name": "Statua del Territorio degli Squali"
+    },
+    {
+      "x": -177771,
+      "y": 265009,
+      "name": "Statua della Foresta del Panda d'Erba"
+    },
+    {
+      "x": -414447,
+      "y": -24604,
+      "name": "Statua dell'Antico Sito Rituale"
+    },
+    {
+      "x": -219173,
+      "y": 226394,
+      "name": "Statua del Ponte dei Due Cavalieri"
+    },
+    {
+      "x": -248771,
+      "y": 126205,
+      "name": "Statua del Regno Sigillato della Velocità"
+    },
+    {
+      "x": -338560,
+      "y": 107660,
+      "name": "Statua della Vetta del Monte dei Conigli"
+    },
+    {
+      "x": -215389,
+      "y": 8854,
+      "name": "Statua del Centro del Lago"
+    },
+    {
+      "x": -195237,
+      "y": 36718,
+      "name": "Statua dell'Entrata della Torre della Libera Alleanza"
+    },
+    {
+      "x": -317778,
+      "y": 212103,
+      "name": "Statua del Bivio per la Montagna Nevosa"
+    },
+    {
+      "x": -137210,
+      "y": -91340,
+      "name": "Statua del Regno Sigillato del Guardiano"
+    },
+    {
+      "x": -465895,
+      "y": -62138,
+      "name": "Statua del Sentiero che Rifiuta i Viventi"
+    },
+    {
+      "x": -88646,
+      "y": -3923,
+      "name": "Statua della Spiaggia delle Acque Fredde"
+    },
+    {
+      "x": -170400,
+      "y": -29240,
+      "name": "Statua della Collina della Donnola di Ghiaccio"
+    },
+    {
+      "x": -450320,
+      "y": 112630,
+      "name": "Statua del Lago Insolubile"
+    },
+    {
+      "x": -376750,
+      "y": 124630,
+      "name": "Statua della Piana di Neve Pura"
+    },
+    {
+      "x": -374180,
+      "y": 63960,
+      "name": "Statua della Collina degli Ipocriti"
+    },
+    {
+      "x": -265980,
+      "y": 268690,
+      "name": "Statua della Statua di Anubis del Monte Obsidian"
+    },
+    {
+      "x": -282110,
+      "y": 355570,
+      "name": "Statua dell'Entrata della Torre della Fiamma Eterna"
+    },
+    {
+      "x": -170719,
+      "y": 409753,
+      "name": "Statua della Spiaggia dell'Estate Perpetua"
+    },
+    {
+      "x": -221400,
+      "y": 330684,
+      "name": "Statua del Villaggio di Pesca Estremo"
+    },
+    {
+      "x": -130061,
+      "y": -53407,
+      "name": "Statua del Sito dell'Antica Civiltà"
+    },
+    {
+      "x": -416558,
+      "y": -90013,
+      "name": "Statua del Monte Obsidian a Metà Costa"
+    },
+    {
+      "x": -250507,
+      "y": 341109,
+      "name": "Statua della Città Fortezza in Rovina"
+    },
+    {
+      "x": -294830,
+      "y": 152240,
+      "name": "Statua dell'Entrata della Torre della Ricerca Genetica"
+    },
+    {
+      "x": -319000,
+      "y": 127170,
+      "name": "Statua della Terra dello Zero Assoluto"
+    },
+    {
+      "x": -117216,
+      "y": 446689,
+      "name": "Statua dell'Entrata delle Dune"
+    },
+    {
+      "x": -63521,
+      "y": -55006,
+      "name": "Statua della Città del Deserto"
+    },
+    {
+      "x": -86710,
+      "y": -140442,
+      "name": "Statua dell'Entrata della Torre della Forza di Autodifesa"
+    },
+    {
+      "x": -25523,
+      "y": -118366,
+      "name": "Statua dell'Interno delle Dune"
+    },
+    {
+      "x": -25916,
+      "y": -78927,
+      "name": "Statua dell'Entrata della Torre di Rayne (Int)"
+    },
+    {
+      "x": 32787,
+      "y": -81421,
+      "name": "Statua della Rovine della Chiesa Abbandonata (Int)"
+    },
+    {
+      "x": -383184,
+      "y": -210791,
+      "name": "Statua del Sentiero del Freddo"
+    },
+    {
+      "x": -2189,
+      "y": -148546,
+      "name": "Statua della Spiaggia Meridionale"
+    },
+    {
+      "x": -503990,
+      "y": -214380,
+      "name": "Statua del Santuario della Sakura Danzante"
+    },
+    {
+      "x": -588140,
+      "y": -253780,
+      "name": "Statua del Campo Roccioso Settentrionale"
+    },
+    {
+      "x": -792350,
+      "y": -251110,
+      "name": "Statua delle Paludi dei Funghi"
+    },
+    {
+      "x": -698515,
+      "y": -322881,
+      "name": "Statua della Baia dei Squali Piccoli"
+    },
+    {
+      "x": -760286,
+      "y": -354967,
+      "name": "Statua della Foresta di Bambù Profonda"
+    },
+    {
+      "x": -888080,
+      "y": -433080,
+      "name": "Statua della Biforcazione dell'Esploratore"
+    },
+    {
+      "x": -699510,
+      "y": -389030,
+      "name": "Statua della Collina del Gigante d'Erba"
+    },
+    {
+      "x": -591120,
+      "y": -484261,
+      "name": "Statua del Regno Sigillato del Drago Alato"
+    },
+    {
+      "x": -236774,
+      "y": -100043,
+      "name": "Statua della Spiaggia dei Pesci Volanti (Nord)"
+    },
+    {
+      "x": -671902,
+      "y": -172408,
+      "name": "Statua dell'Isola del Gelido Vento (Sud)"
+    },
+    {
+      "x": -572462,
+      "y": -287225,
+      "name": "Statua della Costa di Passaggio"
+    },
+    {
+      "x": -798777,
+      "y": -479575,
+      "name": "Statua del Promontorio del Deserto"
+    },
+    {
+      "x": -335854,
+      "y": 335361,
+      "name": "Statua della Duna di Sabbia"
+    },
+    {
+      "x": -33883,
+      "y": 564292,
+      "name": "Statua delle Montagne Astrali"
+    },
+    {
+      "x": 168488,
+      "y": 221797,
+      "name": "Statua della Terra dello Zero Assoluto (Nord)"
+    },
+    {
+      "x": -558411,
+      "y": 121112,
+      "name": "Statua della Piana di Neve Pura (Nord)"
+    },
+    {
+      "x": -209327,
+      "y": -249228,
+      "name": "Statua del Sentiero di Nessuno"
+    },
+    {
+      "x": -197916,
+      "y": 438001,
+      "name": "Statua della Collina Bruciata"
+    },
+    {
+      "x": 29780,
+      "y": 406913,
+      "name": "Statua della Spiaggia Inaridita"
+    },
+    {
+      "x": -488719,
+      "y": -35725,
+      "name": "Statua della Grotta dei Pilastri di Pietra"
+    }
+  ]
 }
