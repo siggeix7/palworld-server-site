@@ -1,446 +1,736 @@
 {
   "boss_tower": [
     {
-      "x": -321597,
-      "y": 209085,
+      "x": -266563.2,
+      "y": 174506.3,
       "name": "Torre della Syndicate di Rayne"
     },
     {
-      "x": -361696,
+      "x": -361695,
       "y": -112009,
       "name": "Torre della Fiamma Eterna"
     },
     {
-      "x": -109960,
-      "y": 241300,
+      "x": 81363,
+      "y": 90183,
       "name": "Torre della Libera Alleanza dei Pal"
     },
     {
-      "x": 81363,
-      "y": 90183,
-      "name": "Torre dell'Unità di Ricerca Genetica"
+      "x": 29975.3,
+      "y": 413325,
+      "name": "Torre dell'Unita di Ricerca Genetica"
     },
     {
-      "x": 29975,
-      "y": 413324,
+      "x": -321596.2,
+      "y": 209085,
       "name": "Torre della Forza di Autodifesa"
     },
     {
-      "x": -29428,
-      "y": -115901,
-      "name": "Regno Sigillato"
+      "x": -778215.9,
+      "y": -36026,
+      "name": "Torre del Feybreak"
     },
     {
-      "x": -889806,
+      "x": -889805.2,
       "y": -435828,
+      "name": "Torre del Santuario Occulto"
+    },
+    {
+      "x": -29427.6,
+      "y": -115900.1,
+      "name": "Regno Sigillato del Cavaliere"
+    },
+    {
+      "x": -108093.8,
+      "y": 77936.1,
       "name": "Santuario Naturalistico"
     }
   ],
   "fast_travel": [
     {
-      "x": -327532,
-      "y": -70411,
-      "name": "Statua della Pianura d'Inizio"
+      "x": -108666.8,
+      "y": 79119.9,
+      "name": "Statua dell'Aquila 1"
     },
     {
-      "x": -50301,
-      "y": 287392,
-      "name": "Statua della Spiaggia dei Pesci Volanti"
+      "x": -265220,
+      "y": 173530,
+      "name": "Statua dell'Aquila 2"
     },
     {
-      "x": 35588,
-      "y": 321331,
-      "name": "Statua dell'Isola Paludosa"
+      "x": -327531.8,
+      "y": -70410.6,
+      "name": "Statua dell'Aquila 3"
     },
     {
-      "x": 117624,
-      "y": 400134,
-      "name": "Statua della Chiesa dell'Isola Paludosa"
+      "x": -367707.8,
+      "y": -114950.9,
+      "name": "Statua dell'Aquila 4"
     },
     {
-      "x": -119038,
-      "y": 138340,
-      "name": "Statua dell'Isola della Brezza Marina"
-    },
-    {
-      "x": -80507,
-      "y": 141464,
-      "name": "Statua della Chiesa dell'Isola della Brezza Marina"
-    },
-    {
-      "x": -39403,
-      "y": 159611,
-      "name": "Statua della Valle dei Bambù"
-    },
-    {
-      "x": 8000,
-      "y": 111770,
-      "name": "Statua del Forte Abbandonato"
-    },
-    {
-      "x": 102159,
-      "y": 48527,
-      "name": "Statua dell'Entrata della Torre di Rayne"
-    },
-    {
-      "x": 89644,
-      "y": 94542,
-      "name": "Statua della Piccola Baia"
-    },
-    {
-      "x": -342035,
-      "y": 236885,
-      "name": "Statua della Spiaggia del Drago Azzurro"
-    },
-    {
-      "x": -314840,
-      "y": 186850,
-      "name": "Statua delle Rovine della Chiesa dell'Isola Dimenticata"
-    },
-    {
-      "x": -358785,
-      "y": 267940,
-      "name": "Statua ai Piedi del Vulcano"
-    },
-    {
-      "x": -346618,
-      "y": 191706,
-      "name": "Statua del Regno Sigillato dell'Uccello di Ghiaccio"
-    },
-    {
-      "x": -326404,
-      "y": 55136,
-      "name": "Statua del Regno Sigillato del Drago Tuono"
-    },
-    {
-      "x": -349536,
-      "y": -4036,
-      "name": "Statua dell'Isola Dimenticata"
-    },
-    {
-      "x": -278469,
-      "y": 212679,
-      "name": "Statua della Chiesa Abbandonata"
-    },
-    {
-      "x": -302825,
-      "y": 241060,
-      "name": "Statua dell'Isola del Vento Ghiacciato"
-    },
-    {
-      "x": -283781,
-      "y": 59352,
-      "name": "Statua della Cascata dell'Asceta"
-    },
-    {
-      "x": -367708,
-      "y": -114951,
-      "name": "Statua del Piccolo Villaggio"
-    },
-    {
-      "x": -218637,
-      "y": 58528,
-      "name": "Statua del Regno Sigillato del Maestro di Spada"
-    },
-    {
-      "x": -257952,
-      "y": 151247,
-      "name": "Statua dell'Entrata della Gola"
-    },
-    {
-      "x": -167685,
-      "y": 167519,
-      "name": "Statua della Foresta di Mossanda"
-    },
-    {
-      "x": -221230,
-      "y": 165130,
-      "name": "Statua dell'Isola della Palude"
-    },
-    {
-      "x": -237611,
-      "y": 190609,
-      "name": "Statua delle Rovine della Chiesa dell'Isola della Palude"
-    },
-    {
-      "x": -151784,
-      "y": 213200,
-      "name": "Statua del Ponte Naturale"
-    },
-    {
-      "x": -125290,
-      "y": 201720,
-      "name": "Statua dell'Isola Selvaggia Orientale"
-    },
-    {
-      "x": -103435,
-      "y": 234761,
-      "name": "Statua della Costa dell'Isola"
-    },
-    {
-      "x": -115430,
-      "y": 289090,
-      "name": "Statua del Territorio degli Squali"
-    },
-    {
-      "x": -177771,
-      "y": 265009,
-      "name": "Statua della Foresta del Panda d'Erba"
-    },
-    {
-      "x": -414447,
-      "y": -24604,
-      "name": "Statua dell'Antico Sito Rituale"
-    },
-    {
-      "x": -219173,
-      "y": 226394,
-      "name": "Statua del Ponte dei Due Cavalieri"
-    },
-    {
-      "x": -248771,
-      "y": 126205,
-      "name": "Statua del Regno Sigillato della Velocità"
-    },
-    {
-      "x": -338560,
-      "y": 107660,
-      "name": "Statua della Vetta del Monte dei Conigli"
-    },
-    {
-      "x": -215389,
-      "y": 8854,
-      "name": "Statua del Centro del Lago"
-    },
-    {
-      "x": -195237,
-      "y": 36718,
-      "name": "Statua dell'Entrata della Torre della Libera Alleanza"
-    },
-    {
-      "x": -317778,
-      "y": 212103,
-      "name": "Statua del Bivio per la Montagna Nevosa"
-    },
-    {
-      "x": -137210,
-      "y": -91340,
-      "name": "Statua del Regno Sigillato del Guardiano"
+      "x": -414446.7,
+      "y": -24603.3,
+      "name": "Statua dell'Aquila 5"
     },
     {
       "x": -465895,
-      "y": -62138,
-      "name": "Statua del Sentiero che Rifiuta i Viventi"
+      "y": -62137.8,
+      "name": "Statua dell'Aquila 6"
     },
     {
-      "x": -88646,
-      "y": -3923,
-      "name": "Statua della Spiaggia delle Acque Fredde"
+      "x": -416557.5,
+      "y": -90012.2,
+      "name": "Statua dell'Aquila 7"
     },
     {
-      "x": -170400,
-      "y": -29240,
-      "name": "Statua della Collina della Donnola di Ghiaccio"
+      "x": -383183.2,
+      "y": -210790.9,
+      "name": "Statua dell'Aquila 8"
     },
     {
-      "x": -450320,
-      "y": 112630,
-      "name": "Statua del Lago Insolubile"
+      "x": 29780.5,
+      "y": 406913.2,
+      "name": "Statua dell'Aquila 9"
     },
     {
-      "x": -376750,
-      "y": 124630,
-      "name": "Statua della Piana di Neve Pura"
+      "x": -50301,
+      "y": 287392.4,
+      "name": "Statua dell'Aquila 10"
     },
     {
-      "x": -374180,
-      "y": 63960,
-      "name": "Statua della Collina degli Ipocriti"
+      "x": 35588.7,
+      "y": 321331.2,
+      "name": "Statua dell'Aquila 11"
     },
     {
-      "x": -265980,
-      "y": 268690,
-      "name": "Statua della Statua di Anubis del Monte Obsidian"
+      "x": 117624.2,
+      "y": 400134.8,
+      "name": "Statua dell'Aquila 12"
     },
     {
-      "x": -282110,
-      "y": 355570,
-      "name": "Statua dell'Entrata della Torre della Fiamma Eterna"
+      "x": -119037.3,
+      "y": 138340.4,
+      "name": "Statua dell'Aquila 13"
     },
     {
-      "x": -170719,
-      "y": 409753,
-      "name": "Statua della Spiaggia dell'Estate Perpetua"
+      "x": -80506.2,
+      "y": 141464.8,
+      "name": "Statua dell'Aquila 14"
     },
     {
-      "x": -221400,
-      "y": 330684,
-      "name": "Statua del Villaggio di Pesca Estremo"
+      "x": -39402.4,
+      "y": 159611.9,
+      "name": "Statua dell'Aquila 15"
     },
     {
-      "x": -130061,
-      "y": -53407,
-      "name": "Statua del Sito dell'Antica Civiltà"
+      "x": 8000.5,
+      "y": 111770.6,
+      "name": "Statua dell'Aquila 16"
     },
     {
-      "x": -416558,
-      "y": -90013,
-      "name": "Statua del Monte Obsidian a Metà Costa"
+      "x": 102159.8,
+      "y": 48527,
+      "name": "Statua dell'Aquila 17"
     },
     {
-      "x": -250507,
-      "y": 341109,
-      "name": "Statua della Città Fortezza in Rovina"
+      "x": 89625,
+      "y": 94363.3,
+      "name": "Statua dell'Aquila 18"
     },
     {
-      "x": -294830,
-      "y": 152240,
-      "name": "Statua dell'Entrata della Torre della Ricerca Genetica"
+      "x": -777490,
+      "y": -40589,
+      "name": "Statua dell'Aquila 19"
     },
     {
-      "x": -319000,
-      "y": 127170,
-      "name": "Statua della Terra dello Zero Assoluto"
+      "x": -758105,
+      "y": -61810,
+      "name": "Statua dell'Aquila 20"
     },
     {
-      "x": -117216,
-      "y": 446689,
-      "name": "Statua dell'Entrata delle Dune"
+      "x": -818013.1,
+      "y": 59827.7,
+      "name": "Statua dell'Aquila 21"
     },
     {
-      "x": -63521,
-      "y": -55006,
-      "name": "Statua della Città del Deserto"
+      "x": -771309.9,
+      "y": 8647.2,
+      "name": "Statua dell'Aquila 22"
     },
     {
-      "x": -86710,
-      "y": -140442,
-      "name": "Statua dell'Entrata della Torre della Forza di Autodifesa"
+      "x": -829095.7,
+      "y": -19262.8,
+      "name": "Statua dell'Aquila 23"
     },
     {
-      "x": -25523,
-      "y": -118366,
-      "name": "Statua dell'Interno delle Dune"
+      "x": -811466.6,
+      "y": -85874.3,
+      "name": "Statua dell'Aquila 24"
     },
     {
-      "x": -25916,
-      "y": -78927,
-      "name": "Statua dell'Entrata della Torre di Rayne (Int)"
+      "x": -237086.6,
+      "y": -100489.9,
+      "name": "Statua dell'Aquila 25"
     },
     {
-      "x": 32787,
-      "y": -81421,
-      "name": "Statua della Rovine della Chiesa Abbandonata (Int)"
+      "x": -798776.8,
+      "y": -479574.8,
+      "name": "Statua dell'Aquila 26"
     },
     {
-      "x": -383184,
-      "y": -210791,
-      "name": "Statua del Sentiero del Freddo"
+      "x": -117215,
+      "y": 446690,
+      "name": "Statua dell'Aquila 27"
     },
     {
-      "x": -2189,
-      "y": -148546,
-      "name": "Statua della Spiaggia Meridionale"
+      "x": -63520.7,
+      "y": -55005.9,
+      "name": "Statua dell'Aquila 28"
+    },
+    {
+      "x": -86709.6,
+      "y": -140441.8,
+      "name": "Statua dell'Aquila 29"
+    },
+    {
+      "x": -25522.2,
+      "y": -118365.3,
+      "name": "Statua dell'Aquila 30"
+    },
+    {
+      "x": -25915.4,
+      "y": -78926.2,
+      "name": "Statua dell'Aquila 31"
+    },
+    {
+      "x": 32787.1,
+      "y": -81420.3,
+      "name": "Statua dell'Aquila 32"
+    },
+    {
+      "x": -2188.8,
+      "y": -148545.9,
+      "name": "Statua dell'Aquila 33"
     },
     {
       "x": -503990,
       "y": -214380,
-      "name": "Statua del Santuario della Sakura Danzante"
+      "name": "Statua dell'Aquila 34"
     },
     {
       "x": -588140,
       "y": -253780,
-      "name": "Statua del Campo Roccioso Settentrionale"
+      "name": "Statua dell'Aquila 35"
     },
     {
       "x": -792350,
       "y": -251110,
-      "name": "Statua delle Paludi dei Funghi"
+      "name": "Statua dell'Aquila 36"
     },
     {
-      "x": -698515,
-      "y": -322881,
-      "name": "Statua della Baia dei Squali Piccoli"
+      "x": -698514.9,
+      "y": -322880.4,
+      "name": "Statua dell'Aquila 37"
     },
     {
-      "x": -760286,
-      "y": -354967,
-      "name": "Statua della Foresta di Bambù Profonda"
+      "x": -760285.4,
+      "y": -354966.2,
+      "name": "Statua dell'Aquila 38"
     },
     {
       "x": -888080,
       "y": -433080,
-      "name": "Statua della Biforcazione dell'Esploratore"
+      "name": "Statua dell'Aquila 39"
     },
     {
       "x": -699510,
       "y": -389030,
-      "name": "Statua della Collina del Gigante d'Erba"
+      "name": "Statua dell'Aquila 40"
     },
     {
       "x": -591120,
-      "y": -484261,
-      "name": "Statua del Regno Sigillato del Drago Alato"
+      "y": -484260,
+      "name": "Statua dell'Aquila 41"
     },
     {
-      "x": -236774,
-      "y": -100043,
-      "name": "Statua della Spiaggia dei Pesci Volanti (Nord)"
+      "x": -671901.2,
+      "y": -172407.6,
+      "name": "Statua dell'Aquila 42"
     },
     {
-      "x": -671902,
-      "y": -172408,
-      "name": "Statua dell'Isola del Gelido Vento (Sud)"
+      "x": -572461.6,
+      "y": -287224.1,
+      "name": "Statua dell'Aquila 43"
     },
     {
-      "x": -572462,
-      "y": -287225,
-      "name": "Statua della Costa di Passaggio"
+      "x": -130060.4,
+      "y": -53406.7,
+      "name": "Statua dell'Aquila 44"
     },
     {
-      "x": -798777,
-      "y": -479575,
-      "name": "Statua del Promontorio del Deserto"
+      "x": -250506.5,
+      "y": 341109.6,
+      "name": "Statua dell'Aquila 45"
     },
     {
-      "x": -335854,
-      "y": 335361,
-      "name": "Statua della Duna di Sabbia"
+      "x": 168489,
+      "y": 221797.6,
+      "name": "Statua dell'Aquila 46"
     },
     {
-      "x": -33883,
-      "y": 564292,
-      "name": "Statua delle Montagne Astrali"
+      "x": -33882.2,
+      "y": 564292.5,
+      "name": "Statua dell'Aquila 47"
     },
     {
-      "x": 168488,
-      "y": 221797,
-      "name": "Statua della Terra dello Zero Assoluto (Nord)"
+      "x": -197915.2,
+      "y": 438001.4,
+      "name": "Statua dell'Aquila 48"
     },
     {
-      "x": -558411,
-      "y": 121112,
-      "name": "Statua della Piana di Neve Pura (Nord)"
+      "x": -335853.8,
+      "y": 335361.3,
+      "name": "Statua dell'Aquila 49"
     },
     {
-      "x": -209327,
-      "y": -249228,
-      "name": "Statua del Sentiero di Nessuno"
+      "x": -558410.4,
+      "y": 121112.1,
+      "name": "Statua dell'Aquila 50"
     },
     {
-      "x": -197916,
-      "y": 438001,
-      "name": "Statua della Collina Bruciata"
+      "x": -488718.2,
+      "y": -35724.9,
+      "name": "Statua dell'Aquila 51"
     },
     {
-      "x": 29780,
-      "y": 406913,
-      "name": "Statua della Spiaggia Inaridita"
+      "x": -209326,
+      "y": -249227.6,
+      "name": "Statua dell'Aquila 52"
     },
     {
-      "x": -488719,
-      "y": -35725,
-      "name": "Statua della Grotta dei Pilastri di Pietra"
+      "x": 14388.2,
+      "y": 476545.6,
+      "name": "Statua dell'Aquila 53"
+    },
+    {
+      "x": -71914.8,
+      "y": 472172.2,
+      "name": "Statua dell'Aquila 54"
+    },
+    {
+      "x": -38212,
+      "y": 406147.1,
+      "name": "Statua dell'Aquila 55"
+    },
+    {
+      "x": -105662.5,
+      "y": 400797,
+      "name": "Statua dell'Aquila 56"
+    },
+    {
+      "x": 191211.2,
+      "y": 375334.7,
+      "name": "Statua dell'Aquila 57"
+    },
+    {
+      "x": 178736.6,
+      "y": 305772.4,
+      "name": "Statua dell'Aquila 58"
+    },
+    {
+      "x": 125988.7,
+      "y": 274597.8,
+      "name": "Statua dell'Aquila 59"
+    },
+    {
+      "x": 12156.8,
+      "y": 249201.4,
+      "name": "Statua dell'Aquila 60"
+    },
+    {
+      "x": 69604.1,
+      "y": 196989.3,
+      "name": "Statua dell'Aquila 61"
+    },
+    {
+      "x": 107940.7,
+      "y": -28036.3,
+      "name": "Statua dell'Aquila 62"
+    },
+    {
+      "x": -38097.3,
+      "y": 53412.5,
+      "name": "Statua dell'Aquila 63"
+    },
+    {
+      "x": -43926.7,
+      "y": -173601,
+      "name": "Statua dell'Aquila 64"
+    },
+    {
+      "x": -131353.9,
+      "y": 54481.7,
+      "name": "Statua dell'Aquila 65"
+    },
+    {
+      "x": -160345.2,
+      "y": 98540.8,
+      "name": "Statua dell'Aquila 66"
+    },
+    {
+      "x": 63442.5,
+      "y": 507395.4,
+      "name": "Statua dell'Aquila 67"
+    },
+    {
+      "x": -153135.8,
+      "y": 589409.5,
+      "name": "Statua dell'Aquila 68"
+    },
+    {
+      "x": -451245,
+      "y": 363338.2,
+      "name": "Statua dell'Aquila 69"
+    },
+    {
+      "x": -984033.7,
+      "y": -371189.8,
+      "name": "Statua dell'Aquila 70"
+    },
+    {
+      "x": -568698.6,
+      "y": -603451.9,
+      "name": "Statua dell'Aquila 71"
+    },
+    {
+      "x": -426910.2,
+      "y": -436850.9,
+      "name": "Statua dell'Aquila 72"
+    },
+    {
+      "x": -61819,
+      "y": -246053.5,
+      "name": "Statua dell'Aquila 73"
+    },
+    {
+      "x": -301681.9,
+      "y": -5184.1,
+      "name": "Statua dell'Aquila 74"
+    },
+    {
+      "x": -266957.5,
+      "y": 93228.6,
+      "name": "Statua dell'Aquila 75"
+    },
+    {
+      "x": -236840.5,
+      "y": 34772.6,
+      "name": "Statua dell'Aquila 76"
+    },
+    {
+      "x": -311508.9,
+      "y": 76832.3,
+      "name": "Statua dell'Aquila 77"
+    },
+    {
+      "x": -421434.3,
+      "y": 29307.7,
+      "name": "Statua dell'Aquila 78"
+    },
+    {
+      "x": -259198.7,
+      "y": -59353.4,
+      "name": "Statua dell'Aquila 79"
+    },
+    {
+      "x": -287201.4,
+      "y": -217569,
+      "name": "Statua dell'Aquila 80"
+    },
+    {
+      "x": -415272.2,
+      "y": -162408.6,
+      "name": "Statua dell'Aquila 81"
+    },
+    {
+      "x": -119900.9,
+      "y": 351109.2,
+      "name": "Statua dell'Aquila 82"
+    },
+    {
+      "x": -156482.2,
+      "y": 317415.3,
+      "name": "Statua dell'Aquila 83"
+    },
+    {
+      "x": -224958.1,
+      "y": 285919.2,
+      "name": "Statua dell'Aquila 84"
+    },
+    {
+      "x": -74928.6,
+      "y": 212787.1,
+      "name": "Statua dell'Aquila 85"
+    },
+    {
+      "x": -578061,
+      "y": -158216.1,
+      "name": "Statua dell'Aquila 86"
+    },
+    {
+      "x": -509887.2,
+      "y": -299269,
+      "name": "Statua dell'Aquila 87"
+    },
+    {
+      "x": -506737.8,
+      "y": -396063.4,
+      "name": "Statua dell'Aquila 88"
+    },
+    {
+      "x": -603491.1,
+      "y": -338965.2,
+      "name": "Statua dell'Aquila 89"
+    },
+    {
+      "x": -651722.9,
+      "y": -373365.2,
+      "name": "Statua dell'Aquila 90"
+    },
+    {
+      "x": -644486,
+      "y": -276536.5,
+      "name": "Statua dell'Aquila 91"
+    },
+    {
+      "x": -725188.8,
+      "y": -238441.9,
+      "name": "Statua dell'Aquila 92"
+    },
+    {
+      "x": -714540.9,
+      "y": -458346.6,
+      "name": "Statua dell'Aquila 93"
+    },
+    {
+      "x": -771223.4,
+      "y": -441798.3,
+      "name": "Statua dell'Aquila 94"
+    },
+    {
+      "x": -810648.4,
+      "y": -393963.7,
+      "name": "Statua dell'Aquila 95"
+    },
+    {
+      "x": -865524.3,
+      "y": -352355,
+      "name": "Statua dell'Aquila 96"
+    },
+    {
+      "x": -923275.1,
+      "y": -385109.1,
+      "name": "Statua dell'Aquila 97"
+    },
+    {
+      "x": -886234.2,
+      "y": -483745.9,
+      "name": "Statua dell'Aquila 98"
+    },
+    {
+      "x": 192505.8,
+      "y": -227006.5,
+      "name": "Statua dell'Aquila 99"
+    },
+    {
+      "x": -294830,
+      "y": 152240,
+      "name": "Statua dell'Aquila 100"
+    },
+    {
+      "x": -319000.0,
+      "y": 127170,
+      "name": "Statua dell'Aquila 101"
+    },
+    {
+      "x": -137210,
+      "y": -91340,
+      "name": "Statua dell'Aquila 102"
+    },
+    {
+      "x": -88645.9,
+      "y": -3922.9,
+      "name": "Statua dell'Aquila 103"
+    },
+    {
+      "x": -170400,
+      "y": -29240,
+      "name": "Statua dell'Aquila 104"
+    },
+    {
+      "x": -450320,
+      "y": 112630,
+      "name": "Statua dell'Aquila 105"
+    },
+    {
+      "x": -376750,
+      "y": 124630,
+      "name": "Statua dell'Aquila 106"
+    },
+    {
+      "x": -374180,
+      "y": 63960,
+      "name": "Statua dell'Aquila 107"
+    },
+    {
+      "x": -265980,
+      "y": 268690,
+      "name": "Statua dell'Aquila 108"
+    },
+    {
+      "x": -282110,
+      "y": 355570,
+      "name": "Statua dell'Aquila 109"
+    },
+    {
+      "x": -170718.7,
+      "y": 409753.2,
+      "name": "Statua dell'Aquila 110"
+    },
+    {
+      "x": -221399.3,
+      "y": 330684.5,
+      "name": "Statua dell'Aquila 111"
+    },
+    {
+      "x": -248770.1,
+      "y": 126205.8,
+      "name": "Statua dell'Aquila 112"
+    },
+    {
+      "x": -338560,
+      "y": 107660,
+      "name": "Statua dell'Aquila 113"
+    },
+    {
+      "x": -215388.5,
+      "y": 8854.2,
+      "name": "Statua dell'Aquila 114"
+    },
+    {
+      "x": -195236.2,
+      "y": 36718.5,
+      "name": "Statua dell'Aquila 115"
+    },
+    {
+      "x": 6,
+      "y": 0,
+      "name": "Statua dell'Aquila 116"
+    },
+    {
+      "x": -326403.8,
+      "y": 55136.7,
+      "name": "Statua dell'Aquila 117"
+    },
+    {
+      "x": -349535.5,
+      "y": -4035.1,
+      "name": "Statua dell'Aquila 118"
+    },
+    {
+      "x": -283781,
+      "y": 59352.7,
+      "name": "Statua dell'Aquila 119"
+    },
+    {
+      "x": -218636.8,
+      "y": 58528.1,
+      "name": "Statua dell'Aquila 120"
+    },
+    {
+      "x": -257951.4,
+      "y": 151247.8,
+      "name": "Statua dell'Aquila 121"
+    },
+    {
+      "x": -167684.9,
+      "y": 167519.2,
+      "name": "Statua dell'Aquila 122"
+    },
+    {
+      "x": -221230,
+      "y": 165130,
+      "name": "Statua dell'Aquila 123"
+    },
+    {
+      "x": -237610,
+      "y": 190610,
+      "name": "Statua dell'Aquila 124"
+    },
+    {
+      "x": -151842,
+      "y": 213101.5,
+      "name": "Statua dell'Aquila 125"
+    },
+    {
+      "x": -125476,
+      "y": 201720,
+      "name": "Statua dell'Aquila 126"
+    },
+    {
+      "x": -103435,
+      "y": 234761.2,
+      "name": "Statua dell'Aquila 127"
+    },
+    {
+      "x": -115430,
+      "y": 289090,
+      "name": "Statua dell'Aquila 128"
+    },
+    {
+      "x": -177770,
+      "y": 265010,
+      "name": "Statua dell'Aquila 129"
+    },
+    {
+      "x": -219172.9,
+      "y": 226394.8,
+      "name": "Statua dell'Aquila 130"
+    },
+    {
+      "x": -317777.2,
+      "y": 212103.3,
+      "name": "Statua dell'Aquila 131"
+    },
+    {
+      "x": -342035,
+      "y": 236885,
+      "name": "Statua dell'Aquila 132"
+    },
+    {
+      "x": -314840,
+      "y": 186850,
+      "name": "Statua dell'Aquila 133"
+    },
+    {
+      "x": -358785,
+      "y": 267940,
+      "name": "Statua dell'Aquila 134"
+    },
+    {
+      "x": -346617.6,
+      "y": 191706.6,
+      "name": "Statua dell'Aquila 135"
+    },
+    {
+      "x": -278468,
+      "y": 212679.4,
+      "name": "Statua dell'Aquila 136"
+    },
+    {
+      "x": -302825,
+      "y": 241060,
+      "name": "Statua dell'Aquila 137"
     }
   ]
 }
