@@ -502,7 +502,7 @@
     elements.fastTravelLayer.replaceChildren()
     elements.towerLayer.replaceChildren()
     for (const point of state.points.fast_travel || []) {
-      const node = marker('fast', point, point.name || '')
+      const node = marker('fast', point)
       node.dataset.name = point.name || 'Viaggio rapido'
       node.addEventListener('pointerenter', () => showMapTooltip(node, point.name || 'Viaggio rapido'))
       node.addEventListener('pointerleave', hideMapTooltip)
@@ -510,7 +510,7 @@
       elements.fastTravelLayer.appendChild(node)
     }
     for (const point of state.points.boss_tower || []) {
-      const node = marker('tower', point, point.name || '')
+      const node = marker('tower', point)
       node.dataset.name = point.name || 'Torre'
       node.addEventListener('pointerenter', () => showMapTooltip(node, point.name || 'Torre'))
       node.addEventListener('pointerleave', hideMapTooltip)
@@ -597,7 +597,7 @@
     for (const group of groupMapPlayers(players)) {
       if (group.length === 1) {
         const player = group[0].player
-        const node = marker('player', [player.location_x, player.location_y], `Lv.${player.level} ${player.name}`)
+        const node = marker('player', [player.location_x, player.location_y])
         node.dataset.playerId = player.id
         node.dataset.name = `${player.name} · Lv.${player.level} · ${formatNumber(player.ping)} ms`
         node.style.setProperty('--player-color', playerColor(player.id))
@@ -612,7 +612,7 @@
         const x = group.reduce((total, entry) => total + Number(entry.player.location_x), 0) / group.length
         const y = group.reduce((total, entry) => total + Number(entry.player.location_y), 0) / group.length
         const names = group.map((entry) => entry.player.name).join(', ')
-        const node = marker('cluster', [x, y], names)
+        const node = marker('cluster', [x, y])
         node.setAttribute('aria-label', `Avvicina ${group.length} giocatori: ${names}`)
         node.addEventListener('click', () => centerPlayerGroup(group))
         node.querySelector('span').textContent = String(group.length)
