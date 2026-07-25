@@ -6,7 +6,12 @@ camp data to the site's ingest service.
 
 ## Install
 
-1. Install `PalworldSaveTools`/`palsav-flex` and `requests` on the Palworld VM.
+1. Install the source archive for
+   [`PalworldSaveTools v2.1.7`](https://github.com/deafdudecomputers/PalworldSaveTools/releases/tag/v2.1.7)
+   under `/opt/PalworldSaveTools`. The expected source archive SHA-256 is
+   `988dc766a903fa9ef56d172ecd2bee5b77c4920123f7dccc6084ee251c68b2e3`.
+   Install its local `palsav-flex 0.2.0` and `palooz 0.2.0` packages; they are
+   not published on PyPI.
 2. Copy this directory to `/opt/PalworldGuildSync`.
 3. Copy `.env.example` to `.env`, set the real token, and run
    `chmod 600 /opt/PalworldGuildSync/.env`.
@@ -31,6 +36,8 @@ old inspection/conversion experiments and are not called by cron. One-off
 save mutation scripts are intentionally not tracked because they contained
 live player/base UUIDs and were specific to a completed migration.
 
-The save currently exposes useful data including guilds, base camps, PalBox
-objects and health, characters/Pals, dungeons, enemy camps, items, and world
-time. Only guilds and base positions are uploaded by the scheduled job.
+The scheduled job uploads compact aggregates for guilds, base workers, worker
+health, saved work activity, active invasions, and oil-rig state. Raw save
+UUIDs are replaced with opaque join keys. Individual Pal records, inventories,
+structures, and technical save references remain on the Palworld VM and are
+not exposed by the site.

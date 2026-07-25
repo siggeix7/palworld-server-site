@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from dashboard.models import GuildSnapshot, UserProfile
 
@@ -71,13 +74,78 @@ class SectionPageTests(TestCase):
     def test_guild_data_exposes_bases_to_approved_members(self):
         GuildSnapshot.objects.create(
             payload={
-                "guilds": [{"group_id": "guild-1", "guild_name": "Explorers"}],
-                "bases": [{"base_id": "base-1", "group_id": "guild-1"}],
+                "schema_version": 2,
+                "guilds": [{
+                    "group_id": "guild-1",
+                    "guild_name": "Explorers",
+                    "players": [{"player_name": "Member"}],
+                }],
+                "bases": [{
+                    "base_id": "base-1",
+                    "group_id": "guild-1",
+                    "name": "Forte Nord",
+                    "problem_worker_count": 2,
+                }],
+                "world": {"active_raid_count": 0, "oil_rig_count": 3},
             }
         )
         response = self.client.get(reverse("guild-data"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["bases"][0]["base_id"], "base-1")
+        self.assertEqual(response.json()["world"]["oil_rig_count"], 3)
+        self.assertNotIn("alerts", response.json())
+
+    def test_guild_data_exposes_compact_alerts_only_to_admins(self):
+        snapshot = GuildSnapshot.objects.create(
+            payload={
+                "schema_version": 2,
+                "guilds": [{
+                    "group_id": "guild-1",
+                    "guild_name": "Explorers",
+                    "players": [],
+                }],
+                "bases": [{
+                    "base_id": "base-1",
+                    "group_id": "guild-1",
+                    "name": "Forte Nord",
+                    "problem_worker_count": 2,
+                    "raid_active": True,
+                }],
+                "diagnostics": {"unresolved_worker_count": 1},
+                "world": {"active_raid_count": 2, "oil_rig_alert_count": 1},
+            }
+        )
+        GuildSnapshot.objects.filter(pk=snapshot.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=20)
+        )
+        self.assertNotIn("alerts", self.client.get(reverse("guild-data")).json())
+
+        admin = self.create_user("administrator", "admin@example.com", admin=True)
+        self.client.force_login(admin)
+        payload = self.client.get(reverse("guild-data")).json()
+        titles = {alert["title"] for alert in payload["alerts"]}
+        self.assertIn("Sincronizzazione save in ritardo", titles)
+        self.assertIn("Gilda senza membri", titles)
+        self.assertIn("Pal in difficoltà", titles)
+        self.assertIn("Invasione attiva", titles)
+        self.assertIn("Riferimenti save scollegati", titles)
+        self.assertIn("Allarme piattaforma petrolifera", titles)
+        self.assertIn("Invasione non associata", titles)
+
+    def test_page_specific_scripts_keep_shared_site_script(self):
+        for name, script in (
+            ("guilds", "dashboard/js/guilds.js"),
+            ("admin-panel", "dashboard/js/admin.js"),
+            ("vm-dashboard", "dashboard/js/vm.js"),
+        ):
+            if name == "admin-panel":
+                admin = self.create_user(
+                    "script-admin", "admin@example.com", admin=True
+                )
+                self.client.force_login(admin)
+            response = self.client.get(reverse(name))
+            self.assertContains(response, "dashboard/js/site.js", count=1)
+            self.assertContains(response, script, count=1)
 
     def test_anonymous_visitors_are_redirected_to_login(self):
         self.client.logout()

@@ -2,7 +2,7 @@
   'use strict'
 
   const THEMES = new Set(['observatory', 'tron', 'ares', 'clu', 'athena', 'aphrodite', 'poseidon'])
-  const state = { requests: {}, pollTimer: null, pollGeneration: 0 }
+  const state = { requests: {}, pollTimer: null, pollGeneration: 0, alertTimer: null }
 
   const $ = (selector) => document.querySelector(selector)
   const elements = {
@@ -15,6 +15,8 @@
     result: $('#announceResult'),
     refreshInfo: $('#refreshInfo'),
     info: $('#adminServerInfo'),
+    alerts: $('#saveAlerts'),
+    alertsUpdated: $('#saveAlertsUpdated'),
   }
 
   function setText(el, v) { if (el && el.textContent !== String(v)) el.textContent = String(v) }
@@ -52,6 +54,63 @@
   }
 
   function formatNumber(v, d = 0) { const n = Number(v); return Number.isFinite(n) ? n.toLocaleString('it-IT', { maximumFractionDigits: d }) : '--' }
+
+  function formatDate(v) {
+    const date = new Date(v)
+    return !v || Number.isNaN(date.getTime())
+      ? 'mai'
+      : new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date)
+  }
+
+  function renderAlerts(data) {
+    if (!elements.alerts) return
+    elements.alerts.replaceChildren()
+    const alerts = Array.isArray(data.alerts) ? data.alerts : []
+    if (!alerts.length) {
+      const card = document.createElement('article')
+      card.className = 'admin-alert ok'
+      const title = document.createElement('strong')
+      const detail = document.createElement('span')
+      title.textContent = 'Nessuna anomalia rilevata'
+      detail.textContent = 'Gilde, basi e sincronizzazione risultano regolari.'
+      card.append(title, detail)
+      elements.alerts.appendChild(card)
+    } else {
+      for (const alert of alerts) {
+        const card = document.createElement('article')
+        card.className = `admin-alert ${alert.level === 'danger' ? 'danger' : 'warning'}`
+        const title = document.createElement('strong')
+        const detail = document.createElement('span')
+        title.textContent = alert.title || 'Avviso'
+        detail.textContent = alert.detail || ''
+        card.append(title, detail)
+        elements.alerts.appendChild(card)
+      }
+    }
+    setText(elements.alertsUpdated, `Snapshot aggiornato: ${formatDate(data.updated_at)}`)
+  }
+
+  async function loadAlerts() {
+    if (!elements.alerts) return
+    try {
+      renderAlerts(await requestJson('/api/v1/guild/data', 'save-alerts'))
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      elements.alerts.replaceChildren()
+      const message = document.createElement('p')
+      message.className = 'empty-copy'
+      message.textContent = 'Avvisi del salvataggio temporaneamente non disponibili.'
+      elements.alerts.appendChild(message)
+    }
+  }
+
+  function scheduleAlertPoll() {
+    window.clearTimeout(state.alertTimer)
+    state.alertTimer = window.setTimeout(async () => {
+      if (!document.hidden) await loadAlerts()
+      scheduleAlertPoll()
+    }, 120000)
+  }
 
   function renderPlayers(players) {
     elements.table.replaceChildren()
@@ -197,9 +256,14 @@
         elements.result.textContent = `Errore: ${error.message}`
       }
     })
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) startPolling() })
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return
+      startPolling()
+      loadAlerts().then(scheduleAlertPoll)
+    })
     startPolling()
     loadInfo()
+    loadAlerts().then(scheduleAlertPoll)
   }
 
   initialize()

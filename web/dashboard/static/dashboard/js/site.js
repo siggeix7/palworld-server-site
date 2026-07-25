@@ -17,6 +17,7 @@
 
   const state = {
     snapshot: null,
+    worldSaveData: null,
     selectedPlayer: null,
     map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false, pointers: new Map(), pinchDistance: 0, pinchScale: 1 },
     points: { fast_travel: [], boss_tower: [] },
@@ -31,6 +32,8 @@
     requests: {},
     notices: { snapshot: null, history: null },
     snapshotTimer: null,
+    baseTimer: null,
+    worldSaveTimer: null,
     snapshotFailures: 0,
     snapshotGeneration: 0,
     historyTimer: null,
@@ -98,6 +101,9 @@
     serverProfile: $('#serverProfile'),
     worldHighlights: $('#worldHighlights'),
     worldDiff: $('#worldDiff'),
+    worldSaveStatus: $('#worldSaveStatus'),
+    worldSaveUpdated: $('#worldSaveUpdated'),
+    worldSaveNotice: $('#worldSaveNotice'),
     eventList: $('#eventList'),
     eventFilter: $('#eventFilter'),
     eventCounts: $('#eventCounts'),
@@ -531,13 +537,34 @@
     if (mapTooltip) mapTooltip.remove()
     mapTooltip = document.createElement('div')
     mapTooltip.className = 'map-tooltip'
-    mapTooltip.textContent = text
+    if (text && typeof text === 'object') {
+      const title = document.createElement('strong')
+      title.textContent = text.title || ''
+      mapTooltip.appendChild(title)
+      for (const row of text.rows || []) {
+        const line = document.createElement('span')
+        line.textContent = row.text || row
+        if (row.className) line.className = row.className
+        mapTooltip.appendChild(line)
+      }
+    } else {
+      mapTooltip.textContent = text
+    }
+    mapTooltip.dataset.target = node.dataset.name || ''
     elements.mapViewport?.appendChild(mapTooltip)
     const rect = node.getBoundingClientRect()
     const vpRect = elements.mapViewport?.getBoundingClientRect()
     if (!vpRect) return
-    const left = rect.left - vpRect.left + rect.width / 2
-    const top = rect.top - vpRect.top - 8
+    const desiredLeft = rect.left - vpRect.left + rect.width / 2
+    const halfWidth = mapTooltip.offsetWidth / 2
+    const left = Math.min(
+      vpRect.width - halfWidth - 8,
+      Math.max(halfWidth + 8, desiredLeft),
+    )
+    const desiredTop = rect.top - vpRect.top - 8
+    const showBelow = desiredTop - mapTooltip.offsetHeight < 8
+    const top = showBelow ? rect.bottom - vpRect.top + 8 : desiredTop
+    mapTooltip.classList.toggle('below', showBelow)
     mapTooltip.style.left = `${left}px`
     mapTooltip.style.top = `${top}px`
     requestAnimationFrame(() => mapTooltip?.classList.add('visible'))
@@ -1179,6 +1206,7 @@
     if (elements.lastUpdateHome) elements.lastUpdateHome.dateTime = data.status?.last_updated || ''
 
     renderMap(players)
+    if (state.worldSaveData) renderWorldSaveStatus(state.worldSaveData)
     renderPlayersTable(players)
     renderMobilePlayers(players)
     renderServerProfile(data)
@@ -1871,6 +1899,48 @@
     }
   }
 
+  function workTypeLabel(key) {
+    const labels = {
+      GenerateElectricity: 'Elettricità',
+      EmitFlame: 'Accensione',
+      Cool: 'Raffreddamento',
+      Seeding: 'Semina',
+      Deforest: 'Disboscamento',
+      Handcraft: 'Lavoro manuale',
+      Watering: 'Irrigazione',
+      Transport: 'Trasporto',
+      Mining: 'Estrazione',
+      Medicine: 'Medicina',
+      ProductMedicine: 'Medicina',
+      GenerateOil: 'Produzione petrolio',
+    }
+    return labels[key] || key
+  }
+
+  function baseTooltipContent(base) {
+    const problems = Number(base.problem_worker_count) || 0
+    const rows = [
+      { text: base.guild_name },
+      { text: `${formatNumber(base.worker_count || 0)} Pal assegnati · ${formatNumber(base.working_count || 0)} al lavoro` },
+    ]
+    if (base.raid_active) rows.push({ text: 'Invasione attiva', className: 'danger' })
+    if (problems) {
+      const details = [
+        Number(base.sick_count) ? `${formatNumber(base.sick_count)} malati` : '',
+        Number(base.hungry_count) ? `${formatNumber(base.hungry_count)} affamati` : '',
+        Number(base.low_sanity_count) ? `${formatNumber(base.low_sanity_count)} SAN bassa` : '',
+      ].filter(Boolean).join(' · ')
+      rows.push({ text: details || `${formatNumber(problems)} da controllare`, className: 'warning' })
+    } else {
+      rows.push({ text: 'Nessuna criticità', className: 'ok' })
+    }
+    const activities = (base.work_types || [])
+      .map((entry) => `${workTypeLabel(entry.key)} ${formatNumber(entry.count)}`)
+      .join(' · ')
+    if (activities) rows.push({ text: `Attività: ${activities}` })
+    return { title: base.name || 'Base senza nome', rows }
+  }
+
   function renderBases() {
     const layer = $('#baseLayer')
     if (!layer) return
@@ -1887,19 +1957,74 @@
       node.style.setProperty('--base-color', baseGuildColor(base.group_id))
       const icon = document.createElement('span')
       node.appendChild(icon)
-      const guildName = base.guild_name
-      const playerCount = base.player_count || 0
-      const label = `${guildName}${playerCount ? ' (' + playerCount + ' membri)' : ''}`
-      node.dataset.name = label
-      node.addEventListener('pointerenter', () => showMapTooltip(node, label))
+      const tooltip = baseTooltipContent(base)
+      const label = `${tooltip.title} · ${base.guild_name}`
+      node.dataset.name = base.base_id || label
+      node.setAttribute('aria-label', label)
+      node.addEventListener('pointerenter', () => showMapTooltip(node, tooltip))
       node.addEventListener('pointerleave', hideMapTooltip)
-      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, label) })
+      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, tooltip) })
       layer.appendChild(node)
     }
   }
 
   function baseGuildColor(guildId) {
     return state.guildColors[guildId] || '#e5b85c'
+  }
+
+  function scheduleBasePoll() {
+    window.clearTimeout(state.baseTimer)
+    state.baseTimer = window.setTimeout(async () => {
+      if (!document.hidden) await loadBases()
+      scheduleBasePoll()
+    }, 300000)
+  }
+
+  function renderWorldSaveStatus(data) {
+    if (!elements.worldSaveStatus) return
+    state.worldSaveData = data
+    const world = data.world || {}
+    const entries = [
+      ['Giorno mondo', formatNumber(state.snapshot?.metrics?.days), 'Tempo di gioco', ''],
+      ['Invasioni attive', world.active_raid_count || 0, 'Basi sotto attacco', Number(world.active_raid_count) > 0 ? 'danger' : 'ok'],
+      ['Allarmi piattaforme', world.oil_rig_alert_count || 0, 'Oil rig in allerta', Number(world.oil_rig_alert_count) > 0 ? 'warning' : 'ok'],
+      ['Piattaforme completate', `${formatNumber(world.oil_rig_cleared_count || 0)}/${formatNumber(world.oil_rig_count || 0)}`, 'Stato salvato', ''],
+    ]
+    elements.worldSaveStatus.replaceChildren()
+    for (const [label, value, detail, className] of entries) {
+      const card = document.createElement('article')
+      if (className) card.className = className
+      const span = document.createElement('span')
+      const strong = document.createElement('strong')
+      const small = document.createElement('small')
+      span.textContent = label
+      strong.textContent = value
+      small.textContent = detail
+      card.append(span, strong, small)
+      elements.worldSaveStatus.appendChild(card)
+    }
+    setText(elements.worldSaveUpdated, `Snapshot aggiornato: ${formatDate(data.updated_at, true)}`)
+    elements.worldSaveNotice.hidden = true
+  }
+
+  async function loadWorldSaveStatus() {
+    if (!elements.worldSaveStatus) return
+    try {
+      renderWorldSaveStatus(await requestJson('/api/v1/guild/data', 'world-save', 10000))
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      setText(elements.worldSaveNotice, 'Stato del salvataggio temporaneamente non disponibile.')
+      elements.worldSaveNotice.hidden = false
+      elements.worldSaveNotice.classList.add('error')
+    }
+  }
+
+  function scheduleWorldSavePoll() {
+    window.clearTimeout(state.worldSaveTimer)
+    state.worldSaveTimer = window.setTimeout(async () => {
+      if (!document.hidden) await loadWorldSaveStatus()
+      scheduleWorldSavePoll()
+    }, 300000)
   }
 
   function scheduleHistoryPoll() {
@@ -2037,14 +2162,17 @@
       if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)
       if (elements.telemetryStats) loadTelemetryStats()
       if (elements.worldDiff) loadWorldDiff()
+      if (elements.mapViewport) loadBases().then(scheduleBasePoll)
+      if (elements.worldSaveStatus) loadWorldSaveStatus().then(scheduleWorldSavePoll)
     })
     if (elements.mapViewport) loadStaticPoints()
-    if (elements.mapViewport) loadBases()
+    if (elements.mapViewport) loadBases().then(scheduleBasePoll)
     snapshotLoop(true)
     if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
     if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)
     if (elements.telemetryStats) loadTelemetryStats()
     if (elements.worldDiff) loadWorldDiff()
+    if (elements.worldSaveStatus) loadWorldSaveStatus().then(scheduleWorldSavePoll)
   }
 
   initialize()

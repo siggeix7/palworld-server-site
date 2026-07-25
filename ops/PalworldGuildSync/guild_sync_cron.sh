@@ -7,4 +7,5 @@ set -a
 . "$SYNC_DIR/.env"
 set +a
 
-exec /usr/bin/python3 "$SYNC_DIR/guild_sync.py" >> /var/log/guild_sync.log 2>&1
+exec /usr/bin/flock -n /run/lock/palworld-guild-sync.lock \
+  /usr/bin/python3 "$SYNC_DIR/guild_sync.py" >> /var/log/guild_sync.log 2>&1

@@ -82,8 +82,7 @@
   </footer>
 
   <div class="connection-toast" id="connectionToast" role="status" aria-live="polite">Connessione ai dati in corso…</div>
-  {% block page_scripts %}
   <script src="{% static 'dashboard/js/site.js' %}" defer></script>
-  {% endblock %}
+  {% block page_scripts %}{% endblock %}
 </body>
 </html>

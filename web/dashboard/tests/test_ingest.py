@@ -77,15 +77,31 @@ class IngestTests(TestCase):
 
     def test_guild_ingest_stores_guilds_and_bases(self):
         payload = {
-            "guilds": [{"group_id": "guild-1", "guild_name": "Explorers"}],
+            "schema_version": 2,
+            "guilds": [{
+                "group_id": "aaaaaaaaaaaaaaaaaaaa",
+                "guild_name": "Explorers",
+                "pal_count": 24,
+                "worker_count": 8,
+                "working_count": 6,
+                "problem_worker_count": 1,
+                "players": [],
+            }],
             "bases": [
                 {
-                    "base_id": "base-1",
-                    "group_id": "guild-1",
+                    "base_id": "bbbbbbbbbbbbbbbbbbbb",
+                    "group_id": "aaaaaaaaaaaaaaaaaaaa",
+                    "name": "Forte Nord",
                     "location_x": -100,
                     "location_y": 200,
+                    "worker_count": 8,
+                    "problem_worker_count": 1,
+                    "work_types": [],
+                    "raid_active": False,
                 }
             ],
+            "world": {"active_raid_count": 0, "oil_rig_count": 3},
+            "diagnostics": {"unresolved_worker_count": 0},
         }
         response = self.client.post(
             "/api/v1/guild/ingest",
@@ -95,6 +111,81 @@ class IngestTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(GuildSnapshot.objects.get(pk=1).payload, payload)
+
+    def test_guild_ingest_requires_json_object_with_arrays(self):
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data="{}",
+            content_type="text/plain",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 415)
+
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps({"guilds": {}, "bases": []}),
+            content_type="application/json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertFalse(GuildSnapshot.objects.exists())
+
+    def test_guild_ingest_rejects_malformed_entries_and_unicode_token(self):
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps({
+                "schema_version": 2,
+                "guilds": [None],
+                "bases": [],
+                "world": {},
+                "diagnostics": {},
+            }),
+            content_type="application/json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 422)
+
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps({
+                "schema_version": 2,
+                "guilds": [{
+                    "group_id": "raw-guild-uuid",
+                    "guild_name": "Explorers",
+                    "players": [],
+                }],
+                "bases": [],
+                "world": {},
+                "diagnostics": {},
+            }),
+            content_type="application/json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 422)
+
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps({
+                "schema_version": 2,
+                "guilds": [],
+                "bases": [],
+                "world": {},
+                "diagnostics": {},
+            }),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer tåken",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    @override_settings(ZABBIX_CONNECTOR_TOKEN="")
+    def test_guild_ingest_rejects_when_token_is_not_configured(self):
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps({"guilds": [], "bases": []}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer test-connector-token",
+        )
+        self.assertEqual(response.status_code, 503)
 
     def test_rejects_invalid_content_type_and_ndjson(self):
         response = self.client.post(
