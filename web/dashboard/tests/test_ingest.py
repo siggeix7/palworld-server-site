@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from dashboard.models import (
     ConnectorBatch,
+    GuildSnapshot,
     LatestDataset,
     MetricSample,
     Player,
@@ -73,6 +74,27 @@ class IngestTests(TestCase):
             content_type="application/x-ndjson",
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_guild_ingest_stores_guilds_and_bases(self):
+        payload = {
+            "guilds": [{"group_id": "guild-1", "guild_name": "Explorers"}],
+            "bases": [
+                {
+                    "base_id": "base-1",
+                    "group_id": "guild-1",
+                    "location_x": -100,
+                    "location_y": 200,
+                }
+            ],
+        }
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(GuildSnapshot.objects.get(pk=1).payload, payload)
 
     def test_rejects_invalid_content_type_and_ndjson(self):
         response = self.client.post(

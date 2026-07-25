@@ -1,0 +1,8 @@
+.env
+*.log
+Level*.sav
+Level*.json
+Level*.bin
+*.zip
+__pycache__/
+*.pyc

@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from dashboard.models import UserProfile
+from dashboard.models import GuildSnapshot, UserProfile
 
 
 @override_settings(
@@ -67,6 +67,17 @@ class SectionPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "play.example.com")
         self.assertContains(response, "game-server-secret")
+
+    def test_guild_data_exposes_bases_to_approved_members(self):
+        GuildSnapshot.objects.create(
+            payload={
+                "guilds": [{"group_id": "guild-1", "guild_name": "Explorers"}],
+                "bases": [{"base_id": "base-1", "group_id": "guild-1"}],
+            }
+        )
+        response = self.client.get(reverse("guild-data"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["bases"][0]["base_id"], "base-1")
 
     def test_anonymous_visitors_are_redirected_to_login(self):
         self.client.logout()

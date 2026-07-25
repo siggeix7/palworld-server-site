@@ -22,6 +22,7 @@
     points: { fast_travel: [], boss_tower: [] },
     bases: [],
     guildNames: {},
+    guildColors: {},
     heatmap: { cells: [], maxCount: 0, grid: 48, range: '24h', loaded: false, enabled: false },
     historySamples: [],
     historyWindow: null,
@@ -1644,6 +1645,7 @@
       input.addEventListener('change', (event) => {
         if (key === 'players') layer.hidden = !event.target.checked
         else layer.classList.toggle('visible', event.target.checked)
+        if (key === 'bases' && event.target.checked) renderBases()
         writeStorage(`observatory.map.${key}`, event.target.checked ? '1' : '0')
       })
     }
@@ -1851,6 +1853,14 @@
       for (const g of data.guilds || []) {
         state.guildNames[g.group_id] = g.guild_name || g.group_name || ''
       }
+      const guildIds = [...new Set([
+        ...(data.guilds || []).map((guild) => guild.group_id),
+        ...(data.bases || []).map((base) => base.group_id),
+      ].filter(Boolean))].sort()
+      state.guildColors = Object.fromEntries(guildIds.map((guildId, index) => [
+        guildId,
+        `hsl(${(18 + index * 360 / guildIds.length).toFixed(2)} 78% 54%)`,
+      ]))
       state.bases = (data.bases || []).map((b) => ({
         ...b,
         guild_name: state.guildNames[b.group_id] || 'Senza gilda',
@@ -1889,11 +1899,7 @@
   }
 
   function baseGuildColor(guildId) {
-    if (!guildId) return '#e5b85c'
-    const GUILD_COLORS = ['#e5b85c', '#4ce0c1', '#63b7ff', '#ff735c', '#a5ddff', '#d946ef', '#22c55e', '#f97316']
-    let hash = 0
-    for (let i = 0; i < guildId.length; i++) hash = ((hash << 5) - hash + guildId.charCodeAt(i)) | 0
-    return GUILD_COLORS[Math.abs(hash) % GUILD_COLORS.length]
+    return state.guildColors[guildId] || '#e5b85c'
   }
 
   function scheduleHistoryPoll() {
