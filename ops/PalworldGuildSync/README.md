@@ -26,8 +26,10 @@ Run a manual synchronization with:
 ## Repository Policy
 
 The live `.env`, converted saves, JSON dumps, backups, and downloaded tool
-archives must not be committed. The scripts under `tools/` are maintenance
-utilities and are not called by cron.
+archives must not be committed. The scripts under `tools/` consolidate the
+old inspection/conversion experiments and are not called by cron. One-off
+save mutation scripts are intentionally not tracked because they contained
+live player/base UUIDs and were specific to a completed migration.
 
 The save currently exposes useful data including guilds, base camps, PalBox
 objects and health, characters/Pals, dungeons, enemy camps, items, and world
