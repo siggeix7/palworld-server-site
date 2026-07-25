@@ -186,11 +186,12 @@ def guild_ingest(request):
 @never_cache
 @login_required
 def guild_data(request):
-    _admin_required(request)
     snapshot = GuildSnapshot.objects.first()
     if not snapshot:
-        return JsonResponse({"guilds": [], "updated_at": None})
+        return JsonResponse({"guilds": [], "bases": [], "updated_at": None})
+    payload = snapshot.payload
     return JsonResponse({
-        "guilds": snapshot.payload.get("guilds", []),
+        "guilds": payload.get("guilds", []),
+        "bases": payload.get("bases", []),
         "updated_at": snapshot.updated_at.isoformat(),
     })

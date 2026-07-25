@@ -29,6 +29,7 @@
           <label><input type="checkbox" id="showPlayers" checked> Giocatori</label>
           <label><input type="checkbox" id="showFastTravel"> Viaggi rapidi</label>
           <label><input type="checkbox" id="showTowers"> Torri</label>
+          <label><input type="checkbox" id="showBases" checked> Basi</label>
           <label><input type="checkbox" id="showTrail" checked> Traccia</label>
           <label><input type="checkbox" id="showHeatmap"> Calore presenze</label>
           <label><input type="checkbox" id="followPlayer" disabled> Segui</label>
@@ -57,6 +58,7 @@
           <canvas class="heatmap-layer" id="heatmapLayer" aria-hidden="true"></canvas>
           <div class="poi-layer fast-travel-layer" id="fastTravelLayer" aria-hidden="true"></div>
           <div class="poi-layer tower-layer" id="towerLayer" aria-hidden="true"></div>
+          <div class="poi-layer base-layer" id="baseLayer" aria-hidden="true"></div>
           <div class="player-layer" id="playerLayer"></div>
         </div>
         <div class="map-coordinate" id="mapCoordinate">X -- / Y --</div>
@@ -83,6 +85,7 @@
         <span><i class="legend-player"></i> Giocatore</span>
         <span><i class="legend-fast"></i> Viaggio rapido</span>
         <span><i class="legend-tower"></i> Torre</span>
+        <span><i class="legend-base"></i> Base</span>
         <span><i class="legend-heat"></i> Calore presenze</span>
       </div>
     </aside>

@@ -20,6 +20,8 @@
     selectedPlayer: null,
     map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false, pointers: new Map(), pinchDistance: 0, pinchScale: 1 },
     points: { fast_travel: [], boss_tower: [] },
+    bases: [],
+    guildNames: {},
     heatmap: { cells: [], maxCount: 0, grid: 48, range: '24h', loaded: false, enabled: false },
     historySamples: [],
     historyWindow: null,
@@ -69,6 +71,7 @@
     mapCoordinate: $('#mapCoordinate'),
     mapEmpty: $('#mapEmpty'),
     playerLayer: $('#playerLayer'),
+    baseLayer: $('#baseLayer'),
     fastTravelLayer: $('#fastTravelLayer'),
     towerLayer: $('#towerLayer'),
     trailLayer: $('#trailLayer'),
@@ -1630,6 +1633,7 @@
       ['showPlayers', elements.playerLayer, 'players', true],
       ['showFastTravel', elements.fastTravelLayer, 'fastTravel', false],
       ['showTowers', elements.towerLayer, 'towers', false],
+      ['showBases', elements.baseLayer, 'bases', true],
     ]
     for (const [inputId, layer, key, defaultVisible] of layerPreferences) {
       const input = $(`#${inputId}`)
@@ -1839,6 +1843,59 @@
     }
   }
 
+  async function loadBases() {
+    if (!elements.mapViewport || !elements.playerLayer) return
+    try {
+      const data = await requestJson('/api/v1/guild/data', 'bases', 10000)
+      state.guildNames = {}
+      for (const g of data.guilds || []) {
+        state.guildNames[g.group_id] = g.guild_name || g.group_name || ''
+      }
+      state.bases = (data.bases || []).map((b) => ({
+        ...b,
+        guild_name: state.guildNames[b.group_id] || 'Senza gilda',
+      }))
+      renderBases()
+    } catch (_error) {
+      // Bases are optional
+    }
+  }
+
+  function renderBases() {
+    const layer = $('#baseLayer')
+    if (!layer) return
+    layer.replaceChildren()
+    const toggle = $('#showBases')
+    if (toggle && !toggle.checked) return
+    for (const base of state.bases) {
+      const position = worldToPercent(base.location_x, base.location_y)
+      const node = document.createElement('button')
+      node.type = 'button'
+      node.className = 'map-marker base'
+      node.style.left = `${position.left}%`
+      node.style.top = `${position.top}%`
+      node.style.setProperty('--base-color', baseGuildColor(base.group_id))
+      const icon = document.createElement('span')
+      node.appendChild(icon)
+      const guildName = base.guild_name
+      const playerCount = base.player_count || 0
+      const label = `${guildName}${playerCount ? ' (' + playerCount + ' membri)' : ''}`
+      node.dataset.name = label
+      node.addEventListener('pointerenter', () => showMapTooltip(node, label))
+      node.addEventListener('pointerleave', hideMapTooltip)
+      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, label) })
+      layer.appendChild(node)
+    }
+  }
+
+  function baseGuildColor(guildId) {
+    if (!guildId) return '#e5b85c'
+    const GUILD_COLORS = ['#e5b85c', '#4ce0c1', '#63b7ff', '#ff735c', '#a5ddff', '#d946ef', '#22c55e', '#f97316']
+    let hash = 0
+    for (let i = 0; i < guildId.length; i++) hash = ((hash << 5) - hash + guildId.charCodeAt(i)) | 0
+    return GUILD_COLORS[Math.abs(hash) % GUILD_COLORS.length]
+  }
+
   function scheduleHistoryPoll() {
     window.clearTimeout(state.historyTimer)
     state.historyTimer = window.setTimeout(async () => {
@@ -1976,6 +2033,7 @@
       if (elements.worldDiff) loadWorldDiff()
     })
     if (elements.mapViewport) loadStaticPoints()
+    if (elements.mapViewport) loadBases()
     snapshotLoop(true)
     if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
     if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)

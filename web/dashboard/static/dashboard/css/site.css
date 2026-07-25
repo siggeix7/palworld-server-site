@@ -193,6 +193,8 @@ main { overflow-x: hidden; }
 .poi-layer.visible { display: block; }
 .map-marker.fast > span { width: 10px; height: 10px; transform: rotate(45deg) scale(var(--inverse-scale)); background: var(--blue); border: 2px solid white; box-shadow: 0 0 7px var(--blue); }
 .map-marker.tower > span { width: 12px; height: 12px; transform: scale(var(--inverse-scale)); background: var(--gold); clip-path: polygon(50% 0, 100% 100%, 0 100%); filter: drop-shadow(0 0 4px var(--gold)); }
+.map-marker.base { z-index: 2; }
+.map-marker.base > span { width: 20px; height: 20px; transform: scale(var(--inverse-scale)); border: 3px solid var(--paper); border-radius: 4px; background: var(--base-color, var(--gold)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--base-color, var(--gold)) 25%, transparent), 0 3px 10px rgba(0,0,0,.5); }
 .map-coordinate { position: absolute; right: .8rem; bottom: .8rem; padding: .35rem .55rem; color: var(--paper); background: rgba(6,23,25,.82); font-family: ui-monospace, monospace; font-size: .68rem; pointer-events: none; }
 .map-empty { position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%); display: none; padding: .65rem 1rem; color: var(--paper); background: rgba(6,23,25,.88); border: 1px solid var(--line); text-align: center; pointer-events: none; }
 .map-empty.visible { display: block; }
@@ -227,6 +229,7 @@ main { overflow-x: hidden; }
 .legend-player { border-radius: 50%; background: var(--coral); }
 .legend-fast { background: var(--blue); transform: rotate(45deg); }
 .legend-tower { background: var(--gold); clip-path: polygon(50% 0,100% 100%,0 100%); }
+.legend-base { border: 2px solid var(--paper); border-radius: 3px; background: var(--gold); }
 .legend-heat { background: var(--coral); opacity: .6; border-radius: 2px; }
 .empty-copy { color: var(--paper-dim); font-size: .8rem; }
 
