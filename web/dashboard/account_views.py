@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
@@ -15,7 +16,13 @@ from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.urls import reverse_lazy
 
-from .accounts import get_user_profile, has_site_access, is_site_admin
+from .accounts import (
+    get_user_profile,
+    has_site_access,
+    is_site_admin,
+    needs_terms_acceptance,
+    stamp_terms_acceptance,
+)
 from .emails import (
     notify_admins_of_pending_user,
     send_approval_email,
@@ -89,6 +96,7 @@ def register(request):
             )
             return render(request, "dashboard/accounts/register.html", {"form": form})
         get_user_profile(user)
+        stamp_terms_acceptance(get_user_profile(user))
         try:
             send_verification_email(request, user)
             messages.success(request, "Account creato. Controlla la tua email per confermarlo.")
@@ -174,7 +182,33 @@ def pending_approval(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 @never_cache
+def accept_terms(request):
+    profile = get_user_profile(request.user)
+    if not needs_terms_acceptance(profile):
+        return redirect("home")
+    if request.method == "POST" and request.POST.get("accept_terms") == "1":
+        stamp_terms_acceptance(profile)
+        messages.success(request, "Condizioni d'uso accettate. Benvenuto!")
+        return redirect(request.GET.get("next") or "home")
+    return render(
+        request,
+        "dashboard/accounts/accept_terms.html",
+        {
+            "site_admin": is_site_admin(request.user),
+            "profile": profile,
+            "terms_version": settings.CURRENT_TERMS_VERSION,
+            "terms_effective_date": settings.CURRENT_TERMS_EFFECTIVE_DATE,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+@never_cache
 def members(request):
+    profile = get_user_profile(request.user)
+    if needs_terms_acceptance(profile):
+        return redirect("accept-terms")
     if not is_site_admin(request.user) or not has_site_access(request.user):
         raise PermissionDenied
     if request.method == "POST":
@@ -217,6 +251,8 @@ def members(request):
 @require_http_methods(["GET", "POST"])
 @never_cache
 def delete_member(request, profile_id):
+    if needs_terms_acceptance(get_user_profile(request.user)):
+        return redirect("accept-terms")
     if not is_site_admin(request.user) or not has_site_access(request.user):
         raise PermissionDenied
     profile = get_object_or_404(

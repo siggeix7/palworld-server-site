@@ -33,3 +33,13 @@ def has_site_access(user):
         return False
     profile = get_user_profile(user)
     return profile.email_verified and profile.approved
+
+
+def needs_terms_acceptance(profile):
+    return profile.terms_version != settings.CURRENT_TERMS_VERSION
+
+
+def stamp_terms_acceptance(profile):
+    profile.terms_accepted_at = timezone.now()
+    profile.terms_version = settings.CURRENT_TERMS_VERSION
+    profile.save(update_fields=["terms_accepted_at", "terms_version"])

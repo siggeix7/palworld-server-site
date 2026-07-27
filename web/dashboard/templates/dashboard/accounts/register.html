@@ -11,7 +11,15 @@
   </div>
   <form method="post" class="auth-form">
     {% csrf_token %}
-    {{ form.as_p }}
+    {{ form.username.as_field_group }}
+    {{ form.email.as_field_group }}
+    {{ form.password1.as_field_group }}
+    {{ form.password2.as_field_group }}
+    <label class="terms-check">
+      <input type="checkbox" name="accept_terms" value="1"{% if form.accept_terms.value %} checked{% endif %} required>
+      Ho letto e accetto le <a href="{% url 'terms' %}" target="_blank" rel="noopener">condizioni d'uso e l'informativa sulla privacy</a>.
+    </label>
+    {% if form.accept_terms.errors %}<ul class="errorlist"><li>{{ form.accept_terms.errors|join:" " }}</li></ul>{% endif %}
     <button type="submit">Registrati</button>
   </form>
   <div class="auth-links"><a href="{% url 'login' %}">Hai già un account? Accedi</a></div>

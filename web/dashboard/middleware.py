@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import patch_cache_control
 
-from .accounts import get_user_profile
+from .accounts import get_user_profile, needs_terms_acceptance
 from .models import AuthThrottle
 
 
@@ -66,7 +66,12 @@ def _consume_auth_attempt(request, scope, limit, window):
 
 class SiteAccessMiddleware:
     public_prefixes = ("/accounts/", "/static/")
-    public_paths = ("/healthz/", "/api/v1/zabbix/ingest", "/api/v1/guild/ingest")
+    public_paths = (
+        "/healthz/",
+        "/api/v1/zabbix/ingest",
+        "/api/v1/guild/ingest",
+        "/termini/",
+    )
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -91,6 +96,10 @@ class SiteAccessMiddleware:
             if request.path.startswith("/api/"):
                 return JsonResponse({"error": "password change required"}, status=403)
             return redirect("password_change")
+        if needs_terms_acceptance(profile):
+            if request.path.startswith("/api/"):
+                return JsonResponse({"error": "terms acceptance required"}, status=403)
+            return redirect("accept-terms")
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):

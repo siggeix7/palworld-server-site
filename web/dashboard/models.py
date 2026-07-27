@@ -111,6 +111,8 @@ class UserProfile(models.Model):
         on_delete=models.SET_NULL,
         related_name="approved_site_profiles",
     )
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    terms_version = models.CharField(max_length=32, blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]

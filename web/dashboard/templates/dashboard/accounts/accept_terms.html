@@ -1,0 +1,24 @@
+{% extends "dashboard/accounts/base.html" %}
+{% block title %}Condizioni d'uso{% endblock %}
+{% block content %}
+  <p class="eyebrow">Consenso GDPR</p>
+  <h1>Condizioni d'uso del sito</h1>
+  <p class="auth-copy">
+    Per poter accedere al sito devi leggere e accettare le condizioni d'uso e l'informativa sulla privacy
+    (versione {{ terms_version }}) in vigore dal {{ terms_effective_date }}.
+  </p>
+  <div class="terms-scroll">
+    {% include "dashboard/_terms_content.html" %}
+  </div>
+  <form method="post" class="auth-form terms-form">
+    {% csrf_token %}
+    <label class="terms-check">
+      <input type="checkbox" name="accept_terms" value="1" required>
+      Ho letto e accetto le condizioni d'uso e l'informativa sulla privacy.
+    </label>
+    <button type="submit">Accetta e prosegui</button>
+  </form>
+  <form method="post" action="{% url 'logout' %}" class="auth-form compact-form">
+    {% csrf_token %}<button type="submit">Esci senza accettare</button>
+  </form>
+{% endblock %}

@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -142,7 +143,13 @@ class NewPageTests(TestCase):
         user = get_user_model().objects.create_user(
             username=username, email=email, password=self.password
         )
-        UserProfile.objects.create(user=user, email_verified=True, approved=True)
+        UserProfile.objects.create(
+            user=user,
+            email_verified=True,
+            approved=True,
+            terms_version=settings.CURRENT_TERMS_VERSION,
+            terms_accepted_at=timezone.now(),
+        )
         return user
 
     def setUp(self):

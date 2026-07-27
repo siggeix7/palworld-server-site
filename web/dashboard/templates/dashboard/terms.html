@@ -1,0 +1,17 @@
+{% extends "dashboard/base.html" %}
+{% load static %}
+{% block title %}Condizioni d'uso e informativa privacy{% endblock %}
+{% block meta_description %}Condizioni d'uso e informativa sulla protezione dei dati personali (GDPR){% endblock %}
+{% block page_key %}terms{% endblock %}
+{% block content %}
+  <section class="page-section terms-page">
+    <header class="section-head">
+      <p class="eyebrow">Area legale</p>
+      <h1>Condizioni d'uso e informativa privacy</h1>
+    </header>
+    {% include "dashboard/_terms_content.html" %}
+    <div class="terms-actions">
+      <a href="{% url 'home' %}" class="btn">Torna alla home</a>
+    </div>
+  </section>
+{% endblock %}

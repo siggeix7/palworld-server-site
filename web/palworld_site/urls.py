@@ -38,6 +38,11 @@ urlpatterns = [
         name="resend-verification",
     ),
     path("accounts/pending/", account_views.pending_approval, name="pending-approval"),
+    path(
+        "accounts/accept-terms/",
+        account_views.accept_terms,
+        name="accept-terms",
+    ),
     path("accounts/members/", account_views.members, name="members"),
     path(
         "accounts/members/<int:profile_id>/delete/",
@@ -79,6 +84,7 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path("", views.home, name="home"),
+    path("termini/", views.terms_page, name="terms"),
     path("vm/", views.vm_dashboard, name="vm-dashboard"),
     path("mappa/", views.map_page, name="map"),
     path("telemetria/", views.telemetry_page, name="telemetry"),

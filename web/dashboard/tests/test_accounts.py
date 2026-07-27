@@ -1,10 +1,12 @@
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.db import IntegrityError, transaction
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -36,18 +38,23 @@ class AccountAccessTests(TestCase):
         verified=False,
         approved=False,
         must_change_password=False,
+        accepted_terms=True,
     ):
         user = get_user_model().objects.create_user(
             username=username,
             email=email,
             password=self.password,
         )
-        UserProfile.objects.create(
+        profile_kwargs = dict(
             user=user,
             email_verified=verified,
             approved=approved,
             must_change_password=must_change_password,
         )
+        if accepted_terms:
+            profile_kwargs["terms_version"] = settings.CURRENT_TERMS_VERSION
+            profile_kwargs["terms_accepted_at"] = timezone.now()
+        UserProfile.objects.create(**profile_kwargs)
         return user
 
     def create_admin(self):
@@ -138,6 +145,7 @@ class AccountAccessTests(TestCase):
                 "email": "NewMember@Example.com",
                 "password1": self.password,
                 "password2": self.password,
+                "accept_terms": "1",
             },
         )
 
@@ -146,6 +154,11 @@ class AccountAccessTests(TestCase):
         self.assertEqual(user.email, "newmember@example.com")
         self.assertFalse(user.site_profile.email_verified)
         self.assertFalse(user.site_profile.approved)
+        self.assertIsNotNone(user.site_profile.terms_accepted_at)
+        self.assertEqual(
+            user.site_profile.terms_version,
+            "2026-07-27",
+        )
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("https://palworld.example.com/accounts/verify/", mail.outbox[0].body)
 
@@ -167,6 +180,7 @@ class AccountAccessTests(TestCase):
                 "email": "proxy@example.com",
                 "password1": self.password,
                 "password2": self.password,
+                "accept_terms": "1",
             },
             secure=True,
             HTTP_HOST="internal.example",
@@ -540,3 +554,134 @@ class AccountAccessTests(TestCase):
 
         self.assertRedirects(response, reverse("password_reset_done"))
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_terms_page_is_public_and_includes_version_and_date(self):
+        response = self.client.get(reverse("terms"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Condizioni d'uso e informativa privacy")
+        self.assertContains(response, settings.CURRENT_TERMS_VERSION)
+        self.assertContains(response, settings.CURRENT_TERMS_EFFECTIVE_DATE)
+        response = self.create_user(verified=True, approved=True)
+        self.client.force_login(response)
+        authed_response = self.client.get(reverse("terms"))
+        self.assertEqual(authed_response.status_code, 200)
+        self.assertIn("no-store", authed_response.headers["Cache-Control"])
+
+    def test_register_rejects_missing_terms_acceptance(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "username": "NoTermsUser",
+                "email": "noterms@example.com",
+                "password1": self.password,
+                "password2": self.password,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(get_user_model().objects.filter(username="NoTermsUser").exists())
+        self.assertContains(response, "accetto")
+
+    def test_existing_user_without_terms_is_redirected_on_first_login(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        response = self.client.get(reverse("home"))
+        self.assertRedirects(
+            response,
+            reverse("accept-terms"),
+            fetch_redirect_response=False,
+        )
+
+    def test_api_request_returns_403_when_terms_pending(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        response = self.client.get(reverse("snapshot"))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"error": "terms acceptance required"})
+
+    def test_accept_terms_post_stamps_profile_and_redirects_home(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        response = self.client.post(reverse("accept-terms"), {"accept_terms": "1"})
+        self.assertRedirects(response, reverse("home"))
+        user.site_profile.refresh_from_db()
+        self.assertEqual(user.site_profile.terms_version, settings.CURRENT_TERMS_VERSION)
+        self.assertIsNotNone(user.site_profile.terms_accepted_at)
+
+    def test_get_accept_terms_page_shows_form_for_requires_acceptance_user(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        response = self.client.get(reverse("accept-terms"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Accetta e prosegui")
+        self.assertContains(response, settings.CURRENT_TERMS_VERSION)
+
+    def test_accept_terms_redirects_already_compliant_user_to_home(self):
+        user = self.create_user(verified=True, approved=True)
+        self.client.force_login(user)
+        response = self.client.get(reverse("accept-terms"))
+        self.assertRedirects(response, reverse("home"))
+
+    def test_accept_terms_does_not_stamp_when_checkbox_not_set(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        response = self.client.post(reverse("accept-terms"), {})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Accetta e prosegui")
+        user.site_profile.refresh_from_db()
+        self.assertEqual(user.site_profile.terms_version, "")
+        self.assertIsNone(user.site_profile.terms_accepted_at)
+
+    def test_terms_pending_user_can_still_logout(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        self.assertIsNotNone(self.client.session.get("_auth_user_id"))
+        response = self.client.post(reverse("logout"))
+        self.assertRedirects(response, reverse("login"))
+        self.assertIsNone(self.client.session.get("_auth_user_id"))
+
+    def test_configured_admin_must_accept_terms_before_managing_members(self):
+        admin = self.create_user(
+            username="administrator",
+            email="admin@example.com",
+            verified=True,
+            accepted_terms=False,
+        )
+        get_user_profile(admin)
+        self.client.force_login(admin)
+        members_response = self.client.get(reverse("members"))
+        self.assertRedirects(
+            members_response,
+            reverse("accept-terms"),
+            fetch_redirect_response=False,
+        )
+        self.client.post(reverse("accept-terms"), {"accept_terms": "1"})
+        admin.site_profile.refresh_from_db()
+        self.assertEqual(admin.site_profile.terms_version, settings.CURRENT_TERMS_VERSION)
+        response = self.client.get(reverse("members"))
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(CURRENT_TERMS_VERSION="2099-01-01")
+    def test_terms_version_bump_requires_reacceptance(self):
+        user = get_user_model().objects.create_user(
+            username="bumpmember",
+            email="bump@example.com",
+            password=self.password,
+        )
+        UserProfile.objects.create(
+            user=user,
+            email_verified=True,
+            approved=True,
+            terms_version="2026-07-27",
+            terms_accepted_at=timezone.now(),
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse("home"))
+        self.assertRedirects(
+            response,
+            reverse("accept-terms"),
+            fetch_redirect_response=False,
+        )
+        self.client.post(reverse("accept-terms"), {"accept_terms": "1"})
+        user.site_profile.refresh_from_db()
+        self.assertEqual(user.site_profile.terms_version, "2099-01-01")
+        self.assertEqual(self.client.get(reverse("home")).status_code, 200)

@@ -281,6 +281,21 @@ def home(request):
 
 @require_GET
 @never_cache
+def terms_page(request):
+    return render(
+        request,
+        "dashboard/terms.html",
+        _shared_context(
+            request,
+            active_nav="terms",
+            terms_version=settings.CURRENT_TERMS_VERSION,
+            terms_effective_date=settings.CURRENT_TERMS_EFFECTIVE_DATE,
+        ),
+    )
+
+
+@require_GET
+@never_cache
 def map_page(request):
     return render(request, "dashboard/map.html", _shared_context(request, active_nav="map"))
 

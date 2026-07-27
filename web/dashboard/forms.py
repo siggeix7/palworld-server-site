@@ -25,6 +25,10 @@ class RegistrationForm(UserCreationForm):
         max_length=254,
         widget=forms.EmailInput(attrs={"autocomplete": "email"}),
     )
+    accept_terms = forms.BooleanField(
+        required=True,
+        label="Ho letto e accetto le condizioni d'uso e l'informativa sulla privacy",
+    )
 
     class Meta(UserCreationForm.Meta):
         model = get_user_model()

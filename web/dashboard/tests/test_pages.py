@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -31,6 +32,8 @@ class SectionPageTests(TestCase):
             user=user,
             email_verified=True,
             approved=True,
+            terms_version=settings.CURRENT_TERMS_VERSION,
+            terms_accepted_at=timezone.now(),
         )
         if admin:
             self.assertEqual(email, "admin@example.com")
@@ -49,6 +52,7 @@ class SectionPageTests(TestCase):
             ("world", "Mondo"),
             ("activity", "Attività"),
             ("vm-dashboard", "Stato della VM"),
+            ("terms", "Condizioni d'uso e informativa privacy"),
         ]
         for name, title in pages:
             with self.subTest(page=name):

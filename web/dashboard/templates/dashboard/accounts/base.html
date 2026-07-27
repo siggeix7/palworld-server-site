@@ -23,7 +23,10 @@
       {% endif %}
       {% block content %}{% endblock %}
     </section>
-    <p class="auth-credit"><a href="{% static 'dashboard/THIRD_PARTY_NOTICES.txt' %}">Licenze e crediti</a></p>
+    <p class="auth-credit">
+      <a href="{% url 'terms' %}">Condizioni d'uso e privacy</a>
+      · <a href="{% static 'dashboard/THIRD_PARTY_NOTICES.txt' %}">Licenze e crediti</a>
+    </p>
   </main>
 </body>
 </html>
