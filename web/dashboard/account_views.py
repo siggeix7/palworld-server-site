@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -10,11 +11,11 @@ from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
+from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_decode
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 
 from .accounts import (
     get_user_profile,
@@ -28,7 +29,12 @@ from .emails import (
     send_approval_email,
     send_verification_email,
 )
-from .forms import RegistrationForm, ResendVerificationForm, UsernameChangeForm
+from .forms import (
+    RegistrationForm,
+    ResendVerificationForm,
+    TermsAcceptanceForm,
+    UsernameChangeForm,
+)
 from .models import UserProfile
 from .tokens import email_verification_token
 
@@ -51,6 +57,35 @@ def _notify_admins_if_needed(request, user, profile):
     if sent:
         profile.admin_notified_at = timezone.now()
         profile.save(update_fields=["admin_notified_at"])
+
+
+def _safe_next_url(request):
+    target = request.POST.get("next") or request.GET.get("next")
+    if target and url_has_allowed_host_and_scheme(
+        target,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return target
+    return reverse("home")
+
+
+class SiteLoginView(auth_views.LoginView):
+    template_name = "dashboard/accounts/login.html"
+    redirect_authenticated_user = True
+
+    def get_success_url(self):
+        success_url = super().get_success_url()
+        profile = get_user_profile(self.request.user)
+        if (
+            profile.email_verified
+            and profile.approved
+            and not profile.must_change_password
+            and needs_terms_acceptance(profile)
+        ):
+            query = urlencode({"next": success_url})
+            return f"{reverse('accept-terms')}?{query}"
+        return success_url
 
 
 @method_decorator(login_required, name="dispatch")
@@ -85,7 +120,10 @@ class SitePasswordResetConfirmView(auth_views.PasswordResetConfirmView):
 def register(request):
     if request.user.is_authenticated:
         return redirect("home" if has_site_access(request.user) else "pending-approval")
-    form = RegistrationForm(request.POST or None)
+    form = RegistrationForm(
+        request.POST or None,
+        current_version=settings.CURRENT_TERMS_VERSION,
+    )
     if request.method == "POST" and form.is_valid():
         try:
             user = form.save()
@@ -107,6 +145,13 @@ def register(request):
                 "Account creato, ma l'email non è stata inviata. Riprova dalla pagina di reinvio.",
             )
         return redirect("registration-done")
+    if request.method == "POST" and form.has_error("terms_version"):
+        messages.error(
+            request,
+            "Le condizioni sono cambiate mentre la pagina era aperta. "
+            "Rileggile e completa nuovamente la registrazione.",
+        )
+        form = RegistrationForm(current_version=settings.CURRENT_TERMS_VERSION)
     return render(request, "dashboard/accounts/register.html", {"form": form})
 
 
@@ -184,20 +229,36 @@ def pending_approval(request):
 @never_cache
 def accept_terms(request):
     profile = get_user_profile(request.user)
+    next_url = _safe_next_url(request)
     if not needs_terms_acceptance(profile):
-        return redirect("home")
-    if request.method == "POST" and request.POST.get("accept_terms") == "1":
+        return redirect(next_url)
+    form = TermsAcceptanceForm(
+        request.POST or None,
+        current_version=settings.CURRENT_TERMS_VERSION,
+    )
+    if request.method == "POST" and form.is_valid():
         stamp_terms_acceptance(profile)
-        messages.success(request, "Condizioni d'uso accettate. Benvenuto!")
-        return redirect(request.GET.get("next") or "home")
+        messages.success(request, "Nuove condizioni accettate correttamente.")
+        return redirect(next_url)
+    if request.method == "POST" and form.has_error("terms_version"):
+        messages.error(
+            request,
+            "Le condizioni sono cambiate mentre la pagina era aperta. "
+            "Rileggi la versione aggiornata e conferma nuovamente.",
+        )
+        form = TermsAcceptanceForm(current_version=settings.CURRENT_TERMS_VERSION)
     return render(
         request,
         "dashboard/accounts/accept_terms.html",
         {
             "site_admin": is_site_admin(request.user),
             "profile": profile,
+            "form": form,
+            "next_url": next_url,
             "terms_version": settings.CURRENT_TERMS_VERSION,
             "terms_effective_date": settings.CURRENT_TERMS_EFFECTIVE_DATE,
+            "privacy_controller_name": settings.PRIVACY_CONTROLLER_NAME,
+            "privacy_contact_email": settings.PRIVACY_CONTACT_EMAIL,
         },
     )
 

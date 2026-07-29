@@ -29,10 +29,17 @@ class RegistrationForm(UserCreationForm):
         required=True,
         label="Ho letto e accetto le condizioni d'uso e l'informativa sulla privacy",
     )
+    terms_version = forms.CharField(widget=forms.HiddenInput)
 
     class Meta(UserCreationForm.Meta):
         model = get_user_model()
         fields = ("username", "email")
+
+    def __init__(self, *args, current_version, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_version = current_version
+        if not self.is_bound:
+            self.initial["terms_version"] = current_version
 
     def clean_username(self):
         username = self.cleaned_data["username"]
@@ -65,12 +72,45 @@ class RegistrationForm(UserCreationForm):
             raise forms.ValidationError("Questa email non è disponibile.")
         return email
 
+    def clean_terms_version(self):
+        version = self.cleaned_data["terms_version"]
+        if version != self.current_version:
+            raise forms.ValidationError(
+                "Le condizioni sono state aggiornate: rileggile prima di registrarti."
+            )
+        return version
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = self.cleaned_data["email"]
         if commit:
             user.save()
         return user
+
+
+class TermsAcceptanceForm(forms.Form):
+    terms_version = forms.CharField(widget=forms.HiddenInput)
+    accept_terms = forms.BooleanField(
+        required=True,
+        label=(
+            "Dichiaro di aver letto integralmente l'informativa privacy e "
+            "accetto le condizioni d'uso"
+        ),
+    )
+
+    def __init__(self, *args, current_version, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_version = current_version
+        if not self.is_bound:
+            self.initial["terms_version"] = current_version
+
+    def clean_terms_version(self):
+        version = self.cleaned_data["terms_version"]
+        if version != self.current_version:
+            raise forms.ValidationError(
+                "Le condizioni sono state aggiornate: rileggile prima di accettare."
+            )
+        return version
 
 
 class ResendVerificationForm(forms.Form):

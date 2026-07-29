@@ -11,6 +11,8 @@
   </div>
   <form method="post" class="auth-form">
     {% csrf_token %}
+    {{ form.terms_version }}
+    {% if form.terms_version.errors %}{{ form.terms_version.errors }}{% endif %}
     {{ form.username.as_field_group }}
     {{ form.email.as_field_group }}
     {{ form.password1.as_field_group }}

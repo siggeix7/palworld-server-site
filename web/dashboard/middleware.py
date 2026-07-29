@@ -65,12 +65,22 @@ def _consume_auth_attempt(request, scope, limit, window):
 
 
 class SiteAccessMiddleware:
-    public_prefixes = ("/accounts/", "/static/")
-    public_paths = (
+    access_exempt_prefixes = ("/static/", "/accounts/verify/", "/accounts/reset/")
+    access_exempt_paths = (
         "/healthz/",
         "/api/v1/zabbix/ingest",
         "/api/v1/guild/ingest",
         "/termini/",
+        "/accounts/login/",
+        "/accounts/logout/",
+        "/accounts/register/",
+        "/accounts/register/done/",
+        "/accounts/resend-verification/",
+        "/accounts/password-reset/",
+        "/accounts/password-reset/done/",
+        "/accounts/pending/",
+        "/accounts/password-change/",
+        "/accounts/accept-terms/",
     )
 
     def __init__(self, get_response):
@@ -80,7 +90,9 @@ class SiteAccessMiddleware:
         if not settings.SITE_AUTH_REQUIRED:
             return self.get_response(request)
 
-        if request.path in self.public_paths or request.path.startswith(self.public_prefixes):
+        if request.path in self.access_exempt_paths or request.path.startswith(
+            self.access_exempt_prefixes
+        ):
             return self.get_response(request)
         if not request.user.is_authenticated:
             if request.path.startswith("/api/"):
@@ -99,7 +111,8 @@ class SiteAccessMiddleware:
         if needs_terms_acceptance(profile):
             if request.path.startswith("/api/"):
                 return JsonResponse({"error": "terms acceptance required"}, status=403)
-            return redirect("accept-terms")
+            query = urlencode({"next": request.get_full_path()})
+            return redirect(f"{reverse('accept-terms')}?{query}")
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):

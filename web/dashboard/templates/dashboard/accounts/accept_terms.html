@@ -1,21 +1,27 @@
 {% extends "dashboard/accounts/base.html" %}
 {% block title %}Condizioni d'uso{% endblock %}
+{% block body_class %}terms-accept-page{% endblock %}
 {% block content %}
-  <p class="eyebrow">Consenso GDPR</p>
-  <h1>Condizioni d'uso del sito</h1>
+  <p class="eyebrow">Accettazione obbligatoria</p>
+  <h1>Nuove condizioni d'uso</h1>
   <p class="auth-copy">
-    Per poter accedere al sito devi leggere e accettare le condizioni d'uso e l'informativa sulla privacy
-    (versione {{ terms_version }}) in vigore dal {{ terms_effective_date }}.
+    Per entrare nel sito devi leggere l'informativa privacy e accettare le condizioni d'uso
+    <strong>versione {{ terms_version }}</strong>, in vigore dal {{ terms_effective_date }}.
+    L'obbligo vale per ogni account, inclusi gli amministratori.
   </p>
   <div class="terms-scroll">
     {% include "dashboard/_terms_content.html" %}
   </div>
   <form method="post" class="auth-form terms-form">
     {% csrf_token %}
+    {{ form.terms_version }}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    {% if form.terms_version.errors %}{{ form.terms_version.errors }}{% endif %}
     <label class="terms-check">
-      <input type="checkbox" name="accept_terms" value="1" required>
-      Ho letto e accetto le condizioni d'uso e l'informativa sulla privacy.
+      {{ form.accept_terms }}
+      <span>Dichiaro di aver letto integralmente l'informativa privacy e accetto le condizioni d'uso.</span>
     </label>
+    {% if form.accept_terms.errors %}{{ form.accept_terms.errors }}{% endif %}
     <button type="submit">Accetta e prosegui</button>
   </form>
   <form method="post" action="{% url 'logout' %}" class="auth-form compact-form">

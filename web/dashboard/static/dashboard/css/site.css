@@ -692,11 +692,12 @@ footer a { color: var(--teal); }
 .terms-actions { margin-top: 2rem; }
 .terms-actions .btn { display: inline-block; padding: .65rem 1rem; border: 1px solid var(--teal); color: var(--ink); background: var(--teal); text-decoration: none; font-weight: 700; }
 
-.terms-scroll { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); padding: .75rem 1rem; margin: 1rem 0; font-size: .82rem; color: var(--paper); line-height: 1.55; background: var(--ink-soft); }
+.auth-page.terms-accept-page .auth-shell { width: min(100%, 820px); }
+.terms-scroll { border: 1px solid var(--line); padding: clamp(.85rem, 3vw, 1.4rem); margin: 1rem 0; font-size: .82rem; color: var(--paper); line-height: 1.55; background: var(--ink-soft); }
 .terms-scroll h2 { color: var(--teal); font-size: .85rem; margin: 1.2rem 0 .5rem; font-weight: 700; }
 .terms-scroll p, .terms-scroll ul { margin: .3rem 0 .6rem; }
 .terms-scroll ul li { margin: .15rem 0; }
-.terms-check { display: flex; gap: .55rem; align-items: flex-start; margin: 1rem 0; font-size: .85rem; cursor: pointer; color: var(--paper); }
-.terms-check input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--teal); flex-shrink: 0; }
+.auth-form label.terms-check { display: flex; gap: .65rem; align-items: flex-start; margin: 1rem 0; color: var(--paper); font-size: .85rem; line-height: 1.45; letter-spacing: normal; text-transform: none; cursor: pointer; }
+.terms-check input { width: 20px; height: 20px; min-height: 20px; margin-top: 1px; padding: 0; accent-color: var(--teal); flex-shrink: 0; }
 .terms-check a { color: var(--teal); text-decoration: underline; }
 .terms-form { margin-top: .5rem; }

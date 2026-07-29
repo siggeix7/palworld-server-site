@@ -9,7 +9,7 @@
   <title>{% block title %}Account{% endblock %} · Palworld Server Observatory</title>
   <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
 </head>
-<body class="auth-page">
+<body class="auth-page {% block body_class %}{% endblock %}">
   <main class="auth-shell">
     <a class="brand auth-brand" href="{% url 'home' %}" aria-label="Palworld Server Observatory">
       <span class="brand-mark" aria-hidden="true"><i></i></span>

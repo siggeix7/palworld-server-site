@@ -290,6 +290,8 @@ def terms_page(request):
             active_nav="terms",
             terms_version=settings.CURRENT_TERMS_VERSION,
             terms_effective_date=settings.CURRENT_TERMS_EFFECTIVE_DATE,
+            privacy_controller_name=settings.PRIVACY_CONTROLLER_NAME,
+            privacy_contact_email=settings.PRIVACY_CONTACT_EMAIL,
         ),
     )
 

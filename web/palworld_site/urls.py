@@ -8,11 +8,7 @@ from dashboard.forms import CanonicalPasswordResetForm, SiteAuthenticationForm
 urlpatterns = [
     path(
         "accounts/login/",
-        auth_views.LoginView.as_view(
-            template_name="dashboard/accounts/login.html",
-            authentication_form=SiteAuthenticationForm,
-            redirect_authenticated_user=True,
-        ),
+        account_views.SiteLoginView.as_view(authentication_form=SiteAuthenticationForm),
         name="login",
     ),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),

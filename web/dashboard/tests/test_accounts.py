@@ -1,4 +1,5 @@
 from unittest import mock
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -146,6 +147,7 @@ class AccountAccessTests(TestCase):
                 "password1": self.password,
                 "password2": self.password,
                 "accept_terms": "1",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
             },
         )
 
@@ -157,7 +159,7 @@ class AccountAccessTests(TestCase):
         self.assertIsNotNone(user.site_profile.terms_accepted_at)
         self.assertEqual(
             user.site_profile.terms_version,
-            "2026-07-27",
+            settings.CURRENT_TERMS_VERSION,
         )
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("https://palworld.example.com/accounts/verify/", mail.outbox[0].body)
@@ -181,6 +183,7 @@ class AccountAccessTests(TestCase):
                 "password1": self.password,
                 "password2": self.password,
                 "accept_terms": "1",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
             },
             secure=True,
             HTTP_HOST="internal.example",
@@ -199,6 +202,8 @@ class AccountAccessTests(TestCase):
                 "email": "other@example.com",
                 "password1": self.password,
                 "password2": self.password,
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
             },
         )
         self.assertContains(response, "Esiste già un account con questo username.")
@@ -211,6 +216,8 @@ class AccountAccessTests(TestCase):
                 "email": "EXISTING@example.com",
                 "password1": self.password,
                 "password2": self.password,
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
             },
         )
         self.assertContains(response, "Esiste già un account con questa email.")
@@ -224,6 +231,8 @@ class AccountAccessTests(TestCase):
                 "email": "attacker@example.net",
                 "password1": self.password,
                 "password2": self.password,
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
             },
         )
 
@@ -236,7 +245,11 @@ class AccountAccessTests(TestCase):
             verified=True,
         )
         self.client.force_login(legacy_user)
-        self.assertEqual(self.client.get(reverse("members")).status_code, 403)
+        self.assertRedirects(
+            self.client.get(reverse("members")),
+            reverse("pending-approval"),
+            fetch_redirect_response=False,
+        )
 
     @override_settings(SITE_ADMIN_USERS={"administrator"})
     def test_registration_cannot_claim_configured_admin_username(self):
@@ -247,6 +260,8 @@ class AccountAccessTests(TestCase):
                 "email": "attacker@example.net",
                 "password1": self.password,
                 "password2": self.password,
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
             },
         )
 
@@ -318,7 +333,11 @@ class AccountAccessTests(TestCase):
         admin.site_profile.refresh_from_db()
         self.assertTrue(admin.site_profile.approved)
         self.assertFalse(admin.site_profile.email_verified)
-        self.assertEqual(self.client.get(reverse("members")).status_code, 403)
+        self.assertRedirects(
+            self.client.get(reverse("members")),
+            reverse("pending-approval"),
+            fetch_redirect_response=False,
+        )
 
         admin.site_profile.email_verified = True
         admin.site_profile.save(update_fields=["email_verified"])
@@ -455,7 +474,11 @@ class AccountAccessTests(TestCase):
             {"username": "MEMBER@EXAMPLE.COM", "password": self.password},
         )
 
-        self.assertRedirects(response, reverse("home"))
+        self.assertRedirects(
+            response,
+            reverse("home"),
+            fetch_redirect_response=False,
+        )
 
     def test_temporary_password_must_be_changed_before_site_access(self):
         user = self.create_user(
@@ -575,11 +598,30 @@ class AccountAccessTests(TestCase):
                 "email": "noterms@example.com",
                 "password1": self.password,
                 "password2": self.password,
+                "terms_version": settings.CURRENT_TERMS_VERSION,
             },
         )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(get_user_model().objects.filter(username="NoTermsUser").exists())
         self.assertContains(response, "accetto")
+
+    def test_register_rejects_a_stale_terms_version(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "username": "StaleTermsUser",
+                "email": "stale@example.com",
+                "password1": self.password,
+                "password2": self.password,
+                "accept_terms": "on",
+                "terms_version": "2026-07-27",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "condizioni sono cambiate")
+        self.assertFalse(
+            get_user_model().objects.filter(username="StaleTermsUser").exists()
+        )
 
     def test_existing_user_without_terms_is_redirected_on_first_login(self):
         user = self.create_user(verified=True, approved=True, accepted_terms=False)
@@ -587,7 +629,47 @@ class AccountAccessTests(TestCase):
         response = self.client.get(reverse("home"))
         self.assertRedirects(
             response,
-            reverse("accept-terms"),
+            f"{reverse('accept-terms')}?{urlencode({'next': reverse('home')})}",
+            fetch_redirect_response=False,
+        )
+
+    def test_existing_user_login_redirects_directly_to_current_terms(self):
+        self.create_user(verified=True, approved=True, accepted_terms=False)
+        response = self.client.post(
+            reverse("login"),
+            {"username": "member", "password": self.password},
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('accept-terms')}?{urlencode({'next': reverse('home')})}",
+            fetch_redirect_response=False,
+        )
+
+    def test_admin_login_redirects_directly_to_current_terms(self):
+        admin = self.create_user(
+            username="administrator",
+            email="admin@example.com",
+            verified=True,
+            accepted_terms=False,
+        )
+        get_user_profile(admin)
+        response = self.client.post(
+            reverse("login"),
+            {"username": "admin@example.com", "password": self.password},
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('accept-terms')}?{urlencode({'next': reverse('home')})}",
+            fetch_redirect_response=False,
+        )
+
+    def test_terms_gate_covers_protected_account_routes(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        path = reverse("change-username")
+        self.assertRedirects(
+            self.client.get(path),
+            f"{reverse('accept-terms')}?{urlencode({'next': path})}",
             fetch_redirect_response=False,
         )
 
@@ -601,7 +683,13 @@ class AccountAccessTests(TestCase):
     def test_accept_terms_post_stamps_profile_and_redirects_home(self):
         user = self.create_user(verified=True, approved=True, accepted_terms=False)
         self.client.force_login(user)
-        response = self.client.post(reverse("accept-terms"), {"accept_terms": "1"})
+        response = self.client.post(
+            reverse("accept-terms"),
+            {
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
+            },
+        )
         self.assertRedirects(response, reverse("home"))
         user.site_profile.refresh_from_db()
         self.assertEqual(user.site_profile.terms_version, settings.CURRENT_TERMS_VERSION)
@@ -624,7 +712,10 @@ class AccountAccessTests(TestCase):
     def test_accept_terms_does_not_stamp_when_checkbox_not_set(self):
         user = self.create_user(verified=True, approved=True, accepted_terms=False)
         self.client.force_login(user)
-        response = self.client.post(reverse("accept-terms"), {})
+        response = self.client.post(
+            reverse("accept-terms"),
+            {"terms_version": settings.CURRENT_TERMS_VERSION},
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Accetta e prosegui")
         user.site_profile.refresh_from_db()
@@ -651,10 +742,16 @@ class AccountAccessTests(TestCase):
         members_response = self.client.get(reverse("members"))
         self.assertRedirects(
             members_response,
-            reverse("accept-terms"),
+            f"{reverse('accept-terms')}?{urlencode({'next': reverse('members')})}",
             fetch_redirect_response=False,
         )
-        self.client.post(reverse("accept-terms"), {"accept_terms": "1"})
+        self.client.post(
+            reverse("accept-terms"),
+            {
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
+            },
+        )
         admin.site_profile.refresh_from_db()
         self.assertEqual(admin.site_profile.terms_version, settings.CURRENT_TERMS_VERSION)
         response = self.client.get(reverse("members"))
@@ -678,10 +775,128 @@ class AccountAccessTests(TestCase):
         response = self.client.get(reverse("home"))
         self.assertRedirects(
             response,
-            reverse("accept-terms"),
+            f"{reverse('accept-terms')}?{urlencode({'next': reverse('home')})}",
             fetch_redirect_response=False,
         )
-        self.client.post(reverse("accept-terms"), {"accept_terms": "1"})
+        self.client.post(
+            reverse("accept-terms"),
+            {"accept_terms": "on", "terms_version": "2099-01-01"},
+        )
         user.site_profile.refresh_from_db()
         self.assertEqual(user.site_profile.terms_version, "2099-01-01")
         self.assertEqual(self.client.get(reverse("home")).status_code, 200)
+
+    def test_stale_terms_form_cannot_accept_a_newer_version(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("accept-terms"),
+            {"accept_terms": "on", "terms_version": "2026-07-27"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "condizioni sono cambiate")
+        self.assertContains(response, settings.CURRENT_TERMS_VERSION)
+        user.site_profile.refresh_from_db()
+        self.assertEqual(user.site_profile.terms_version, "")
+        self.assertIsNone(user.site_profile.terms_accepted_at)
+
+    def test_accept_terms_requires_csrf(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(user)
+        response = csrf_client.post(
+            reverse("accept-terms"),
+            {
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+        user.site_profile.refresh_from_db()
+        self.assertEqual(user.site_profile.terms_version, "")
+
+        page = csrf_client.get(reverse("accept-terms"))
+        token = page.cookies["csrftoken"].value
+        response = csrf_client.post(
+            reverse("accept-terms"),
+            {
+                "csrfmiddlewaretoken": token,
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
+            },
+        )
+        self.assertRedirects(response, reverse("home"))
+        user.site_profile.refresh_from_db()
+        self.assertEqual(user.site_profile.terms_version, settings.CURRENT_TERMS_VERSION)
+
+    def test_accept_terms_rejects_external_next_redirect(self):
+        user = self.create_user(verified=True, approved=True, accepted_terms=False)
+        self.client.force_login(user)
+        response = self.client.post(
+            f"{reverse('accept-terms')}?next=https%3A%2F%2Fevil.example%2F",
+            {
+                "accept_terms": "on",
+                "terms_version": settings.CURRENT_TERMS_VERSION,
+                "next": "https://evil.example/",
+            },
+        )
+        self.assertRedirects(response, reverse("home"))
+
+    def test_password_change_precedes_terms_acceptance(self):
+        user = self.create_user(
+            verified=True,
+            approved=True,
+            must_change_password=True,
+            accepted_terms=False,
+        )
+        self.client.force_login(user)
+        self.assertRedirects(
+            self.client.get(reverse("home")),
+            reverse("password_change"),
+            fetch_redirect_response=False,
+        )
+        response = self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": self.password,
+                "new_password1": "A-new-valid-test-password-963!",
+                "new_password2": "A-new-valid-test-password-963!",
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("home"),
+            fetch_redirect_response=False,
+        )
+        user.site_profile.refresh_from_db()
+        self.assertFalse(user.site_profile.must_change_password)
+        self.assertEqual(user.site_profile.terms_version, "")
+        self.assertRedirects(
+            self.client.get(reverse("home")),
+            f"{reverse('accept-terms')}?{urlencode({'next': reverse('home')})}",
+            fetch_redirect_response=False,
+        )
+
+    @override_settings(CURRENT_TERMS_VERSION="2099-admin")
+    def test_admin_with_an_existing_session_must_reaccept_new_terms(self):
+        admin = get_user_model().objects.create_user(
+            username="administrator",
+            email="admin@example.com",
+            password=self.password,
+        )
+        UserProfile.objects.create(
+            user=admin,
+            email_verified=True,
+            approved=True,
+            terms_version="2026-07-29",
+            terms_accepted_at=timezone.now(),
+        )
+        self.client.force_login(admin)
+        for route in ("home", "members", "admin-panel"):
+            with self.subTest(route=route):
+                path = reverse(route)
+                self.assertRedirects(
+                    self.client.get(path),
+                    f"{reverse('accept-terms')}?{urlencode({'next': path})}",
+                    fetch_redirect_response=False,
+                )

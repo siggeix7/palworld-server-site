@@ -140,10 +140,17 @@ SITE_ADMIN_USERS = {
 }
 if not SITE_ADMIN_USERS:
     raise ImproperlyConfigured("SITE_ADMIN_USERS must contain at least one identifier")
-CURRENT_TERMS_VERSION = os.getenv("CURRENT_TERMS_VERSION", "2026-07-27")
+CURRENT_TERMS_VERSION = os.getenv("CURRENT_TERMS_VERSION", "2026-07-29")
 CURRENT_TERMS_EFFECTIVE_DATE = os.getenv(
-    "CURRENT_TERMS_EFFECTIVE_DATE", "27 luglio 2026"
+    "CURRENT_TERMS_EFFECTIVE_DATE", "29 luglio 2026"
 )
+PRIVACY_CONTROLLER_NAME = os.getenv(
+    "PRIVACY_CONTROLLER_NAME", "Gestore di Palworld Server Observatory"
+).strip()
+PRIVACY_CONTACT_EMAIL = os.getenv(
+    "PRIVACY_CONTACT_EMAIL",
+    os.getenv("DEFAULT_FROM_EMAIL", os.getenv("EMAIL_HOST_USER", "guidi.zabbix@libero.it")),
+).strip()
 PALWORLD_PUBLIC_HOST = os.getenv("PALWORLD_PUBLIC_HOST", "").strip()
 PALWORLD_PUBLIC_PORT = os.getenv("PALWORLD_PUBLIC_PORT", "8211").strip()
 PALWORLD_PUBLIC_PASSWORD = os.getenv("PALWORLD_PUBLIC_PASSWORD", "")
