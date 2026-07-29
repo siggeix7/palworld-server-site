@@ -390,8 +390,13 @@ td code { color: var(--teal); font-family: ui-monospace, monospace; }
 .player-history-card header small { color: var(--paper-dim); }
 .archive-status { max-width: 190px; color: var(--paper-dim); font-size: .66rem; text-align: right; }
 .archive-status.online { color: var(--teal); text-transform: uppercase; letter-spacing: .08em; }
+.archive-status.saved { color: var(--gold); text-transform: uppercase; letter-spacing: .08em; }
 .favorite-toggle { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); color: var(--gold); background: transparent; cursor: pointer; font-size: 1.2rem; }
 .favorite-toggle:hover, .favorite-toggle:focus-visible, .favorite-toggle[aria-pressed="true"] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.player-progression-grid { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); }
+.player-progression-grid > div { min-width: 0; padding: .8rem 1rem; background: var(--panel-light); }
+.player-progression-grid dt, .player-stat-grid dt { color: var(--paper-dim); text-transform: uppercase; letter-spacing: .08em; font-size: .6rem; }
+.player-progression-grid dd { margin: .45rem 0 0; color: var(--paper); font-size: .78rem; overflow-wrap: anywhere; }
 .player-time-grid { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); }
 .player-time-grid > div { min-width: 0; padding: 1rem; background: var(--ink-soft); }
 .player-time-grid dt { min-height: 2.3em; color: var(--paper-dim); text-transform: uppercase; letter-spacing: .08em; font-size: .65rem; }
@@ -399,6 +404,9 @@ td code { color: var(--teal); font-family: ui-monospace, monospace; }
 .player-history-meta { margin: 0; padding: .75rem 1rem; border-top: 1px solid var(--line); color: var(--paper-dim); font-size: .68rem; }
 .player-history-card details { border-top: 1px solid var(--line); }
 .player-history-card summary { padding: .8rem 1rem; color: var(--teal); cursor: pointer; text-transform: uppercase; letter-spacing: .08em; font-size: .65rem; }
+.player-stat-grid { margin: 0; padding: 1rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; border-top: 1px solid var(--line); background: var(--ink-soft); }
+.player-stat-grid > div { min-width: 0; }
+.player-stat-grid dd { margin: .35rem 0 0; color: var(--sky); font-family: ui-monospace, monospace; }
 .session-periods { max-height: 320px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border-top: 1px solid var(--line); }
 .session-periods li { padding: .7rem 1rem; display: grid; grid-template-columns: 1fr auto; gap: 1rem; border-bottom: 1px solid var(--line); color: var(--paper-dim); font-size: .68rem; }
 .session-periods li:last-child { border-bottom: 0; }
@@ -661,6 +669,7 @@ footer a { color: var(--teal); }
   .server-profile-grid { grid-template-columns: 1fr; }
   .vm-diagnostic-counts { grid-template-columns: 1fr; }
   .player-time-grid { grid-template-columns: 1fr; }
+  .player-progression-grid, .player-stat-grid { grid-template-columns: 1fr 1fr; }
   .vm-value-row { grid-template-columns: 1fr; }
   .access-warning { font-size: .85rem; }
   .map-marker.player > span { width: 34px; height: 34px; }

@@ -112,6 +112,47 @@ class IngestTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(GuildSnapshot.objects.get(pk=1).payload, payload)
 
+    def test_guild_ingest_stores_minimized_saved_players(self):
+        payload = {
+            "schema_version": 3,
+            "guilds": [{
+                "group_id": "aaaaaaaaaaaaaaaaaaaa",
+                "guild_name": "Explorers",
+                "players": [],
+            }],
+            "bases": [],
+            "players": [{
+                "player_id": "cccccccccccccccccccc",
+                "player_name": "Historical Explorer",
+                "guild_id": "aaaaaaaaaaaaaaaaaaaa",
+                "is_admin": False,
+                "level": 42,
+                "exp": 987654,
+                "owned_pal_count": 17,
+                "unused_status_points": 2,
+                "status_points": {"max_hp": 5, "attack": 3},
+            }],
+            "world": {},
+            "diagnostics": {},
+        }
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(GuildSnapshot.objects.get(pk=1).payload, payload)
+
+        payload["players"][0]["player_uid"] = "raw-player-uuid"
+        response = self.client.post(
+            "/api/v1/guild/ingest",
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 422)
+
     def test_guild_ingest_requires_json_object_with_arrays(self):
         response = self.client.post(
             "/api/v1/guild/ingest",

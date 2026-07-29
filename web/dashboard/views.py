@@ -1,3 +1,4 @@
+from collections import Counter, defaultdict
 from datetime import timedelta
 from statistics import median
 
@@ -13,6 +14,7 @@ from django.views.decorators.http import require_GET
 
 from .models import (
     ConnectorBatch,
+    GuildSnapshot,
     LatestDataset,
     MetricSample,
     Player,
@@ -554,20 +556,113 @@ def players(request):
     ).order_by("-last_seen", "name")
     archive = []
 
+    snapshot = GuildSnapshot.objects.first()
+    save_payload = (
+        snapshot.payload
+        if snapshot and isinstance(snapshot.payload, dict)
+        else {}
+    )
+    saved_players = save_payload.get("players", [])
+    if not isinstance(saved_players, list):
+        saved_players = []
+    saved_guilds = save_payload.get("guilds", [])
+    if not isinstance(saved_guilds, list):
+        saved_guilds = []
+    guild_names = {
+        guild.get("group_id"): guild.get("guild_name", "")
+        for guild in saved_guilds
+        if isinstance(guild, dict)
+    }
+    valid_saved_players = []
+    saved_by_name = defaultdict(list)
+    for saved_player in saved_players:
+        if not isinstance(saved_player, dict):
+            continue
+        saved_id = saved_player.get("player_id")
+        normalized_name = str(saved_player.get("player_name", "")).strip().casefold()
+        if not isinstance(saved_id, str) or not saved_id or not normalized_name:
+            continue
+        valid_saved_players.append(saved_player)
+        saved_by_name[normalized_name].append(saved_player)
+    saved_players = valid_saved_players
+    telemetry_name_counts = Counter(
+        player.name.strip().casefold() for player in queryset
+    )
+    consumed_saved_ids = set()
+
+    ping_stats = {
+        row["player_id"]: {
+            "average": round(row["average"] or 0, 2),
+            "minimum": round(row["minimum"] or 0, 2),
+            "maximum": round(row["maximum"] or 0, 2),
+            "sample_count": row["sample_count"],
+        }
+        for row in PositionSample.objects.filter(
+            source_clock__gte=now - timedelta(days=7),
+            source_clock__lte=now,
+            ping__gt=0,
+        )
+        .values("player_id")
+        .annotate(
+            average=Avg("ping"),
+            minimum=Min("ping"),
+            maximum=Max("ping"),
+            sample_count=Count("id"),
+        )
+    }
+
+    def save_fields(saved_player):
+        if not saved_player:
+            return {
+                "save_available": False,
+                "save_only": False,
+                "saved_level": None,
+                "exp": None,
+                "owned_pal_count": None,
+                "unused_status_points": None,
+                "status_points": {},
+                "guild_name": "",
+                "is_guild_admin": False,
+            }
+        return {
+            "save_available": True,
+            "save_only": False,
+            "saved_level": saved_player.get("level", 0),
+            "exp": saved_player.get("exp", 0),
+            "owned_pal_count": saved_player.get("owned_pal_count", 0),
+            "unused_status_points": saved_player.get(
+                "unused_status_points", 0
+            ),
+            "status_points": saved_player.get("status_points", {}),
+            "guild_name": guild_names.get(saved_player.get("guild_id"), ""),
+            "is_guild_admin": bool(saved_player.get("is_admin", False)),
+        }
+
     for player in queryset:
         seconds_30d = 0
         seconds_365d = 0
         seconds_all = 0
         online = False
         periods = []
+        durations = []
+        active_dates_30d = set()
         sessions = list(player.sessions.all())
 
         for session in sessions:
             ended_at, active = _session_end(session, now)
-            seconds_all += _duration_seconds(session.started_at, ended_at)
+            duration = _duration_seconds(session.started_at, ended_at)
+            durations.append(duration)
+            seconds_all += duration
             seconds_30d += _duration_seconds(max(session.started_at, since_30d), ended_at)
             seconds_365d += _duration_seconds(max(session.started_at, since_365d), ended_at)
             online = online or active
+            active_start = max(session.started_at, since_30d)
+            if ended_at > active_start:
+                day = timezone.localdate(active_start)
+                final_day = timezone.localdate(ended_at - timedelta(microseconds=1))
+                while day <= final_day:
+                    active_dates_30d.add(day)
+                    day += timedelta(days=1)
             periods.append(
                 {
                     "started_at": _iso(session.started_at),
@@ -580,12 +675,24 @@ def players(request):
                 }
             )
 
+        normalized_name = player.name.strip().casefold()
+        matches = saved_by_name.get(normalized_name, [])
+        saved_player = (
+            matches[0]
+            if len(matches) == 1 and telemetry_name_counts[normalized_name] == 1
+            else None
+        )
+        if saved_player:
+            consumed_saved_ids.add(saved_player["player_id"])
+        progression = save_fields(saved_player)
+
         archive.append(
             {
                 "id": player.public_id,
                 "name": player.name,
                 "accountName": player.account_name,
-                "level": player.level,
+                "level": max(player.level, progression["saved_level"] or 0),
+                "building_count": player.building_count,
                 "first_seen": _iso(player.first_seen),
                 "last_seen": _iso(player.last_seen),
                 "online": online,
@@ -593,14 +700,57 @@ def players(request):
                 "minutes_30d": seconds_30d // 60,
                 "minutes_365d": seconds_365d // 60,
                 "minutes_all": seconds_all // 60,
+                "average_session_minutes": (
+                    round(seconds_all / len(durations) / 60) if durations else 0
+                ),
+                "longest_session_minutes": (
+                    max(durations) // 60 if durations else 0
+                ),
+                "active_days_30d": len(active_dates_30d),
+                "ping_7d": ping_stats.get(player.id),
                 "periods": periods,
+                **progression,
             }
         )
+
+    for saved_player in saved_players:
+        if (
+            not isinstance(saved_player, dict)
+            or saved_player.get("player_id") in consumed_saved_ids
+        ):
+            continue
+        progression = save_fields(saved_player)
+        progression["save_only"] = True
+        archive.append(
+            {
+                "id": f"save-{saved_player['player_id']}",
+                "name": saved_player["player_name"],
+                "accountName": "",
+                "level": saved_player.get("level", 0),
+                "building_count": 0,
+                "first_seen": None,
+                "last_seen": None,
+                "online": False,
+                "session_count": 0,
+                "minutes_30d": 0,
+                "minutes_365d": 0,
+                "minutes_all": 0,
+                "average_session_minutes": 0,
+                "longest_session_minutes": 0,
+                "active_days_30d": 0,
+                "ping_7d": None,
+                "periods": [],
+                **progression,
+            }
+        )
+
+    archive.sort(key=lambda player: player["name"].casefold())
 
     return JsonResponse(
         {
             "generated_at": _iso(now),
             "windows": {"month_days": 30, "year_days": 365},
+            "save_updated_at": _iso(snapshot.updated_at) if snapshot else None,
             "players": archive,
         }
     )

@@ -5,6 +5,7 @@ from unittest import mock
 from django.test import TestCase, override_settings
 
 from dashboard.models import (
+    GuildSnapshot,
     LatestDataset,
     MetricSample,
     Player,
@@ -249,6 +250,10 @@ class PublicApiTests(TestCase):
         self.assertEqual(player["minutes_30d"], 160)
         self.assertEqual(player["minutes_365d"], 250)
         self.assertEqual(player["minutes_all"], 280)
+        self.assertEqual(player["building_count"], 10)
+        self.assertEqual(player["average_session_minutes"], 56)
+        self.assertEqual(player["longest_session_minutes"], 120)
+        self.assertEqual(player["active_days_30d"], 3)
         self.assertEqual(len(player["periods"]), 5)
         self.assertTrue(player["periods"][0]["active"])
         self.assertIsNone(player["periods"][0]["ended_at"])
@@ -260,6 +265,105 @@ class PublicApiTests(TestCase):
         self.assertEqual(stale["minutes_all"], 61)
         self.assertFalse(stale["periods"][0]["active"])
         self.assertIsNotNone(stale["periods"][0]["ended_at"])
+
+    def test_player_archive_merges_save_progression_and_includes_save_only_players(self):
+        GuildSnapshot.objects.create(
+            payload={
+                "schema_version": 3,
+                "guilds": [{
+                    "group_id": "aaaaaaaaaaaaaaaaaaaa",
+                    "guild_name": "Explorers",
+                    "players": [],
+                }],
+                "bases": [],
+                "players": [
+                    {
+                        "player_id": "bbbbbbbbbbbbbbbbbbbb",
+                        "player_name": "Explorer",
+                        "guild_id": "aaaaaaaaaaaaaaaaaaaa",
+                        "is_admin": True,
+                        "level": 55,
+                        "exp": 1234567,
+                        "owned_pal_count": 24,
+                        "unused_status_points": 3,
+                        "status_points": {"max_hp": 5, "attack": 2},
+                    },
+                    {
+                        "player_id": "cccccccccccccccccccc",
+                        "player_name": "Historical Explorer",
+                        "guild_id": "aaaaaaaaaaaaaaaaaaaa",
+                        "is_admin": False,
+                        "level": 31,
+                        "exp": 456789,
+                        "owned_pal_count": 8,
+                        "unused_status_points": 0,
+                        "status_points": {"work_speed": 4},
+                    },
+                ],
+                "world": {},
+                "diagnostics": {},
+            }
+        )
+
+        payload = self.client.get("/api/v1/players").json()
+        self.assertEqual(len(payload["players"]), 2)
+        current = next(
+            player for player in payload["players"] if player["name"] == "Explorer"
+        )
+        self.assertEqual(current["id"], "public-player-id")
+        self.assertEqual(current["level"], 55)
+        self.assertEqual(current["building_count"], 10)
+        self.assertEqual(current["exp"], 1234567)
+        self.assertEqual(current["owned_pal_count"], 24)
+        self.assertEqual(current["guild_name"], "Explorers")
+        self.assertTrue(current["is_guild_admin"])
+        self.assertFalse(current["save_only"])
+        self.assertEqual(current["ping_7d"]["average"], 22.0)
+
+        historical = next(
+            player
+            for player in payload["players"]
+            if player["name"] == "Historical Explorer"
+        )
+        self.assertEqual(historical["id"], "save-cccccccccccccccccccc")
+        self.assertTrue(historical["save_only"])
+        self.assertTrue(historical["save_available"])
+        self.assertIsNone(historical["first_seen"])
+        self.assertIsNone(historical["last_seen"])
+        self.assertEqual(historical["level"], 31)
+        self.assertEqual(historical["session_count"], 0)
+        self.assertEqual(historical["status_points"], {"work_speed": 4})
+
+    def test_player_archive_does_not_guess_ambiguous_name_matches(self):
+        Player.objects.create(
+            public_id="duplicate-player-id",
+            name="Explorer",
+            first_seen=self.player.first_seen,
+            last_seen=self.player.last_seen,
+        )
+        GuildSnapshot.objects.create(
+            payload={
+                "schema_version": 3,
+                "guilds": [],
+                "bases": [],
+                "players": [{
+                    "player_id": "dddddddddddddddddddd",
+                    "player_name": "Explorer",
+                    "guild_id": "",
+                    "is_admin": False,
+                    "level": 60,
+                    "exp": 1,
+                    "owned_pal_count": 1,
+                    "unused_status_points": 0,
+                    "status_points": {},
+                }],
+                "world": {},
+                "diagnostics": {},
+            }
+        )
+        players = self.client.get("/api/v1/players").json()["players"]
+        self.assertEqual(len(players), 3)
+        self.assertEqual(sum(player["save_only"] for player in players), 1)
 
     def test_invalid_ranges_are_rejected(self):
         self.assertEqual(self.client.get("/api/v1/history?range=forever").status_code, 400)

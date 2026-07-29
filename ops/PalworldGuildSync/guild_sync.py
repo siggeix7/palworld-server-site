@@ -19,6 +19,14 @@ SITE_TOKEN = os.getenv("SITE_TOKEN", "")
 VERIFY_SSL = os.getenv("VERIFY_SSL", "true").lower() == "true"
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 LOW_SANITY_THRESHOLD = 30
+PLAYER_STATUS_NAMES = {
+    "最大HP": "max_hp",
+    "最大SP": "stamina",
+    "攻撃力": "attack",
+    "所持重量": "carry_weight",
+    "捕獲率": "capture_rate",
+    "作業速度": "work_speed",
+}
 
 
 def to_str(value):
@@ -38,6 +46,16 @@ def property_number(properties, name):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return value
+
+
+def nonnegative_int(value):
+    value = property_value(value, 0)
+    if isinstance(value, bool):
+        return 0
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def enum_name(properties, name):
@@ -89,6 +107,103 @@ def parse_guilds(world_data):
         )
 
     return guilds
+
+
+def player_status_points(save_parameters):
+    totals = Counter()
+    for field in ("GotStatusPointList", "GotExStatusPointList"):
+        payload = property_value(save_parameters.get(field), {})
+        values = payload.get("values", []) if isinstance(payload, dict) else []
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            key = PLAYER_STATUS_NAMES.get(
+                to_str(property_value(item.get("StatusName"), ""))
+            )
+            if key:
+                totals[key] += nonnegative_int(item.get("StatusPoint"))
+    return {
+        key: totals[key]
+        for key in PLAYER_STATUS_NAMES.values()
+        if totals[key] > 0
+    }
+
+
+def parse_players(world_data, guilds):
+    guild_members = {}
+    for guild in guilds:
+        for member in guild["players"]:
+            player_uid = member["player_uid"]
+            if not player_uid:
+                continue
+            candidate = {
+                "player_uid": player_uid,
+                "player_name": member["player_name"],
+                "group_id": guild["group_id"],
+                "is_admin": member["is_admin"],
+            }
+            current = guild_members.get(player_uid)
+            if current is None or candidate["is_admin"]:
+                guild_members[player_uid] = candidate
+
+    players = {}
+    pal_counts = Counter()
+    for item in world_data.get("CharacterSaveParameterMap", {}).get("value", []):
+        key = item.get("key", {})
+        raw_data = item.get("value", {}).get("RawData", {}).get("value", {})
+        save_parameters = (
+            raw_data.get("object", {}).get("SaveParameter", {}).get("value", {})
+        )
+        if not property_value(save_parameters.get("IsPlayer"), False):
+            owner_id = to_str(
+                property_value(save_parameters.get("OwnerPlayerUId"), "")
+            )
+            if owner_id:
+                pal_counts[owner_id] += 1
+            continue
+
+        player_uid = to_str(property_value(key.get("PlayerUId"), ""))
+        if not player_uid or player_uid == ZERO_UUID:
+            continue
+        member = guild_members.get(player_uid, {})
+        player_name = (
+            to_str(property_value(save_parameters.get("NickName"), "")).strip()
+            or to_str(
+                property_value(save_parameters.get("FilteredNickName"), "")
+            ).strip()
+            or to_str(member.get("player_name", "")).strip()
+        )
+        if not player_name:
+            continue
+        players[player_uid] = {
+            "player_uid": player_uid,
+            "player_name": player_name[:128],
+            "group_id": to_str(member.get("group_id", "")),
+            "is_admin": bool(member.get("is_admin", False)),
+            "level": nonnegative_int(save_parameters.get("Level")),
+            "exp": nonnegative_int(save_parameters.get("Exp")),
+            "unused_status_points": nonnegative_int(
+                save_parameters.get("UnusedStatusPoint")
+            ),
+            "status_points": player_status_points(save_parameters),
+            "owned_pal_count": 0,
+        }
+
+    for player_uid, member in guild_members.items():
+        if player_uid in players or not member["player_name"]:
+            continue
+        players[player_uid] = {
+            **member,
+            "level": 0,
+            "exp": 0,
+            "unused_status_points": 0,
+            "status_points": {},
+            "owned_pal_count": 0,
+        }
+
+    for player_uid, player in players.items():
+        player["owned_pal_count"] = pal_counts[player_uid]
+    return sorted(players.values(), key=lambda player: player["player_name"].casefold())
 
 
 def index_characters(world_data, guilds):
@@ -323,7 +438,7 @@ def opaque_id(kind, value):
     return hashlib.sha256(source).hexdigest()[:20]
 
 
-def minimize_payload(guilds, bases):
+def minimize_payload(guilds, bases, players):
     guild_keys = {
         guild["group_id"]: opaque_id("guild", guild["group_id"])
         for guild in guilds
@@ -370,7 +485,21 @@ def minimize_payload(guilds, bases):
                 base["group_id"], opaque_id("guild", base["group_id"])
             ),
         })
-    return public_guilds, public_bases
+    public_players = [
+        {
+            "player_id": opaque_id("player", player["player_uid"]),
+            "player_name": player["player_name"],
+            "guild_id": guild_keys.get(player["group_id"], ""),
+            "is_admin": player["is_admin"],
+            "level": player["level"],
+            "exp": player["exp"],
+            "owned_pal_count": player["owned_pal_count"],
+            "unused_status_points": player["unused_status_points"],
+            "status_points": player["status_points"],
+        }
+        for player in players
+    ]
+    return public_guilds, public_bases, public_players
 
 
 def validate_world_data(world_data):
@@ -549,6 +678,7 @@ def main():
         print(f"Unable to parse save: {exc}", file=sys.stderr)
         return 1
     guilds = parse_guilds(world_data)
+    players = parse_players(world_data, guilds)
     characters, guild_pal_ids = index_characters(world_data, guilds)
     containers = index_character_containers(world_data)
     world, active_raid_base_ids = parse_world(world_data)
@@ -574,14 +704,17 @@ def main():
         guild_working,
         guild_problems,
     )
-    public_guilds, public_bases = minimize_payload(guilds, bases)
+    public_guilds, public_bases, public_players = minimize_payload(
+        guilds, bases, players
+    )
 
     response = requests.post(
         f"{SITE_URL}/api/v1/guild/ingest",
         json={
-            "schema_version": 2,
+            "schema_version": 3,
             "guilds": public_guilds,
             "bases": public_bases,
+            "players": public_players,
             "world": world,
             "diagnostics": diagnostics,
         },
@@ -590,7 +723,7 @@ def main():
         timeout=15,
     )
     print(
-        f"Sent {len(guilds)} guilds, {len(bases)} bases, "
+        f"Sent {len(guilds)} guilds, {len(bases)} bases, {len(players)} players, "
         f"and {sum(guild['pal_count'] for guild in guilds)} Pals; "
         f"status={response.status_code}"
     )

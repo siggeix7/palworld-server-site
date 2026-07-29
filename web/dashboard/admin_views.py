@@ -44,6 +44,14 @@ DIAGNOSTIC_FIELDS = {
     "unowned_base_count", "missing_worker_container_count",
     "unresolved_worker_count",
 }
+PLAYER_FIELDS = {
+    "player_id", "player_name", "guild_id", "is_admin", "level", "exp",
+    "owned_pal_count", "unused_status_points", "status_points",
+}
+PLAYER_STATUS_FIELDS = {
+    "max_hp", "stamina", "attack", "carry_weight", "capture_rate",
+    "work_speed",
+}
 
 
 def _api_client():
@@ -69,9 +77,15 @@ def _is_nonnegative_int(value):
 def _validate_guild_payload(payload):
     if not isinstance(payload, dict):
         return "payload must be an object"
-    if payload.get("schema_version") != 2:
+    schema_version = payload.get("schema_version")
+    if schema_version not in {2, 3}:
         return "unsupported schema_version"
-    if set(payload) - {"schema_version", "guilds", "bases", "world", "diagnostics"}:
+    supported_fields = {
+        "schema_version", "guilds", "bases", "world", "diagnostics",
+    }
+    if schema_version == 3:
+        supported_fields.add("players")
+    if set(payload) - supported_fields:
         return "payload contains unsupported fields"
     for key in ("guilds", "bases"):
         if not isinstance(payload.get(key), list):
@@ -80,8 +94,12 @@ def _validate_guild_payload(payload):
         return "world must be an object"
     if not isinstance(payload.get("diagnostics"), dict):
         return "diagnostics must be an object"
+    if schema_version == 3 and not isinstance(payload.get("players"), list):
+        return "players must be an array"
     if len(payload["guilds"]) > 256 or len(payload["bases"]) > 512:
         return "payload contains too many guilds or bases"
+    if schema_version == 3 and len(payload["players"]) > 4096:
+        return "payload contains too many players"
 
     for guild in payload["guilds"]:
         if not isinstance(guild, dict) or set(guild) - GUILD_FIELDS:
@@ -142,6 +160,39 @@ def _validate_guild_payload(payload):
             for work_type in work_types
         ):
             return "each base work type contains invalid fields"
+
+    for player in payload.get("players", []):
+        if not isinstance(player, dict) or set(player) - PLAYER_FIELDS:
+            return "each saved player must contain only supported fields"
+        if not OPAQUE_ID_PATTERN.fullmatch(player.get("player_id", "")):
+            return "each saved player must have a player_id"
+        if (
+            not isinstance(player.get("player_name"), str)
+            or not player["player_name"]
+            or len(player["player_name"]) > 128
+        ):
+            return "saved player names must be non-empty strings"
+        guild_id = player.get("guild_id")
+        if not isinstance(guild_id, str) or (
+            guild_id and not OPAQUE_ID_PATTERN.fullmatch(guild_id)
+        ):
+            return "saved player guild_id must be empty or opaque"
+        if not isinstance(player.get("is_admin"), bool):
+            return "saved player is_admin must be boolean"
+        if any(
+            not _is_nonnegative_int(player.get(field))
+            for field in (
+                "level", "exp", "owned_pal_count", "unused_status_points",
+            )
+        ):
+            return "saved player counts must be non-negative integers"
+        status_points = player.get("status_points")
+        if (
+            not isinstance(status_points, dict)
+            or set(status_points) - PLAYER_STATUS_FIELDS
+            or any(not _is_nonnegative_int(value) for value in status_points.values())
+        ):
+            return "saved player status points are invalid"
 
     if set(payload["world"]) - WORLD_FIELDS or any(
         not _is_nonnegative_int(value) for value in payload["world"].values()

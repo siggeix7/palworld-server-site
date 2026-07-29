@@ -63,6 +63,11 @@ class SectionPageTests(TestCase):
                 self.assertContains(response, reverse("vm-dashboard"))
                 self.assertIn("no-store", response.headers["Cache-Control"])
 
+    def test_players_page_explains_save_history_source(self):
+        response = self.client.get(reverse("players"))
+        self.assertContains(response, "Level.sav")
+        self.assertContains(response, "non è necessario essere registrati al sito")
+
     def test_home_landing_links_to_each_section(self):
         response = self.client.get(reverse("home"))
         self.assertEqual(response.status_code, 200)

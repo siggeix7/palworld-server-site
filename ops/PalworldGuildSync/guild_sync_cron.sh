@@ -8,4 +8,4 @@ set -a
 set +a
 
 exec /usr/bin/flock -n /run/lock/palworld-guild-sync.lock \
-  /usr/bin/python3 "$SYNC_DIR/guild_sync.py" >> /var/log/guild_sync.log 2>&1
+  "$SYNC_DIR/.venv/bin/python" "$SYNC_DIR/guild_sync.py" >> /var/log/guild_sync.log 2>&1

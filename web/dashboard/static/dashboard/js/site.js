@@ -879,7 +879,11 @@
     if (!elements.playerArchive) return
     const expanded = new Set(
       [...elements.playerArchive.querySelectorAll('details[open]')]
-        .map((details) => details.closest('[data-player-id]')?.dataset.playerId),
+        .map((details) => {
+          const playerId = details.closest('[data-player-id]')?.dataset.playerId
+          return playerId ? `${playerId}:${details.dataset.section || 'details'}` : null
+        })
+        .filter(Boolean),
     )
     const query = state.playerQuery.trim().toLocaleLowerCase('it')
     const visiblePlayers = players
@@ -918,14 +922,20 @@
       const name = document.createElement('strong')
       name.textContent = player.name
       const account = document.createElement('small')
-      account.textContent = player.accountName || 'account non disponibile'
+      account.textContent = player.save_only
+        ? 'Personaggio storico dal salvataggio'
+        : (player.accountName || 'account non disponibile')
       identity.append(name, account)
       const status = document.createElement('span')
-      status.className = player.online ? 'archive-status online' : 'archive-status'
+      status.className = player.online
+        ? 'archive-status online'
+        : `archive-status${player.save_only ? ' saved' : ''}`
       const firstSeenDate = new Date(player.first_seen)
       const isNew = Number.isFinite(firstSeenDate.getTime()) && (Date.now() - firstSeenDate.getTime()) < 7 * 86400 * 1000
       if (player.online) {
         status.textContent = 'Online ora'
+      } else if (player.save_only) {
+        status.textContent = 'Storico del mondo'
       } else if (isNew) {
         status.textContent = 'Nuovo esploratore'
       } else {
@@ -946,18 +956,44 @@
       })
       header.append(avatar, identity, status, favorite)
 
+      const progression = document.createElement('dl')
+      progression.className = 'player-progression-grid'
+      const pingAverage = player.ping_7d?.sample_count
+        ? `${formatNumber(player.ping_7d.average, 0)} ms · ${formatNumber(player.ping_7d.minimum, 0)}–${formatNumber(player.ping_7d.maximum, 0)}`
+        : '--'
+      const progressionRows = [
+        ['Livello', `Lv. ${formatNumber(player.level)}`],
+        ['Esperienza', player.save_available ? formatNumber(player.exp) : '--'],
+        ['Pal posseduti', player.save_available ? formatNumber(player.owned_pal_count) : '--'],
+        ['Costruzioni', player.save_only ? '--' : formatNumber(player.building_count)],
+        ['Gilda', player.guild_name ? `${player.guild_name}${player.is_guild_admin ? ' · capogilda' : ''}` : '--'],
+        ['Ping medio 7g', pingAverage],
+      ]
+      for (const [label, value] of progressionRows) {
+        const item = document.createElement('div')
+        const term = document.createElement('dt')
+        term.textContent = label
+        const description = document.createElement('dd')
+        description.textContent = value
+        item.append(term, description)
+        progression.appendChild(item)
+      }
+
       const totals = document.createElement('dl')
       totals.className = 'player-time-grid'
       for (const [label, value] of [
-        ['Ultimi 30 giorni', player.minutes_30d],
-        ['Ultimi 365 giorni', player.minutes_365d],
-        ['Da sempre', player.minutes_all],
+        ['Ultimi 30 giorni', formatDuration(Number(player.minutes_30d) * 60)],
+        ['Ultimi 365 giorni', formatDuration(Number(player.minutes_365d) * 60)],
+        ['Da sempre', formatDuration(Number(player.minutes_all) * 60)],
+        ['Media sessione', formatDuration(Number(player.average_session_minutes) * 60)],
+        ['Sessione più lunga', formatDuration(Number(player.longest_session_minutes) * 60)],
+        ['Giorni attivi 30g', formatNumber(player.active_days_30d)],
       ]) {
         const item = document.createElement('div')
         const term = document.createElement('dt')
         term.textContent = label
         const description = document.createElement('dd')
-        description.textContent = `${formatNumber(value)} min`
+        description.textContent = value
         item.append(term, description)
         totals.appendChild(item)
       }
@@ -965,12 +1001,56 @@
       const meta = document.createElement('p')
       meta.className = 'player-history-meta'
       const sessionLabel = Number(player.session_count) === 1 ? 'sessione' : 'sessioni'
-      meta.textContent = `Prima visita ${formatFullDate(player.first_seen)} · ${formatNumber(player.session_count)} ${sessionLabel}`
-      card.append(header, totals, meta)
+      meta.textContent = player.first_seen
+        ? `Prima visita ${formatFullDate(player.first_seen)} · ${formatNumber(player.session_count)} ${sessionLabel}`
+        : 'Personaggio recuperato dal Level.sav · nessuna sessione registrata dal sito'
+      card.append(header, progression)
+      if (!player.save_only) card.appendChild(totals)
+      card.appendChild(meta)
+
+      const statusPointLabels = [
+        ['max_hp', 'HP massimo'],
+        ['stamina', 'Stamina'],
+        ['attack', 'Attacco'],
+        ['carry_weight', 'Peso trasportabile'],
+        ['capture_rate', 'Cattura'],
+        ['work_speed', 'Velocità lavoro'],
+      ]
+      const visibleStatusPoints = statusPointLabels.filter(([key]) => Number(player.status_points?.[key]) > 0)
+      if (visibleStatusPoints.length || Number(player.unused_status_points) > 0) {
+        const details = document.createElement('details')
+        details.dataset.section = 'stats'
+        details.open = expanded.has(`${player.id}:stats`)
+        const summary = document.createElement('summary')
+        summary.textContent = 'Punti statistiche personaggio'
+        const stats = document.createElement('dl')
+        stats.className = 'player-stat-grid'
+        for (const [key, label] of visibleStatusPoints) {
+          const item = document.createElement('div')
+          const term = document.createElement('dt')
+          term.textContent = label
+          const description = document.createElement('dd')
+          description.textContent = formatNumber(player.status_points[key])
+          item.append(term, description)
+          stats.appendChild(item)
+        }
+        if (Number(player.unused_status_points) > 0) {
+          const item = document.createElement('div')
+          const term = document.createElement('dt')
+          term.textContent = 'Punti inutilizzati'
+          const description = document.createElement('dd')
+          description.textContent = formatNumber(player.unused_status_points)
+          item.append(term, description)
+          stats.appendChild(item)
+        }
+        details.append(summary, stats)
+        card.appendChild(details)
+      }
 
       if (player.periods?.length) {
         const details = document.createElement('details')
-        details.open = expanded.has(player.id)
+        details.dataset.section = 'sessions'
+        details.open = expanded.has(`${player.id}:sessions`)
         const summary = document.createElement('summary')
         summary.textContent = `Periodi online (${formatNumber(player.periods.length)})`
         const periods = document.createElement('ol')

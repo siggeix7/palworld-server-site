@@ -25,12 +25,15 @@ def enum(value):
     return prop(prop(value))
 
 
-def character(instance_id, owner_id="", **parameters):
+def character(instance_id, owner_id="", player_uid="", **parameters):
     values = {name: prop(value) for name, value in parameters.items()}
     if owner_id:
         values["OwnerPlayerUId"] = prop(owner_id)
+    key = {"InstanceId": prop(instance_id)}
+    if player_uid:
+        key["PlayerUId"] = prop(player_uid)
     return {
-        "key": {"InstanceId": prop(instance_id)},
+        "key": key,
         "value": {
             "RawData": prop({
                 "object": {"SaveParameter": prop(values)},
@@ -58,12 +61,42 @@ class GuildSyncParserTests(SimpleTestCase):
                         "players": [{
                             "player_uid": self.player_id,
                             "player_info": {"player_name": "Leader"},
+                        }, {
+                            "player_uid": "legacy-player-uid",
+                            "player_info": {"player_name": "Legacy"},
                         }],
                         "base_ids": [self.base_id],
                     }),
                 },
             }]),
             "CharacterSaveParameterMap": prop([
+                character(
+                    "leader-character",
+                    player_uid=self.player_id,
+                    IsPlayer=True,
+                    NickName="Leader",
+                    Level=51,
+                    Exp=123456,
+                    UnusedStatusPoint=3,
+                    GotStatusPointList={
+                        "values": [
+                            {
+                                "StatusName": prop("最大HP"),
+                                "StatusPoint": prop(4),
+                            },
+                            {
+                                "StatusName": prop("攻撃力"),
+                                "StatusPoint": prop(2),
+                            },
+                        ],
+                    },
+                    GotExStatusPointList={
+                        "values": [{
+                            "StatusName": prop("最大HP"),
+                            "StatusPoint": prop(1),
+                        }],
+                    },
+                ),
                 character(
                     "healthy-worker",
                     self.player_id,
@@ -130,6 +163,7 @@ class GuildSyncParserTests(SimpleTestCase):
     def test_builds_compact_health_and_world_aggregates(self):
         guild_sync.validate_world_data(self.world)
         guilds = guild_sync.parse_guilds(self.world)
+        players = guild_sync.parse_players(self.world, guilds)
         characters, guild_pal_ids = guild_sync.index_characters(self.world, guilds)
         containers = guild_sync.index_character_containers(self.world)
         world, raid_ids = guild_sync.parse_world(self.world)
@@ -160,8 +194,10 @@ class GuildSyncParserTests(SimpleTestCase):
         self.assertEqual(world["oil_rig_alert_count"], 1)
         self.assertEqual(diagnostics["unresolved_worker_count"], 0)
 
-        public_guilds, public_bases = guild_sync.minimize_payload(guilds, bases)
-        serialized = json.dumps([public_guilds, public_bases])
+        public_guilds, public_bases, public_players = guild_sync.minimize_payload(
+            guilds, bases, players
+        )
+        serialized = json.dumps([public_guilds, public_bases, public_players])
         self.assertNotIn(self.guild_id, serialized)
         self.assertNotIn(self.player_id, serialized)
         self.assertNotIn(self.base_id, serialized)
@@ -170,6 +206,20 @@ class GuildSyncParserTests(SimpleTestCase):
         self.assertNotIn("group_name", public_guilds[0])
         self.assertNotIn("location_z", public_bases[0])
         self.assertNotIn("player_count", public_bases[0])
+        leader = next(
+            player for player in public_players if player["player_name"] == "Leader"
+        )
+        legacy = next(
+            player for player in public_players if player["player_name"] == "Legacy"
+        )
+        self.assertEqual(len(leader["player_id"]), 20)
+        self.assertEqual(leader["level"], 51)
+        self.assertEqual(leader["exp"], 123456)
+        self.assertEqual(leader["owned_pal_count"], 1)
+        self.assertEqual(leader["unused_status_points"], 3)
+        self.assertEqual(leader["status_points"], {"max_hp": 5, "attack": 2})
+        self.assertEqual(legacy["level"], 0)
+        self.assertEqual(legacy["owned_pal_count"], 0)
 
     def test_rejects_an_unsupported_core_dataset(self):
         self.world["CharacterSaveParameterMap"] = prop({})
@@ -218,7 +268,7 @@ class GuildSyncParserTests(SimpleTestCase):
         ]
         raw_data.pop("guild_name")
         guilds = guild_sync.parse_guilds(self.world)
-        public_guilds, _ = guild_sync.minimize_payload(guilds, [])
+        public_guilds, _, _ = guild_sync.minimize_payload(guilds, [], [])
 
         self.assertEqual(public_guilds[0]["guild_name"], "")
         self.assertNotIn(self.player_id, json.dumps(public_guilds))
