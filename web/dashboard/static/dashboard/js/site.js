@@ -1,11 +1,23 @@
 (() => {
   'use strict'
 
-  const WORLD = {
-    maxX: 349400,
-    maxY: 724400,
-    minX: -1099400,
-    minY: -724400,
+  const MAPS = {
+    palpagos: {
+      label: 'Palpagos',
+      detail: 'Mappa principale · dati Palworld 1.0.1',
+      maxX: 349400,
+      maxY: 724400,
+      minX: -1099400,
+      minY: -724400,
+    },
+    'world-tree': {
+      label: 'Albero del Mondo',
+      detail: 'Area oltre l’Albero · dati Palworld 1.0.1',
+      maxX: 689148.5,
+      maxY: -476400,
+      minX: 347351.5,
+      minY: -818197,
+    },
   }
   // Palette and interaction concepts adapted from RNZ01/palworld-server-dashboard.
   // This implementation uses deterministic public IDs; see THIRD_PARTY_NOTICES.txt.
@@ -19,8 +31,8 @@
     snapshot: null,
     worldSaveData: null,
     selectedPlayer: null,
-    map: { scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false, pointers: new Map(), pinchDistance: 0, pinchScale: 1 },
-    points: { fast_travel: [], boss_tower: [] },
+    map: { active: 'palpagos', scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false, pointers: new Map(), pinchDistance: 0, pinchScale: 1, imageResolution: 0, imagePendingMap: null, imagePendingResolution: 0, imageRequest: 0, viewportWidth: 0, viewportHeight: 0 },
+    points: {},
     bases: [],
     guildNames: {},
     guildColors: {},
@@ -72,6 +84,10 @@
     mapPlane: $('#mapPlane'),
     mapImage: $('#mapImage'),
     mapImageError: $('#mapImageError'),
+    mapImageLoading: $('#mapImageLoading'),
+    mapRegionStatus: $('#mapRegionStatus'),
+    mapTouchActivate: $('#mapTouchActivate'),
+    mapTouchExit: $('#mapTouchExit'),
     mapCoordinate: $('#mapCoordinate'),
     mapEmpty: $('#mapEmpty'),
     playerLayer: $('#playerLayer'),
@@ -258,6 +274,34 @@
     return player?.location_available !== false && Number.isFinite(x) && Number.isFinite(y) && (x !== 0 || y !== 0)
   }
 
+  function activeMap() {
+    return MAPS[state.map.active] || MAPS.palpagos
+  }
+
+  function mapContains(mapId, x, y) {
+    const map = MAPS[mapId]
+    const px = Number(x)
+    const py = Number(y)
+    return Boolean(
+      map
+      && Number.isFinite(px)
+      && Number.isFinite(py)
+      && px >= map.minX
+      && px <= map.maxX
+      && py >= map.minY
+      && py <= map.maxY
+    )
+  }
+
+  function mapForLocation(x, y) {
+    if (mapContains(state.map.active, x, y)) return state.map.active
+    return Object.keys(MAPS).find((mapId) => mapContains(mapId, x, y)) || null
+  }
+
+  function hasActiveMapLocation(player) {
+    return hasMapLocation(player) && mapContains(state.map.active, player.location_x, player.location_y)
+  }
+
   async function requestJson(url, key, timeout = 8000) {
     if (state.requests[key]) state.requests[key].abort()
     const controller = new AbortController()
@@ -298,17 +342,76 @@
   }
 
   function worldToPercent(x, y) {
+    const world = activeMap()
     return {
-      left: ((Number(y) - WORLD.minY) / (WORLD.maxY - WORLD.minY)) * 100,
-      top: ((WORLD.maxX - Number(x)) / (WORLD.maxX - WORLD.minX)) * 100,
+      left: ((Number(y) - world.minY) / (world.maxY - world.minY)) * 100,
+      top: ((world.maxX - Number(x)) / (world.maxX - world.minX)) * 100,
     }
   }
 
   function percentToWorld(left, top) {
+    const world = activeMap()
     return {
-      x: WORLD.maxX - (top / 100) * (WORLD.maxX - WORLD.minX),
-      y: WORLD.minY + (left / 100) * (WORLD.maxY - WORLD.minY),
+      x: world.maxX - (top / 100) * (world.maxX - world.minX),
+      y: world.minY + (left / 100) * (world.maxY - world.minY),
     }
+  }
+
+  function mapImageSource(mapId, resolution) {
+    if (!elements.mapImage) return ''
+    const prefix = mapId === 'world-tree' ? 'worldTree' : 'palpagos'
+    const suffix = resolution === 8192 ? 'Full' : (resolution === 4096 ? 'Medium' : 'Small')
+    return elements.mapImage.dataset[`${prefix}${suffix}`] || ''
+  }
+
+  function updateMapImageResolution(force = false) {
+    if (!elements.mapImage || !elements.mapViewport) return
+    const width = elements.mapViewport.getBoundingClientRect().width || window.innerWidth
+    const needed = width * Math.min(3, window.devicePixelRatio || 1) * state.map.scale
+    const resolution = needed > 4096 ? 8192 : (needed > 2048 ? 4096 : 2048)
+    if (!force && resolution <= state.map.imageResolution) return
+    const source = mapImageSource(state.map.active, resolution)
+    if (!source) return
+    if (elements.mapImage.getAttribute('src') === source) {
+      state.map.imageResolution = resolution
+      return
+    }
+    if (
+      state.map.imagePendingMap === state.map.active
+      && state.map.imagePendingResolution === resolution
+    ) return
+    const mapId = state.map.active
+    const switchingMap = force || (elements.mapImageLoading && !elements.mapImageLoading.hidden)
+    const request = state.map.imageRequest + 1
+    state.map.imageRequest = request
+    state.map.imagePendingMap = mapId
+    state.map.imagePendingResolution = resolution
+    if (switchingMap && elements.mapImageLoading) elements.mapImageLoading.hidden = false
+    const image = new Image()
+    image.decoding = 'async'
+    image.addEventListener('load', async () => {
+      try {
+        await image.decode()
+      } catch (_error) {
+        // A completed load can still be safely reused when decode() is absent.
+      }
+      if (state.map.imageRequest !== request || state.map.active !== mapId) return
+      state.map.imagePendingMap = null
+      state.map.imagePendingResolution = 0
+      state.map.imageResolution = resolution
+      elements.mapImageError.hidden = true
+      if (elements.mapImageLoading) elements.mapImageLoading.hidden = true
+      elements.mapImage.alt = `Mappa di ${activeMap().label} aggiornata a Palworld 1.0.1`
+      elements.mapImage.src = source
+    })
+    image.addEventListener('error', () => {
+      if (state.map.imageRequest !== request || state.map.active !== mapId) return
+      state.map.imagePendingMap = null
+      state.map.imagePendingResolution = 0
+      if (elements.mapImageLoading) elements.mapImageLoading.hidden = true
+      if (switchingMap) elements.mapImageError.hidden = false
+    })
+    image.src = source
   }
 
   function mapLocalFromPointer(event) {
@@ -336,6 +439,13 @@
 
   function applyMapTransform() {
     if (!elements.mapPlane) return
+    const rect = elements.mapViewport.getBoundingClientRect()
+    if (state.map.viewportWidth && state.map.viewportHeight) {
+      state.map.panX *= rect.width / state.map.viewportWidth
+      state.map.panY *= rect.height / state.map.viewportHeight
+    }
+    state.map.viewportWidth = rect.width
+    state.map.viewportHeight = rect.height
     clampMapPan()
     if (state.map.frame !== null) return
     state.map.frame = window.requestAnimationFrame(() => {
@@ -372,7 +482,11 @@
       state.map.panY = anchorY - centerY - state.map.scale * (localY - centerY)
     }
     applyMapTransform()
-    if (previous !== state.map.scale) scheduleMapRender()
+    if (previous !== state.map.scale) {
+      dismissMapTooltip()
+      updateMapImageResolution()
+      scheduleMapRender()
+    }
     return previous !== state.map.scale
   }
 
@@ -404,14 +518,51 @@
     state.map.panX = 0
     state.map.panY = 0
     clearSelection()
+    dismissMapTooltip()
     applyMapTransform()
+  }
+
+  function setActiveMap(mapId, persist = true, preserveSelection = false, initialScale = 1) {
+    if (!MAPS[mapId] || mapId === state.map.active) return
+    state.map.active = mapId
+    state.map.scale = Math.min(5, Math.max(1, initialScale))
+    state.map.panX = 0
+    state.map.panY = 0
+    state.map.imageResolution = 0
+    state.heatmap.cells = []
+    state.heatmap.loaded = false
+    if (preserveSelection) clearTrail()
+    else clearSelection(false)
+    dismissMapTooltip()
+    drawHeatmapLayer()
+    setText(elements.mapCoordinate, 'X -- / Y --')
+    for (const button of document.querySelectorAll('[data-map-region]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.mapRegion === mapId))
+    }
+    if (elements.mapRegionStatus) {
+      const title = elements.mapRegionStatus.querySelector('strong')
+      const detail = elements.mapRegionStatus.querySelector('span')
+      setText(title, activeMap().label)
+      setText(detail, activeMap().detail)
+    }
+    updateMapImageResolution(true)
+    applyMapTransform()
+    renderStaticPoints()
+    renderBases()
+    if (state.snapshot) renderMap(state.snapshot.players || [])
+    if (state.heatmap.enabled) loadHeatmap()
+    if (persist) writeStorage('observatory.map.region', mapId)
   }
 
   function centerPlayer(player) {
     if (!elements.mapViewport || !hasMapLocation(player)) return
+    const mapId = mapForLocation(player.location_x, player.location_y)
+    if (!mapId) return
+    const targetScale = Math.max(2.2, state.map.scale)
+    if (mapId !== state.map.active) setActiveMap(mapId, true, false, targetScale)
     const position = worldToPercent(player.location_x, player.location_y)
     const rect = elements.mapViewport.getBoundingClientRect()
-    state.map.scale = Math.max(2.2, state.map.scale)
+    state.map.scale = targetScale
     state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
     state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
     state.selectedPlayer = player.id
@@ -420,6 +571,7 @@
       elements.followPlayer.disabled = false
     }
     applyMapTransform()
+    updateMapImageResolution()
     renderMap(state.snapshot?.players || [])
     if ($('#showTrail')?.checked) loadTrail(player.id)
   }
@@ -428,6 +580,12 @@
     if (!state.map.follow || !state.selectedPlayer || !elements.mapViewport) return
     const player = players.find((entry) => entry.id === state.selectedPlayer)
     if (!player || !hasMapLocation(player)) return
+    const mapId = mapForLocation(player.location_x, player.location_y)
+    if (!mapId) return
+    if (mapId !== state.map.active) {
+      setActiveMap(mapId, true, true, Math.max(2.2, state.map.scale))
+      return
+    }
     const position = worldToPercent(player.location_x, player.location_y)
     const rect = elements.mapViewport.getBoundingClientRect()
     state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
@@ -439,11 +597,11 @@
     const px = Array.isArray(point) ? point[0] : point.x
     const py = Array.isArray(point) ? point[1] : point.y
     const position = worldToPercent(px, py)
-    const node = document.createElement(type === 'player' || type === 'cluster' ? 'button' : 'span')
+    const node = document.createElement('button')
     node.className = `map-marker ${type}`
     node.style.left = `${position.left}%`
     node.style.top = `${position.top}%`
-    if (node instanceof HTMLButtonElement) node.type = 'button'
+    node.type = 'button'
     const icon = document.createElement('span')
     node.appendChild(icon)
     if (label) {
@@ -456,7 +614,7 @@
 
   function groupMapPlayers(players) {
     const mapped = players
-      .filter(hasMapLocation)
+      .filter(hasActiveMapLocation)
       .map((player) => ({ player, position: worldToPercent(player.location_x, player.location_y) }))
     if (state.map.scale >= 4.5 || mapped.length < 2) return mapped.map((entry) => [entry])
     const rect = elements.mapViewport.getBoundingClientRect()
@@ -504,6 +662,7 @@
     state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
     state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
     applyMapTransform()
+    updateMapImageResolution()
     renderMap(state.snapshot?.players || [])
   }
 
@@ -511,32 +670,41 @@
     if (!elements.fastTravelLayer || !elements.towerLayer) return
     elements.fastTravelLayer.replaceChildren()
     elements.towerLayer.replaceChildren()
-    for (const point of state.points.fast_travel || []) {
+    const points = state.points[state.map.active] || {}
+    for (const point of points.fast_travel || []) {
       const node = marker('fast', point)
-      node.dataset.name = point.name || 'Viaggio rapido'
-      node.addEventListener('pointerenter', () => showMapTooltip(node, point.name || 'Viaggio rapido'))
-      node.addEventListener('pointerleave', hideMapTooltip)
-      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, point.name || 'Viaggio rapido') })
+      const name = point.name || 'Viaggio rapido'
+      node.dataset.name = point.id || name
+      node.setAttribute('aria-label', `Viaggio rapido: ${name}`)
+      bindMapTooltip(node, { title: name, rows: [{ text: 'Viaggio rapido' }] })
       elements.fastTravelLayer.appendChild(node)
     }
-    for (const point of state.points.boss_tower || []) {
+    for (const point of points.boss_tower || []) {
       const node = marker('tower', point)
-      node.dataset.name = point.name || 'Torre'
-      node.addEventListener('pointerenter', () => showMapTooltip(node, point.name || 'Torre'))
-      node.addEventListener('pointerleave', hideMapTooltip)
-      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, point.name || 'Torre') })
+      const name = point.name || 'Torre'
+      node.dataset.name = point.id || name
+      node.setAttribute('aria-label', `Torre: ${name}`)
+      bindMapTooltip(node, {
+        title: name,
+        rows: [{ text: point.detail || 'Torre del boss' }],
+      })
       elements.towerLayer.appendChild(node)
     }
   }
 
   let mapTooltip = null
+  let mapTooltipTarget = null
   let mapTooltipTimer = null
+  let mapTooltipSequence = 0
+  const mapTooltipBindings = new WeakMap()
 
   function showMapTooltip(node, text) {
     if (mapTooltipTimer) window.clearTimeout(mapTooltipTimer)
-    if (mapTooltip) mapTooltip.remove()
+    dismissMapTooltip()
     mapTooltip = document.createElement('div')
     mapTooltip.className = 'map-tooltip'
+    mapTooltip.id = `mapTooltip${mapTooltipSequence += 1}`
+    mapTooltip.setAttribute('role', 'tooltip')
     if (text && typeof text === 'object') {
       const title = document.createElement('strong')
       title.textContent = text.title || ''
@@ -550,7 +718,9 @@
     } else {
       mapTooltip.textContent = text
     }
-    mapTooltip.dataset.target = node.dataset.name || ''
+    mapTooltipTarget = node
+    node.setAttribute('aria-expanded', 'true')
+    node.setAttribute('aria-describedby', mapTooltip.id)
     elements.mapViewport?.appendChild(mapTooltip)
     const rect = node.getBoundingClientRect()
     const vpRect = elements.mapViewport?.getBoundingClientRect()
@@ -574,21 +744,84 @@
     if (mapTooltipTimer) window.clearTimeout(mapTooltipTimer)
     mapTooltipTimer = window.setTimeout(() => {
       if (mapTooltip) {
+        const target = mapTooltipTarget
         mapTooltip.classList.remove('visible')
         const el = mapTooltip
         mapTooltip = null
+        mapTooltipTarget = null
+        target?.setAttribute('aria-expanded', 'false')
+        target?.removeAttribute('aria-describedby')
         window.setTimeout(() => el.remove(), 200)
       }
     }, 150)
   }
 
+  function dismissMapTooltip() {
+    if (mapTooltipTimer) window.clearTimeout(mapTooltipTimer)
+    mapTooltipTimer = null
+    if (mapTooltip) mapTooltip.remove()
+    mapTooltip = null
+    mapTooltipTarget?.setAttribute('aria-expanded', 'false')
+    mapTooltipTarget?.removeAttribute('aria-describedby')
+    mapTooltipTarget = null
+  }
+
   function toggleMapTooltip(node, text) {
-    if (mapTooltip && mapTooltip.dataset.target === node.dataset.name) {
-      hideMapTooltip()
-    } else {
-      showMapTooltip(node, text)
-      if (mapTooltip) mapTooltip.dataset.target = node.dataset.name
+    if (mapTooltip && mapTooltipTarget === node) dismissMapTooltip()
+    else showMapTooltip(node, text)
+  }
+
+  function nearestTappableMarker(event, fallback) {
+    let nearest = fallback
+    let nearestDistance = Number.POSITIVE_INFINITY
+    for (const candidate of elements.mapPlane?.querySelectorAll('.map-marker') || []) {
+      const binding = mapTooltipBindings.get(candidate)
+      if (!binding?.tapToToggle || candidate.offsetParent === null) continue
+      const rect = candidate.getBoundingClientRect()
+      const distance = Math.hypot(
+        event.clientX - rect.left - rect.width / 2,
+        event.clientY - rect.top - rect.height / 2,
+      )
+      if (distance < nearestDistance) {
+        nearest = candidate
+        nearestDistance = distance
+      }
     }
+    return nearest
+  }
+
+  function bindMapTooltip(node, content, tapToToggle = true) {
+    mapTooltipBindings.set(node, { content, tapToToggle })
+    node.setAttribute('aria-expanded', 'false')
+    node.addEventListener('pointerdown', (event) => {
+      node.dataset.pointerType = event.pointerType || ''
+    })
+    node.addEventListener('keydown', () => {
+      node.dataset.pointerType = 'keyboard'
+    })
+    node.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'mouse') showMapTooltip(node, content)
+    })
+    node.addEventListener('pointerleave', (event) => {
+      if (event.pointerType === 'mouse') hideMapTooltip()
+    })
+    node.addEventListener('focus', () => {
+      if (node.dataset.pointerType !== 'touch') showMapTooltip(node, content)
+    })
+    node.addEventListener('blur', () => {
+      node.dataset.pointerType = ''
+      hideMapTooltip()
+    })
+    if (!tapToToggle) return
+    node.addEventListener('click', (event) => {
+      event.stopPropagation()
+      const pointerType = event.pointerType || node.dataset.pointerType
+      if (pointerType === 'mouse' || event.detail === 0) showMapTooltip(node, content)
+      else {
+        const target = nearestTappableMarker(event, node)
+        toggleMapTooltip(target, mapTooltipBindings.get(target)?.content || content)
+      }
+    })
   }
 
   function renderSelection(players) {
@@ -613,7 +846,8 @@
     elements.playerLayer.replaceChildren()
     elements.mapRoster.replaceChildren()
     setText(elements.rosterCount, String(players.length))
-    elements.mapEmpty.classList.toggle('visible', players.length === 0)
+    const visiblePlayerCount = players.filter(hasActiveMapLocation).length
+    elements.mapEmpty.classList.toggle('visible', visiblePlayerCount === 0)
 
     if (!players.length) {
       const empty = document.createElement('p')
@@ -635,9 +869,11 @@
         node.classList.toggle('selected', player.id === state.selectedPlayer)
         node.setAttribute('aria-label', `Centra ${player.name} sulla mappa`)
         node.setAttribute('aria-pressed', String(player.id === state.selectedPlayer))
-        node.addEventListener('pointerenter', () => showMapTooltip(node, `${player.name} · Lv.${player.level} · ${formatNumber(player.ping)} ms`))
-        node.addEventListener('pointerleave', hideMapTooltip)
-        node.addEventListener('click', () => centerPlayer(player))
+        bindMapTooltip(node, `${player.name} · Lv.${player.level} · ${formatNumber(player.ping)} ms`, false)
+        node.addEventListener('click', () => {
+          dismissMapTooltip()
+          centerPlayer(player)
+        })
         elements.playerLayer.appendChild(node)
       } else {
         const x = group.reduce((total, entry) => total + Number(entry.player.location_x), 0) / group.length
@@ -652,13 +888,17 @@
     }
 
     for (const player of players) {
-      const mapped = hasMapLocation(player)
+      const mapId = hasMapLocation(player)
+        ? mapForLocation(player.location_x, player.location_y)
+        : null
+      const mapped = Boolean(mapId)
       const roster = document.createElement('button')
       roster.type = 'button'
       roster.dataset.playerId = player.id
       roster.className = 'roster-player'
       roster.classList.toggle('selected', player.id === state.selectedPlayer)
       roster.classList.toggle('unmapped', !mapped)
+      roster.classList.toggle('other-map', Boolean(mapId && mapId !== state.map.active))
       roster.setAttribute('aria-pressed', String(player.id === state.selectedPlayer))
       roster.style.setProperty('--player-color', playerColor(player.id))
       if (!mapped) roster.disabled = true
@@ -675,9 +915,11 @@
       detail.className = pingClass(player.ping)
       identity.append(name, detail)
       const coordinate = document.createElement('span')
-      coordinate.textContent = mapped
-        ? `${formatNumber(player.location_x, 0)} / ${formatNumber(player.location_y, 0)}`
-        : 'Posizione non disponibile'
+      coordinate.textContent = !mapped
+        ? 'Posizione non disponibile'
+        : (mapId === state.map.active
+            ? `${formatNumber(player.location_x, 0)} / ${formatNumber(player.location_y, 0)}`
+            : MAPS[mapId].label)
       roster.append(avatar, identity, coordinate)
       if (mapped) roster.addEventListener('click', () => centerPlayer(player))
       elements.mapRoster.appendChild(roster)
@@ -701,7 +943,7 @@
       const data = await requestJson(`/api/v1/player/${encodeURIComponent(playerId)}/trail?range=${encodeURIComponent(range)}`, 'trail')
       if (state.selectedPlayer !== playerId || !$('#showTrail')?.checked) return
       const points = (data.positions || [])
-        .filter((position) => Number(position.x) !== 0 || Number(position.y) !== 0)
+        .filter((position) => mapContains(state.map.active, position.x, position.y))
         .map((position) => {
           const mapped = worldToPercent(position.x, position.y)
           return `${mapped.left * 10},${mapped.top * 10}`
@@ -749,10 +991,11 @@
   async function loadHeatmap() {
     if (!elements.heatmapLayer) return
     const range = elements.heatmapRange?.value || '24h'
+    const mapId = state.map.active
     state.heatmap.range = range
     try {
-      const data = await requestJson(`/api/v1/map/heatmap?range=${encodeURIComponent(range)}`, 'heatmap')
-      if (state.heatmap.range !== range) return
+      const data = await requestJson(`/api/v1/map/heatmap?range=${encodeURIComponent(range)}&map=${encodeURIComponent(mapId)}`, 'heatmap')
+      if (state.heatmap.range !== range || state.map.active !== mapId) return
       state.heatmap.cells = Array.isArray(data.cells) ? data.cells : []
       state.heatmap.maxCount = data.max_count || 0
       state.heatmap.grid = data.grid_size || 48
@@ -1738,6 +1981,30 @@
 
   function bindMapControls() {
     if (!elements.mapViewport) return
+    const mapOptions = $('#mapOptions')
+    const compactMapControls = window.matchMedia('(max-width: 700px), (max-height: 600px)')
+    const syncMapOptions = () => {
+      if (mapOptions) mapOptions.open = !compactMapControls.matches
+    }
+    syncMapOptions()
+    compactMapControls.addEventListener?.('change', syncMapOptions)
+
+    const regionButtons = [...document.querySelectorAll('[data-map-region]')]
+    for (const [index, button] of regionButtons.entries()) {
+      button.addEventListener('click', () => setActiveMap(button.dataset.mapRegion))
+      button.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return
+        event.preventDefault()
+        const offset = event.key === 'ArrowRight' ? 1 : -1
+        const next = regionButtons[(index + offset + regionButtons.length) % regionButtons.length]
+        next.focus()
+        setActiveMap(next.dataset.mapRegion)
+      })
+    }
+    const storedMap = readStorage('observatory.map.region', 'palpagos')
+    if (MAPS[storedMap] && storedMap !== state.map.active) setActiveMap(storedMap, false)
+    else updateMapImageResolution(true)
+
     const layerPreferences = [
       ['showPlayers', elements.playerLayer, 'players', true],
       ['showFastTravel', elements.fastTravelLayer, 'fastTravel', false],
@@ -1753,6 +2020,7 @@
       input.addEventListener('change', (event) => {
         if (key === 'players') layer.hidden = !event.target.checked
         else layer.classList.toggle('visible', event.target.checked)
+        if (!event.target.checked && mapTooltipTarget?.closest(`#${layer.id}`)) dismissMapTooltip()
         if (key === 'bases' && event.target.checked) renderBases()
         writeStorage(`observatory.map.${key}`, event.target.checked ? '1' : '0')
       })
@@ -1829,33 +2097,93 @@
         }
       })
     }
+
+    const setTouchMapActive = (active) => {
+      elements.mapViewport.classList.toggle('touch-active', active)
+      if (elements.mapTouchExit) elements.mapTouchExit.hidden = !active
+      if (!active) {
+        state.map.pointers.clear()
+        state.map.dragging = false
+        state.map.pinchDistance = 0
+        elements.mapViewport.classList.remove('dragging')
+        dismissMapTooltip()
+      }
+    }
+    elements.mapTouchActivate?.addEventListener('click', (event) => {
+      event.stopPropagation()
+      setTouchMapActive(true)
+      elements.mapViewport.focus({ preventScroll: true })
+    })
+    elements.mapTouchExit?.addEventListener('click', (event) => {
+      event.stopPropagation()
+      setTouchMapActive(false)
+    })
+
     const fullscreenButton = elements.fullscreenMap
     if (fullscreenButton) {
-      fullscreenButton.addEventListener('click', () => {
+      let wasFullscreen = false
+      const updateFullscreenState = () => {
         const card = elements.mapCard
         if (!card) return
-        const isFs = card.classList.toggle('fullscreen')
-        fullscreenButton.textContent = isFs ? 'Esci schermo intero' : 'Schermo intero'
+        const isFs = document.fullscreenElement === card || card.classList.contains('fullscreen')
+        if (wasFullscreen && !isFs) setTouchMapActive(false)
+        wasFullscreen = isFs
+        fullscreenButton.textContent = isFs ? 'Esci' : 'Espandi'
         fullscreenButton.setAttribute('aria-label', isFs ? 'Esci da schermo intero' : 'Attiva schermo intero')
-        resetMap()
         window.requestAnimationFrame(() => {
+          if (isFs) {
+            const toolbar = card.querySelector('.map-toolbar')
+            const statusHeight = elements.mapRegionStatus?.offsetHeight || 0
+            const landscape = window.matchMedia('(max-height: 600px) and (min-width: 701px)').matches
+            const availableWidth = card.clientWidth - (landscape ? toolbar?.offsetWidth || 0 : 0)
+            const availableHeight = card.clientHeight - statusHeight - (landscape ? 0 : toolbar?.offsetHeight || 0)
+            const size = Math.max(180, Math.min(availableWidth, availableHeight))
+            card.style.setProperty('--map-fullscreen-size', `${size}px`)
+          } else {
+            card.style.removeProperty('--map-fullscreen-size')
+          }
           applyMapTransform()
           if (state.snapshot) renderMap(state.snapshot.players || [])
           drawHeatmapLayer()
+          updateMapImageResolution()
         })
-      })
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && elements.mapCard?.classList.contains('fullscreen')) {
-          elements.mapCard.classList.remove('fullscreen')
-          fullscreenButton.textContent = 'Schermo intero'
-          fullscreenButton.setAttribute('aria-label', 'Attiva schermo intero')
-          resetMap()
-          window.requestAnimationFrame(() => {
-            applyMapTransform()
-            if (state.snapshot) renderMap(state.snapshot.players || [])
-            drawHeatmapLayer()
-          })
+      }
+      fullscreenButton.addEventListener('click', async () => {
+        const card = elements.mapCard
+        if (!card) return
+        if (document.fullscreenElement === card) {
+          await document.exitFullscreen()
+          setTouchMapActive(false)
+          return
         }
+        if (card.classList.contains('fullscreen')) {
+          card.classList.remove('fullscreen')
+          document.body.classList.remove('map-fullscreen-open')
+          setTouchMapActive(false)
+          updateFullscreenState()
+          return
+        }
+        try {
+          if (!card.requestFullscreen) throw new Error('fullscreen unavailable')
+          await card.requestFullscreen()
+        } catch (_error) {
+          card.classList.add('fullscreen')
+          document.body.classList.add('map-fullscreen-open')
+        }
+        if (window.matchMedia('(any-pointer: coarse)').matches) setTouchMapActive(true)
+        updateFullscreenState()
+      })
+      document.addEventListener('fullscreenchange', updateFullscreenState)
+      window.addEventListener('resize', updateFullscreenState)
+      $('#mapOptions')?.addEventListener('toggle', updateFullscreenState)
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return
+        dismissMapTooltip()
+        if (!elements.mapCard?.classList.contains('fullscreen')) return
+        elements.mapCard.classList.remove('fullscreen')
+        document.body.classList.remove('map-fullscreen-open')
+        setTouchMapActive(false)
+        updateFullscreenState()
       })
     }
     $('#zoomIn')?.addEventListener('click', () => setZoom(state.map.scale + 0.45))
@@ -1872,7 +2200,10 @@
       if (changed) event.preventDefault()
     }, { passive: false })
     elements.mapViewport.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'touch' && !elements.mapViewport.classList.contains('touch-active')) return
+      if (event.pointerType === 'mouse' && event.button !== 0) return
       if (event.target.closest('.map-marker')) return
+      dismissMapTooltip()
       state.map.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       elements.mapViewport.setPointerCapture(event.pointerId)
       if (state.map.pointers.size === 1) {
@@ -1888,6 +2219,7 @@
       }
     })
     elements.mapViewport.addEventListener('pointermove', (event) => {
+      if (event.pointerType === 'touch' && !elements.mapViewport.classList.contains('touch-active')) return
       if (state.map.pointers.has(event.pointerId)) {
         state.map.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       }
@@ -1940,13 +2272,22 @@
       else if (event.key === 'ArrowDown') state.map.panY -= step
       else return
       event.preventDefault()
+      dismissMapTooltip()
       applyMapTransform()
+    })
+    elements.mapViewport.addEventListener('click', (event) => {
+      if (!event.target.closest('.map-marker, .map-touch-activate, .map-touch-exit')) {
+        dismissMapTooltip()
+      }
     })
   }
 
   async function loadStaticPoints() {
     try {
-      state.points = await requestJson('/static/dashboard/data/map-points.json', 'points', 5000)
+      const data = await requestJson('/static/dashboard/data/map-points.json', 'points', 5000)
+      state.points = data?.maps && typeof data.maps === 'object'
+        ? data.maps
+        : { palpagos: data || {} }
       renderStaticPoints()
     } catch (_error) {
       // Static POIs are optional; live player positions remain available.
@@ -2028,6 +2369,7 @@
     const toggle = $('#showBases')
     if (toggle && !toggle.checked) return
     for (const base of state.bases) {
+      if (!mapContains(state.map.active, base.location_x, base.location_y)) continue
       const position = worldToPercent(base.location_x, base.location_y)
       const node = document.createElement('button')
       node.type = 'button'
@@ -2041,9 +2383,7 @@
       const label = `${tooltip.title} · ${base.guild_name}`
       node.dataset.name = base.base_id || label
       node.setAttribute('aria-label', label)
-      node.addEventListener('pointerenter', () => showMapTooltip(node, tooltip))
-      node.addEventListener('pointerleave', hideMapTooltip)
-      node.addEventListener('click', (e) => { e.stopPropagation(); toggleMapTooltip(node, tooltip) })
+      bindMapTooltip(node, tooltip)
       layer.appendChild(node)
     }
   }
@@ -2225,6 +2565,7 @@
       window.cancelAnimationFrame(resizeFrame)
       resizeFrame = window.requestAnimationFrame(() => {
         applyMapTransform()
+        updateMapImageResolution()
         if (state.snapshot) renderMap(state.snapshot.players || [])
         drawChart()
         drawHeatmapLayer()

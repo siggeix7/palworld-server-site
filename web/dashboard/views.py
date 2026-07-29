@@ -955,11 +955,19 @@ def connector_status(request):
     )
 
 
-WORLD_BOUNDS = {
-    "min_x": -1099400,
-    "max_x": 349400,
-    "min_y": -724400,
-    "max_y": 724400,
+MAP_BOUNDS = {
+    "palpagos": {
+        "min_x": -1099400,
+        "max_x": 349400,
+        "min_y": -724400,
+        "max_y": 724400,
+    },
+    "world-tree": {
+        "min_x": 347351.5,
+        "max_x": 689148.5,
+        "min_y": -818197,
+        "max_y": -476400,
+    },
 }
 MAP_HEATMAP_GRID = 48
 MAP_HEATMAP_RANGES = {
@@ -1146,32 +1154,45 @@ def map_heatmap(request):
     duration = MAP_HEATMAP_RANGES.get(range_name)
     if not duration:
         return JsonResponse({"error": "unsupported range"}, status=400)
+    map_id = request.GET.get("map", "palpagos")
+    bounds = MAP_BOUNDS.get(map_id)
+    if not bounds:
+        return JsonResponse({"error": "unsupported map"}, status=400)
     now = timezone.now()
     since = now - duration
-    min_x = WORLD_BOUNDS["min_x"]
-    max_x = WORLD_BOUNDS["max_x"]
-    min_y = WORLD_BOUNDS["min_y"]
-    max_y = WORLD_BOUNDS["max_y"]
+    min_x = bounds["min_x"]
+    max_x = bounds["max_x"]
+    min_y = bounds["min_y"]
+    max_y = bounds["max_y"]
     span_x = max_x - min_x
     span_y = max_y - min_y
     grid = MAP_HEATMAP_GRID
     cells = {}
     queryset = PositionSample.objects.filter(
-        source_clock__gte=since, source_clock__lte=now
+        source_clock__gte=since,
+        source_clock__lte=now,
+        x__gte=min_x,
+        x__lte=max_x,
+        y__gte=min_y,
+        y__lte=max_y,
     ).values_list("x", "y").iterator(chunk_size=2000)
     for x, y in queryset:
         if x == 0 and y == 0:
             continue
-        gx = int((x - min_x) / span_x * grid)
-        gy = int((y - min_y) / span_y * grid)
+        gx = min(grid - 1, int((y - min_y) / span_y * grid))
+        gy = min(grid - 1, int((max_x - x) / span_x * grid))
         if 0 <= gx < grid and 0 <= gy < grid:
             cells[(gx, gy)] = cells.get((gx, gy), 0) + 1
     return JsonResponse({
         "generated_at": _iso(now),
         "range": range_name,
-        "bounds": WORLD_BOUNDS,
+        "map": map_id,
+        "bounds": bounds,
         "grid_size": grid,
-        "cells": [{"x": k[0], "y": k[1], "count": v} for k, v in cells.items()],
+        "cells": [
+            {"x": key[0], "y": key[1], "count": value}
+            for key, value in sorted(cells.items())
+        ],
         "max_count": max(cells.values()) if cells else 0,
         "total_samples": sum(cells.values()),
     })

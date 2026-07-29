@@ -29,22 +29,47 @@ Adapted material and modifications:
   ingest sanitizer. Raw player/user IDs and IP addresses are still discarded.
 - `lib/theme-context.tsx`: theme names and accent palette were adapted to the
   existing Observatory CSS variables without React, Tailwind or Radix.
-- `lib/map-points.json`: seven tower and 81 validated fast-travel coordinates
-  are present in `web/dashboard/static/dashboard/data/map-points.json`. The
-  ambiguous upstream point `[6, -1]` is intentionally omitted.
-- `public/palworld-map/full-map-native-8192.webp`: distributed locally as
-  `web/dashboard/static/dashboard/images/palworld-map.webp`, byte-identical to
-  Git blob `b7b2db97749bd8715bb6ebcb9d9b62eacac61ff2` with SHA-256
-  `26b4a2564820db2d085b5462293891a99676ce98dc5bf11680bfa3f6784f0816`.
-  Its matching MainMap bounds are `[349400, 724400, -1099400, -724400]`.
+- `public/palworld-map/full-map-native-8192.webp`: the Palpagos overview was
+  subsequently updated to the 8192x8192 Palworld 1.0 map distributed locally as
+  `web/dashboard/static/dashboard/images/palworld-map.webp`, SHA-256
+  `34f67e2e02a9c573d7c2c229207844407a852b7e016f9796b9603e0db3115a86`.
+  Its matching bounds are `[349400, 724400, -1099400, -724400]`. Local 2048
+  and 4096 WebP derivatives reduce transfer and decode cost on smaller screens.
 
 The public site exposes the full notice below through
 `web/dashboard/static/dashboard/THIRD_PARTY_NOTICES.txt`.
 
 No RNZ01 administrative proxy, authentication, password storage, kick/ban,
 announcement, save, shutdown, restart, chat or raw console code is included.
-No additional Palworld artwork, Gridcn components or npm dependencies were
-copied during this integration.
+No Gridcn components or npm dependencies were copied from RNZ01 during this
+integration.
+
+## LukeHollandDev/palworld-live-map
+
+The Palworld 1.0.1 map manifest and static navigation catalogues were generated
+by the reproducible exporter documented at:
+
+https://github.com/LukeHollandDev/palworld-live-map
+
+Pinned game-data version: `1.0.1.100619`.
+
+- `assets/palworld/maps/world-tree.jpg`: native 8192x8192 World Tree overview,
+  source SHA-256
+  `77fee7b2bb90fa62f26eeb862396d54dbc8c7d2f0f5b12339c12585474f7c521`,
+  converted locally to WebP at
+  `web/dashboard/static/dashboard/images/palworld-map-world-tree.webp`,
+  SHA-256
+  `8a08427dc41f25189dbab4c8e15ad529c35b0e36b2901e426203a4ff5dd03ec2`.
+  Its matching bounds are `[689148.5, -476400, 347351.5, -818197]`. Local 2048
+  and 4096 WebP derivatives are served adaptively.
+- `assets/palworld/landmarks/catalogue/navigation.json` and
+  `assets/palworld/landmarks/manifest.json`: factual names and coordinates were
+  minimized into `web/dashboard/static/dashboard/data/map-points.json`. It
+  contains 137 Palpagos and 15 World Tree fast-travel points, plus eight
+  Palpagos and one World Tree boss towers. Internal object paths, instance IDs,
+  state keys and unrelated game data are not included.
+
+No application or exporter code from this project is included.
 
 ### RNZ01 MIT License
 
@@ -72,11 +97,12 @@ SOFTWARE.
 
 ## Pocketpair material
 
-The RNZ01 MIT License covers RNZ01's software contributions. It does not grant
-rights to Palworld artwork, trademarks or other material owned by Pocketpair,
-Inc. The map image appears to originate from Palworld game data. Palworld and
-the map artwork are trademarks and copyrighted material of Pocketpair, Inc.
-This project is an unofficial community dashboard and is not affiliated with
-or endorsed by Pocketpair. Anyone redistributing the map must independently
-verify that the intended use complies with applicable Pocketpair terms and
-fan-content rules.
+The software licenses referenced above do not grant rights to Palworld artwork,
+trademarks or game data owned by Pocketpair, Inc. The map images originate from
+Palworld game data. Palworld and the map artwork are trademarks and copyrighted
+material of Pocketpair, Inc. This project is an unofficial community dashboard
+and is not affiliated with or endorsed by Pocketpair. Anyone redistributing the
+maps must independently verify that the intended use complies with applicable
+Pocketpair terms and fan-content rules:
+
+https://www.pocketpair.jp/en/guidelines-derivativework-en/

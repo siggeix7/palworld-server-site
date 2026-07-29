@@ -1,736 +1,993 @@
 {
-  "boss_tower": [
-    {
-      "x": -266563.2,
-      "y": 174506.3,
-      "name": "Torre della Syndicate di Rayne"
+  "schema_version": 2,
+  "game_version": "1.0.1.100619",
+  "maps": {
+    "palpagos": {
+      "fast_travel": [
+        {
+          "id": "FTPoint98",
+          "x": -156482.2344,
+          "y": 317415.3125,
+          "name": "Altar of the Windcaller"
+        },
+        {
+          "id": "FTPoint128",
+          "x": -923275.125,
+          "y": -385109.125,
+          "name": "Amethyst Outcrop"
+        },
+        {
+          "id": "FTPoint4",
+          "x": -414446.7188,
+          "y": -24603.3223,
+          "name": "Ancient Civilization Ruins"
+        },
+        {
+          "id": "FTPoint31",
+          "x": -257951.3906,
+          "y": 151247.8438,
+          "name": "Ancient Ritual Site"
+        },
+        {
+          "id": "FTPoint92",
+          "x": -160345.1719,
+          "y": 98540.7891,
+          "name": "Anubis Dunes"
+        },
+        {
+          "id": "FTPoint63",
+          "x": -117215.0234,
+          "y": 446689.9688,
+          "name": "Arena Entrance"
+        },
+        {
+          "id": "FTPoint25",
+          "x": -326403.8438,
+          "y": 55136.7266,
+          "name": "Ascetic Falls"
+        },
+        {
+          "id": "FTPoint127",
+          "x": -865524.3125,
+          "y": -352355.0312,
+          "name": "Azure Cliffs"
+        },
+        {
+          "id": "SkyIsland_BOSS",
+          "x": -777490,
+          "y": -40589,
+          "name": "Azure Covenant Tower Entrance"
+        },
+        {
+          "id": "FTPoint7",
+          "x": -383183.1562,
+          "y": -210790.9219,
+          "name": "Beach of Everlasting Summer"
+        },
+        {
+          "id": "New_SmallIsland04",
+          "x": -984033.6875,
+          "y": -371189.75,
+          "name": "Bicornis Islet"
+        },
+        {
+          "id": "FTPoint61",
+          "x": -294830,
+          "y": 152240,
+          "name": "Bridge of the Twin Knights"
+        },
+        {
+          "id": "FTPoint68",
+          "x": -25915.3711,
+          "y": -78926.1641,
+          "name": "Cherry Blossom Crossroads"
+        },
+        {
+          "id": "FTPoint41",
+          "x": -248770.1094,
+          "y": 126205.8438,
+          "name": "Cinnamoth Forest"
+        },
+        {
+          "id": "FTPoint14",
+          "x": -119037.2891,
+          "y": 138340.3594,
+          "name": "Cold Shore"
+        },
+        {
+          "id": "FTPoint117",
+          "x": -578061,
+          "y": -158216.0781,
+          "name": "Crimson Cliffs"
+        },
+        {
+          "id": "FTPoint121",
+          "x": -651722.875,
+          "y": -373365.2188,
+          "name": "Crimson Labyrinth"
+        },
+        {
+          "id": "SkyIsland_B",
+          "x": -829095.6875,
+          "y": -19262.8457,
+          "name": "Crystalline Archipelago"
+        },
+        {
+          "id": "FTPoint122",
+          "x": -644486,
+          "y": -276536.5,
+          "name": "Crystallized Great Tree"
+        },
+        {
+          "id": "FTPoint119",
+          "x": -506737.8125,
+          "y": -396063.4375,
+          "name": "Curved Redrock"
+        },
+        {
+          "id": "FTPoint43",
+          "x": -215388.5156,
+          "y": 8854.2227,
+          "name": "Deep Bamboo Thicket"
+        },
+        {
+          "id": "FTPoint13",
+          "x": 117624.25,
+          "y": 400134.7812,
+          "name": "Deep Sand Dunes"
+        },
+        {
+          "id": "FTPoint103",
+          "x": -38212.0039,
+          "y": 406147.0625,
+          "name": "Desert Backbone"
+        },
+        {
+          "id": "FTPoint79",
+          "x": -591120,
+          "y": -484260,
+          "name": "Deserted Ash Plateau"
+        },
+        {
+          "id": "Boss_KingWhale",
+          "x": -108666.75,
+          "y": 79119.8672,
+          "name": "Deserted Islet"
+        },
+        {
+          "id": "FTPoint101",
+          "x": 14388.1836,
+          "y": 476545.5938,
+          "name": "Desiccated Coast"
+        },
+        {
+          "id": "FTPoint22",
+          "x": -314840,
+          "y": 186850,
+          "name": "Desolate Church"
+        },
+        {
+          "id": "FTPoint111",
+          "x": -415272.2188,
+          "y": -162408.6094,
+          "name": "Dry Dunes"
+        },
+        {
+          "id": "FTPoint12",
+          "x": 35588.6602,
+          "y": 321331.25,
+          "name": "Duneshelter"
+        },
+        {
+          "id": "FTPoint97",
+          "x": -119900.8516,
+          "y": 351109.2188,
+          "name": "Dustview Coast"
+        },
+        {
+          "id": "FTPoint57",
+          "x": -170718.6875,
+          "y": 409753.1562,
+          "name": "Eastern Wild Island"
+        },
+        {
+          "id": "FTPoint80",
+          "x": -671901.25,
+          "y": -172407.5625,
+          "name": "Emberstone Plateau"
+        },
+        {
+          "id": "SkyIsland_A",
+          "x": -818013.0625,
+          "y": 59827.7188,
+          "name": "Enchanted Firmament"
+        },
+        {
+          "id": "FTPoint3",
+          "x": -367707.7812,
+          "y": -114950.8984,
+          "name": "Eternal Pyre Tower Entrance"
+        },
+        {
+          "id": "FTPoint129",
+          "x": -886234.25,
+          "y": -483745.9375,
+          "name": "Exile's Cape"
+        },
+        {
+          "id": "SkyIsland_E",
+          "x": -771309.9375,
+          "y": 8647.208,
+          "name": "Farcry Marsh"
+        },
+        {
+          "id": "FTPoint83",
+          "x": -798776.8125,
+          "y": -479574.8125,
+          "name": "Feybreak Shipwreck"
+        },
+        {
+          "id": "FTPoint76",
+          "x": -888080,
+          "y": -433080,
+          "name": "Feybreak Tower Entrance"
+        },
+        {
+          "id": "FTPoint5",
+          "x": -465895,
+          "y": -62137.7539,
+          "name": "Fisherman's Point"
+        },
+        {
+          "id": "New_SmallIsland02",
+          "x": 63442.5391,
+          "y": 507395.375,
+          "name": "Flamepulse Islet"
+        },
+        {
+          "id": "FTPoint26",
+          "x": -349535.5,
+          "y": -4035.1057,
+          "name": "Foot of the Volcano"
+        },
+        {
+          "id": "FootOfWorldTree",
+          "x": 192505.8281,
+          "y": -227006.4688,
+          "name": "Foot of the World Tree"
+        },
+        {
+          "id": "FTPoint28",
+          "x": -302825,
+          "y": 241060,
+          "name": "Fort Ruins"
+        },
+        {
+          "id": "Boss_Forest",
+          "x": -265220,
+          "y": 173530,
+          "name": "Free Pal Alliance Tower Entrance"
+        },
+        {
+          "id": "FTPoint87",
+          "x": -558410.4375,
+          "y": 121112.1016,
+          "name": "Frostbitten Isle"
+        },
+        {
+          "id": "FTPoint37",
+          "x": -103434.9844,
+          "y": 234761.1719,
+          "name": "Frostbound Mountains Summit"
+        },
+        {
+          "id": "FTPoint107",
+          "x": 125988.6953,
+          "y": 274597.8438,
+          "name": "Frozen Dune Cape"
+        },
+        {
+          "id": "FTPoint114",
+          "x": 107940.7422,
+          "y": -28036.3008,
+          "name": "Garden Beneath the Astral Mountains"
+        },
+        {
+          "id": "FTPoint115",
+          "x": -38097.3164,
+          "y": 53412.5234,
+          "name": "Garden Beneath the Cliffs"
+        },
+        {
+          "id": "New_SmallIsland05",
+          "x": -568698.625,
+          "y": -603451.9375,
+          "name": "Glacial Memento Islet"
+        },
+        {
+          "id": "FTPoint40",
+          "x": -219172.8594,
+          "y": 226394.8438,
+          "name": "Gobfin's Turf"
+        },
+        {
+          "id": "FTPoint21",
+          "x": -342035,
+          "y": 236885,
+          "name": "Grassy Behemoth Hills"
+        },
+        {
+          "id": "FTPoint112",
+          "x": -301681.9375,
+          "y": -5184.1118,
+          "name": "Heatwave Gate"
+        },
+        {
+          "id": "FTPoint74",
+          "x": -698514.9375,
+          "y": -322880.4062,
+          "name": "Hidden Passage to the Oculus Gate"
+        },
+        {
+          "id": "FTPoint118",
+          "x": -509887.2188,
+          "y": -299269.0312,
+          "name": "Hill Entrance"
+        },
+        {
+          "id": "FTPoint23",
+          "x": -358785,
+          "y": 267940,
+          "name": "Hill of Beginnings"
+        },
+        {
+          "id": "FTPoint34",
+          "x": -237610,
+          "y": 190610,
+          "name": "Hypocrite Hill"
+        },
+        {
+          "id": "FTPoint16",
+          "x": -39402.4258,
+          "y": 159611.8594,
+          "name": "Icy Weasel Hill"
+        },
+        {
+          "id": "FTPoint30",
+          "x": -218636.7812,
+          "y": 58528.1445,
+          "name": "Investigator's Fork"
+        },
+        {
+          "id": "FTPoint55",
+          "x": -265980,
+          "y": 268690,
+          "name": "Islandhopper Coast"
+        },
+        {
+          "id": "FTPoint89",
+          "x": -197915.2188,
+          "y": 438001.4375,
+          "name": "Isle of Decayed Treasures"
+        },
+        {
+          "id": "FTPoint50",
+          "x": -88645.8516,
+          "y": -3922.8848,
+          "name": "Isle of Murmurs"
+        },
+        {
+          "id": "FTPoint91",
+          "x": -131353.9219,
+          "y": 54481.7422,
+          "name": "Isle of Murmurs Beach"
+        },
+        {
+          "id": "FTPoint49",
+          "x": -137210,
+          "y": -91340,
+          "name": "Isle of Silence"
+        },
+        {
+          "id": "FTPoint59",
+          "x": -130060.375,
+          "y": -53406.6914,
+          "name": "Isle of Silence Church Ruins"
+        },
+        {
+          "id": "FTPoint86",
+          "x": 168489,
+          "y": 221797.5938,
+          "name": "Isle of the Glacial Core"
+        },
+        {
+          "id": "New_SmallIsland01",
+          "x": -153135.8125,
+          "y": 589409.5,
+          "name": "Islet of Circular Ruins"
+        },
+        {
+          "id": "FTPoint51",
+          "x": -170400,
+          "y": -29240,
+          "name": "Kelpsea Hill"
+        },
+        {
+          "id": "FTPoint33",
+          "x": -221230,
+          "y": 165130,
+          "name": "Lake Center"
+        },
+        {
+          "id": "FTPoint18",
+          "x": 102159.8203,
+          "y": 48527.0273,
+          "name": "Land of Absolute Zero"
+        },
+        {
+          "id": "FTPoint73",
+          "x": -792350,
+          "y": -251110,
+          "name": "Loess Plains"
+        },
+        {
+          "id": "FTPoint56",
+          "x": -282110,
+          "y": 355570,
+          "name": "Marsh Island"
+        },
+        {
+          "id": "FTPoint60",
+          "x": -250506.4844,
+          "y": 341109.5938,
+          "name": "Marsh Island Church Ruins"
+        },
+        {
+          "id": "FTPoint67",
+          "x": -25522.2109,
+          "y": -118365.3438,
+          "name": "Moonflower Tower Entrance"
+        },
+        {
+          "id": "FTPoint39",
+          "x": -177770,
+          "y": 265010,
+          "name": "Mossanda Forest"
+        },
+        {
+          "id": "FTPoint99",
+          "x": -224958.1094,
+          "y": 285919.2188,
+          "name": "Mossanda Inner Coast"
+        },
+        {
+          "id": "FTPoint32",
+          "x": -167684.9219,
+          "y": 167519.2344,
+          "name": "Mount Flopie Summit"
+        },
+        {
+          "id": "FTPoint6",
+          "x": -416557.5312,
+          "y": -90012.1562,
+          "name": "Mount Obsidian - Anubis Statue"
+        },
+        {
+          "id": "FTPoint1",
+          "x": -327531.7812,
+          "y": -70410.5469,
+          "name": "Mount Obsidian - Midpoint"
+        },
+        {
+          "id": "FTPoint109",
+          "x": -259198.7031,
+          "y": -59353.4141,
+          "name": "Mount Obsidian - Second Ascent"
+        },
+        {
+          "id": "FTPoint110",
+          "x": -287201.4375,
+          "y": -217568.9531,
+          "name": "Mount Obsidian Trail"
+        },
+        {
+          "id": "FTPoint58",
+          "x": -221399.2656,
+          "y": 330684.5312,
+          "name": "Natural Bridge"
+        },
+        {
+          "id": "FTPoint15",
+          "x": -80506.1562,
+          "y": 141464.7656,
+          "name": "No Man's Trail"
+        },
+        {
+          "id": "FTPoint85",
+          "x": -33882.1484,
+          "y": 564292.5,
+          "name": "Oasis Isle"
+        },
+        {
+          "id": "FTPoint124",
+          "x": -714540.875,
+          "y": -458346.5625,
+          "name": "Oilfield Overlook"
+        },
+        {
+          "id": "FTPoint20",
+          "x": 89624.9844,
+          "y": 94363.3203,
+          "name": "PAL Genetic Research Unit Tower Entrance"
+        },
+        {
+          "id": "FTPoint88",
+          "x": -209326.0156,
+          "y": -249227.5625,
+          "name": "Phantom Isle"
+        },
+        {
+          "id": "FTPoint9",
+          "x": 29780.5332,
+          "y": 406913.1875,
+          "name": "PIDF Tower Entrance"
+        },
+        {
+          "id": "FTPoint48",
+          "x": 6.0,
+          "y": -0.0,
+          "name": "Pristine Snow Field"
+        },
+        {
+          "id": "FTPoint62",
+          "x": -319000,
+          "y": 127170,
+          "name": "Ravine Entrance"
+        },
+        {
+          "id": "FTPoint45",
+          "x": -317777.1875,
+          "y": 212103.3125,
+          "name": "Rayne Syndicate Tower Entrance"
+        },
+        {
+          "id": "FTPoint8",
+          "x": -237086.5781,
+          "y": -100489.8594,
+          "name": "Ruined Fortress City"
+        },
+        {
+          "id": "FTPoint64",
+          "x": -63520.7344,
+          "y": -55005.9375,
+          "name": "Sakurajima - Mushroom Wetlands"
+        },
+        {
+          "id": "FTPoint69",
+          "x": 32787.0977,
+          "y": -81420.3281,
+          "name": "Sakurajima - Northern Rock Field"
+        },
+        {
+          "id": "FTPoint65",
+          "x": -86709.5703,
+          "y": -140441.75,
+          "name": "Sakurajima - Southern Sandbar"
+        },
+        {
+          "id": "FTPoint116",
+          "x": -43926.7461,
+          "y": -173600.9531,
+          "name": "Sakurajima: West Coast"
+        },
+        {
+          "id": "FTPoint11",
+          "x": -50300.9844,
+          "y": 287392.375,
+          "name": "Sand Dunes Entrance"
+        },
+        {
+          "id": "FTPoint104",
+          "x": -105662.5,
+          "y": 400797,
+          "name": "Sandbar of Solitude"
+        },
+        {
+          "id": "New_SmallIsland06",
+          "x": -426910.1875,
+          "y": -436850.9062,
+          "name": "Sandstone Gate Islet"
+        },
+        {
+          "id": "FTPoint120",
+          "x": -603491.125,
+          "y": -338965.25,
+          "name": "Scarlet Outlook"
+        },
+        {
+          "id": "FTPoint71",
+          "x": -503990,
+          "y": -214380,
+          "name": "Scorched Ashland"
+        },
+        {
+          "id": "FTPoint78",
+          "x": -699510,
+          "y": -389030,
+          "name": "Scorched Hill"
+        },
+        {
+          "id": "New_SmallIsland03",
+          "x": -451245,
+          "y": 363338.1562,
+          "name": "Scouring Islet"
+        },
+        {
+          "id": "FTPoint52",
+          "x": -450320,
+          "y": 112630,
+          "name": "Sea Breeze Archipelago - Castaway Beach"
+        },
+        {
+          "id": "FTPoint53",
+          "x": -376750,
+          "y": 124630,
+          "name": "Sea Breeze Archipelago Church"
+        },
+        {
+          "id": "FTPoint96",
+          "x": -421434.3438,
+          "y": 29307.666,
+          "name": "Sea Breeze Coast"
+        },
+        {
+          "id": "FTPoint90",
+          "x": -488718.1875,
+          "y": -35724.9414,
+          "name": "Sealed Realm of Terraria"
+        },
+        {
+          "id": "FTPoint42",
+          "x": -338560,
+          "y": 107660,
+          "name": "Sealed Realm of the Ardent"
+        },
+        {
+          "id": "FTPoint27",
+          "x": -278468.0312,
+          "y": 212679.4219,
+          "name": "Sealed Realm of the Frozen Wings"
+        },
+        {
+          "id": "FTPoint44",
+          "x": -195236.1719,
+          "y": 36718.4883,
+          "name": "Sealed Realm of the Myriad Flames"
+        },
+        {
+          "id": "FTPoint35",
+          "x": -151842,
+          "y": 213101.4531,
+          "name": "Sealed Realm of the Mystic"
+        },
+        {
+          "id": "FTPoint38",
+          "x": -115430,
+          "y": 289090,
+          "name": "Sealed Realm of the Swift"
+        },
+        {
+          "id": "FTPoint29",
+          "x": -283781,
+          "y": 59352.6836,
+          "name": "Sealed Realm of the Swordmaster"
+        },
+        {
+          "id": "FTPoint106",
+          "x": 178736.5625,
+          "y": 305772.4375,
+          "name": "Seaward Passage"
+        },
+        {
+          "id": "FTPoint70",
+          "x": -2188.7988,
+          "y": -148545.8594,
+          "name": "Secluded Cemetery"
+        },
+        {
+          "id": "FTPoint125",
+          "x": -771223.375,
+          "y": -441798.2812,
+          "name": "Shady Mushroom Cliffs"
+        },
+        {
+          "id": "FTPoint81",
+          "x": -572461.5625,
+          "y": -287224.0625,
+          "name": "Shield Dragon Tunnel"
+        },
+        {
+          "id": "FTPoint126",
+          "x": -810648.4375,
+          "y": -393963.7188,
+          "name": "Silent Lake"
+        },
+        {
+          "id": "FTPoint54",
+          "x": -374180,
+          "y": 63960,
+          "name": "Small Cove"
+        },
+        {
+          "id": "FTPoint24",
+          "x": -346617.5625,
+          "y": 191706.5938,
+          "name": "Small Settlement"
+        },
+        {
+          "id": "FTPoint36",
+          "x": -125476,
+          "y": 201720,
+          "name": "Snowy Mountain Crossroads"
+        },
+        {
+          "id": "FTPoint72",
+          "x": -588140,
+          "y": -253780,
+          "name": "Stone Pillar Cave Entrance"
+        },
+        {
+          "id": "New_SmallIsland07",
+          "x": -61819.0078,
+          "y": -246053.5156,
+          "name": "Suncrest Islet"
+        },
+        {
+          "id": "FTPoint84",
+          "x": -335853.8438,
+          "y": 335361.2812,
+          "name": "Sunlit Isle"
+        },
+        {
+          "id": "FTPoint113",
+          "x": 69604.0938,
+          "y": 196989.2656,
+          "name": "Thawtide Cape"
+        },
+        {
+          "id": "SkyIsland_D",
+          "x": -758105,
+          "y": -61810,
+          "name": "The Azure Tapestry"
+        },
+        {
+          "id": "FTPoint105",
+          "x": 191211.2031,
+          "y": 375334.6875,
+          "name": "The Furthest Flats"
+        },
+        {
+          "id": "FTPoint75",
+          "x": -760285.4375,
+          "y": -354966.2188,
+          "name": "The Oculus Gate, Tower in Sight"
+        },
+        {
+          "id": "FTPoint102",
+          "x": -71914.7969,
+          "y": 472172.1875,
+          "name": "Thirst's End"
+        },
+        {
+          "id": "FTPoint17",
+          "x": 8000.5303,
+          "y": 111770.5469,
+          "name": "Unthawable Lake"
+        },
+        {
+          "id": "FTPoint100",
+          "x": -74928.5781,
+          "y": 212787.0625,
+          "name": "Verdant Stream"
+        },
+        {
+          "id": "SkyIsland_C",
+          "x": -811466.5625,
+          "y": -85874.3125,
+          "name": "Waterlily Gorge"
+        },
+        {
+          "id": "FTPoint93",
+          "x": -266957.5312,
+          "y": 93228.6016,
+          "name": "Whisperwind Cliffs"
+        },
+        {
+          "id": "FTPoint94",
+          "x": -236840.5156,
+          "y": 34772.5781,
+          "name": "Whisperwind Hill"
+        },
+        {
+          "id": "FTPoint123",
+          "x": -725188.75,
+          "y": -238441.8906,
+          "name": "Wildlands Floodgate"
+        },
+        {
+          "id": "FTPoint95",
+          "x": -311508.875,
+          "y": 76832.2891,
+          "name": "Windscream Valley"
+        },
+        {
+          "id": "FTPoint108",
+          "x": 12156.8467,
+          "y": 249201.3906,
+          "name": "Windwatch Outlook"
+        }
+      ],
+      "boss_tower": [
+        {
+          "id": "REGION_Skyisland_Boss",
+          "x": -778215.875,
+          "y": -36025.9961,
+          "name": "Auri & Shaolong",
+          "detail": "Azure Covenant Tower · Dragon / Water · livello 68"
+        },
+        {
+          "id": "REGION_Volcano_Boss",
+          "x": -361695,
+          "y": -112009,
+          "name": "Axel & Orserk",
+          "detail": "Brothers of the Eternal Pyre Tower · Dragon / Electric · livello 30"
+        },
+        {
+          "id": "REGION_Darkisland_Boss",
+          "x": -889805.1875,
+          "y": -435828,
+          "name": "Bjorn & Bastigor",
+          "detail": "Feybreak Tower · Ice · livello 60"
+        },
+        {
+          "id": "REGION_Forest_Boss",
+          "x": -266563.1562,
+          "y": 174506.2969,
+          "name": "Lily & Lyleen",
+          "detail": "Free Pal Alliance Tower · Grass · livello 20"
+        },
+        {
+          "id": "REGION_Desert_Boss",
+          "x": 29975.2754,
+          "y": 413325,
+          "name": "Marcus & Faleris",
+          "detail": "PIDF Tower · Fire · livello 40"
+        },
+        {
+          "id": "REGION_Sakurajima_Boss",
+          "x": -29427.5723,
+          "y": -115900.0547,
+          "name": "Saya & Selyne",
+          "detail": "Moonflower Tower · Dark / Normal · livello 55"
+        },
+        {
+          "id": "REGION_Frost_Boss",
+          "x": 81363,
+          "y": 90183,
+          "name": "Victor & Shadowbeak",
+          "detail": "PAL Genetic Research Unit Tower · Dark · livello 50"
+        },
+        {
+          "id": "REGION_Grass_Boss",
+          "x": -321596.25,
+          "y": 209085,
+          "name": "Zoe & Grizzbolt",
+          "detail": "Rayne Syndicate Tower · Electric · livello 10"
+        }
+      ]
     },
-    {
-      "x": -361695,
-      "y": -112009,
-      "name": "Torre della Fiamma Eterna"
-    },
-    {
-      "x": 81363,
-      "y": 90183,
-      "name": "Torre della Libera Alleanza dei Pal"
-    },
-    {
-      "x": 29975.3,
-      "y": 413325,
-      "name": "Torre dell'Unita di Ricerca Genetica"
-    },
-    {
-      "x": -321596.2,
-      "y": 209085,
-      "name": "Torre della Forza di Autodifesa"
-    },
-    {
-      "x": -778215.9,
-      "y": -36026,
-      "name": "Torre del Feybreak"
-    },
-    {
-      "x": -889805.2,
-      "y": -435828,
-      "name": "Torre del Santuario Occulto"
-    },
-    {
-      "x": -29427.6,
-      "y": -115900.1,
-      "name": "Regno Sigillato del Cavaliere"
-    },
-    {
-      "x": -108093.8,
-      "y": 77936.1,
-      "name": "Santuario Naturalistico"
+    "world-tree": {
+      "fast_travel": [
+        {
+          "id": "WorldTree_lab",
+          "x": 621850,
+          "y": -742575,
+          "name": "Abandoned Laboratory"
+        },
+        {
+          "id": "WorldTree_E",
+          "x": 491660,
+          "y": -593705,
+          "name": "Alluvion Lakefront"
+        },
+        {
+          "id": "WorldTree_I",
+          "x": 602911.0625,
+          "y": -680562.4375,
+          "name": "Boreal Summit"
+        },
+        {
+          "id": "WorldTree_D",
+          "x": 600577.5625,
+          "y": -599143.0625,
+          "name": "Corroded Hollow"
+        },
+        {
+          "id": "WorldTree_C_1",
+          "x": 570652.3125,
+          "y": -558439.5,
+          "name": "Dusty Ravine"
+        },
+        {
+          "id": "WorldTree_MiddleBoss_3",
+          "x": 621794.3125,
+          "y": -757914.5625,
+          "name": "Forbidden Laboratory"
+        },
+        {
+          "id": "WorldTree_N",
+          "x": 518900.25,
+          "y": -671976.1875,
+          "name": "Gilded City Ruins"
+        },
+        {
+          "id": "WorldTree_M",
+          "x": 477460,
+          "y": -724635,
+          "name": "Lacrymal Shoal"
+        },
+        {
+          "id": "WorldTree_C_2",
+          "x": 592964,
+          "y": -625779.625,
+          "name": "Remnant Riverside"
+        },
+        {
+          "id": "WorldTree_MiddleBoss_1",
+          "x": 628791.5625,
+          "y": -610720.4375,
+          "name": "Rotmist Root"
+        },
+        {
+          "id": "WorldTree_MiddleBoss_2",
+          "x": 405904.9062,
+          "y": -729214.125,
+          "name": "Shinespore Root"
+        },
+        {
+          "id": "WorldTree_L",
+          "x": 483205,
+          "y": -672790,
+          "name": "Spore Cloister"
+        },
+        {
+          "id": "WorldTree_A",
+          "x": 512111.75,
+          "y": -510662.6562,
+          "name": "The Verdant Rootpath"
+        },
+        {
+          "id": "WorldTree_B",
+          "x": 524166.125,
+          "y": -567334.375,
+          "name": "Whimsical Wisteria Grove"
+        },
+        {
+          "id": "WorldTree_LastBoss",
+          "x": 501010,
+          "y": -748555,
+          "name": "Within the Seal"
+        }
+      ],
+      "boss_tower": [
+        {
+          "id": "REGION_WorldTree_Boss",
+          "x": 495634.25,
+          "y": -756824.375,
+          "name": "Zenara & Astralym",
+          "detail": "Within the Seal · livello 80"
+        }
+      ]
     }
-  ],
-  "fast_travel": [
-    {
-      "x": -108666.8,
-      "y": 79119.9,
-      "name": "Statua dell'Aquila 1"
-    },
-    {
-      "x": -265220,
-      "y": 173530,
-      "name": "Statua dell'Aquila 2"
-    },
-    {
-      "x": -327531.8,
-      "y": -70410.6,
-      "name": "Statua dell'Aquila 3"
-    },
-    {
-      "x": -367707.8,
-      "y": -114950.9,
-      "name": "Statua dell'Aquila 4"
-    },
-    {
-      "x": -414446.7,
-      "y": -24603.3,
-      "name": "Statua dell'Aquila 5"
-    },
-    {
-      "x": -465895,
-      "y": -62137.8,
-      "name": "Statua dell'Aquila 6"
-    },
-    {
-      "x": -416557.5,
-      "y": -90012.2,
-      "name": "Statua dell'Aquila 7"
-    },
-    {
-      "x": -383183.2,
-      "y": -210790.9,
-      "name": "Statua dell'Aquila 8"
-    },
-    {
-      "x": 29780.5,
-      "y": 406913.2,
-      "name": "Statua dell'Aquila 9"
-    },
-    {
-      "x": -50301,
-      "y": 287392.4,
-      "name": "Statua dell'Aquila 10"
-    },
-    {
-      "x": 35588.7,
-      "y": 321331.2,
-      "name": "Statua dell'Aquila 11"
-    },
-    {
-      "x": 117624.2,
-      "y": 400134.8,
-      "name": "Statua dell'Aquila 12"
-    },
-    {
-      "x": -119037.3,
-      "y": 138340.4,
-      "name": "Statua dell'Aquila 13"
-    },
-    {
-      "x": -80506.2,
-      "y": 141464.8,
-      "name": "Statua dell'Aquila 14"
-    },
-    {
-      "x": -39402.4,
-      "y": 159611.9,
-      "name": "Statua dell'Aquila 15"
-    },
-    {
-      "x": 8000.5,
-      "y": 111770.6,
-      "name": "Statua dell'Aquila 16"
-    },
-    {
-      "x": 102159.8,
-      "y": 48527,
-      "name": "Statua dell'Aquila 17"
-    },
-    {
-      "x": 89625,
-      "y": 94363.3,
-      "name": "Statua dell'Aquila 18"
-    },
-    {
-      "x": -777490,
-      "y": -40589,
-      "name": "Statua dell'Aquila 19"
-    },
-    {
-      "x": -758105,
-      "y": -61810,
-      "name": "Statua dell'Aquila 20"
-    },
-    {
-      "x": -818013.1,
-      "y": 59827.7,
-      "name": "Statua dell'Aquila 21"
-    },
-    {
-      "x": -771309.9,
-      "y": 8647.2,
-      "name": "Statua dell'Aquila 22"
-    },
-    {
-      "x": -829095.7,
-      "y": -19262.8,
-      "name": "Statua dell'Aquila 23"
-    },
-    {
-      "x": -811466.6,
-      "y": -85874.3,
-      "name": "Statua dell'Aquila 24"
-    },
-    {
-      "x": -237086.6,
-      "y": -100489.9,
-      "name": "Statua dell'Aquila 25"
-    },
-    {
-      "x": -798776.8,
-      "y": -479574.8,
-      "name": "Statua dell'Aquila 26"
-    },
-    {
-      "x": -117215,
-      "y": 446690,
-      "name": "Statua dell'Aquila 27"
-    },
-    {
-      "x": -63520.7,
-      "y": -55005.9,
-      "name": "Statua dell'Aquila 28"
-    },
-    {
-      "x": -86709.6,
-      "y": -140441.8,
-      "name": "Statua dell'Aquila 29"
-    },
-    {
-      "x": -25522.2,
-      "y": -118365.3,
-      "name": "Statua dell'Aquila 30"
-    },
-    {
-      "x": -25915.4,
-      "y": -78926.2,
-      "name": "Statua dell'Aquila 31"
-    },
-    {
-      "x": 32787.1,
-      "y": -81420.3,
-      "name": "Statua dell'Aquila 32"
-    },
-    {
-      "x": -2188.8,
-      "y": -148545.9,
-      "name": "Statua dell'Aquila 33"
-    },
-    {
-      "x": -503990,
-      "y": -214380,
-      "name": "Statua dell'Aquila 34"
-    },
-    {
-      "x": -588140,
-      "y": -253780,
-      "name": "Statua dell'Aquila 35"
-    },
-    {
-      "x": -792350,
-      "y": -251110,
-      "name": "Statua dell'Aquila 36"
-    },
-    {
-      "x": -698514.9,
-      "y": -322880.4,
-      "name": "Statua dell'Aquila 37"
-    },
-    {
-      "x": -760285.4,
-      "y": -354966.2,
-      "name": "Statua dell'Aquila 38"
-    },
-    {
-      "x": -888080,
-      "y": -433080,
-      "name": "Statua dell'Aquila 39"
-    },
-    {
-      "x": -699510,
-      "y": -389030,
-      "name": "Statua dell'Aquila 40"
-    },
-    {
-      "x": -591120,
-      "y": -484260,
-      "name": "Statua dell'Aquila 41"
-    },
-    {
-      "x": -671901.2,
-      "y": -172407.6,
-      "name": "Statua dell'Aquila 42"
-    },
-    {
-      "x": -572461.6,
-      "y": -287224.1,
-      "name": "Statua dell'Aquila 43"
-    },
-    {
-      "x": -130060.4,
-      "y": -53406.7,
-      "name": "Statua dell'Aquila 44"
-    },
-    {
-      "x": -250506.5,
-      "y": 341109.6,
-      "name": "Statua dell'Aquila 45"
-    },
-    {
-      "x": 168489,
-      "y": 221797.6,
-      "name": "Statua dell'Aquila 46"
-    },
-    {
-      "x": -33882.2,
-      "y": 564292.5,
-      "name": "Statua dell'Aquila 47"
-    },
-    {
-      "x": -197915.2,
-      "y": 438001.4,
-      "name": "Statua dell'Aquila 48"
-    },
-    {
-      "x": -335853.8,
-      "y": 335361.3,
-      "name": "Statua dell'Aquila 49"
-    },
-    {
-      "x": -558410.4,
-      "y": 121112.1,
-      "name": "Statua dell'Aquila 50"
-    },
-    {
-      "x": -488718.2,
-      "y": -35724.9,
-      "name": "Statua dell'Aquila 51"
-    },
-    {
-      "x": -209326,
-      "y": -249227.6,
-      "name": "Statua dell'Aquila 52"
-    },
-    {
-      "x": 14388.2,
-      "y": 476545.6,
-      "name": "Statua dell'Aquila 53"
-    },
-    {
-      "x": -71914.8,
-      "y": 472172.2,
-      "name": "Statua dell'Aquila 54"
-    },
-    {
-      "x": -38212,
-      "y": 406147.1,
-      "name": "Statua dell'Aquila 55"
-    },
-    {
-      "x": -105662.5,
-      "y": 400797,
-      "name": "Statua dell'Aquila 56"
-    },
-    {
-      "x": 191211.2,
-      "y": 375334.7,
-      "name": "Statua dell'Aquila 57"
-    },
-    {
-      "x": 178736.6,
-      "y": 305772.4,
-      "name": "Statua dell'Aquila 58"
-    },
-    {
-      "x": 125988.7,
-      "y": 274597.8,
-      "name": "Statua dell'Aquila 59"
-    },
-    {
-      "x": 12156.8,
-      "y": 249201.4,
-      "name": "Statua dell'Aquila 60"
-    },
-    {
-      "x": 69604.1,
-      "y": 196989.3,
-      "name": "Statua dell'Aquila 61"
-    },
-    {
-      "x": 107940.7,
-      "y": -28036.3,
-      "name": "Statua dell'Aquila 62"
-    },
-    {
-      "x": -38097.3,
-      "y": 53412.5,
-      "name": "Statua dell'Aquila 63"
-    },
-    {
-      "x": -43926.7,
-      "y": -173601,
-      "name": "Statua dell'Aquila 64"
-    },
-    {
-      "x": -131353.9,
-      "y": 54481.7,
-      "name": "Statua dell'Aquila 65"
-    },
-    {
-      "x": -160345.2,
-      "y": 98540.8,
-      "name": "Statua dell'Aquila 66"
-    },
-    {
-      "x": 63442.5,
-      "y": 507395.4,
-      "name": "Statua dell'Aquila 67"
-    },
-    {
-      "x": -153135.8,
-      "y": 589409.5,
-      "name": "Statua dell'Aquila 68"
-    },
-    {
-      "x": -451245,
-      "y": 363338.2,
-      "name": "Statua dell'Aquila 69"
-    },
-    {
-      "x": -984033.7,
-      "y": -371189.8,
-      "name": "Statua dell'Aquila 70"
-    },
-    {
-      "x": -568698.6,
-      "y": -603451.9,
-      "name": "Statua dell'Aquila 71"
-    },
-    {
-      "x": -426910.2,
-      "y": -436850.9,
-      "name": "Statua dell'Aquila 72"
-    },
-    {
-      "x": -61819,
-      "y": -246053.5,
-      "name": "Statua dell'Aquila 73"
-    },
-    {
-      "x": -301681.9,
-      "y": -5184.1,
-      "name": "Statua dell'Aquila 74"
-    },
-    {
-      "x": -266957.5,
-      "y": 93228.6,
-      "name": "Statua dell'Aquila 75"
-    },
-    {
-      "x": -236840.5,
-      "y": 34772.6,
-      "name": "Statua dell'Aquila 76"
-    },
-    {
-      "x": -311508.9,
-      "y": 76832.3,
-      "name": "Statua dell'Aquila 77"
-    },
-    {
-      "x": -421434.3,
-      "y": 29307.7,
-      "name": "Statua dell'Aquila 78"
-    },
-    {
-      "x": -259198.7,
-      "y": -59353.4,
-      "name": "Statua dell'Aquila 79"
-    },
-    {
-      "x": -287201.4,
-      "y": -217569,
-      "name": "Statua dell'Aquila 80"
-    },
-    {
-      "x": -415272.2,
-      "y": -162408.6,
-      "name": "Statua dell'Aquila 81"
-    },
-    {
-      "x": -119900.9,
-      "y": 351109.2,
-      "name": "Statua dell'Aquila 82"
-    },
-    {
-      "x": -156482.2,
-      "y": 317415.3,
-      "name": "Statua dell'Aquila 83"
-    },
-    {
-      "x": -224958.1,
-      "y": 285919.2,
-      "name": "Statua dell'Aquila 84"
-    },
-    {
-      "x": -74928.6,
-      "y": 212787.1,
-      "name": "Statua dell'Aquila 85"
-    },
-    {
-      "x": -578061,
-      "y": -158216.1,
-      "name": "Statua dell'Aquila 86"
-    },
-    {
-      "x": -509887.2,
-      "y": -299269,
-      "name": "Statua dell'Aquila 87"
-    },
-    {
-      "x": -506737.8,
-      "y": -396063.4,
-      "name": "Statua dell'Aquila 88"
-    },
-    {
-      "x": -603491.1,
-      "y": -338965.2,
-      "name": "Statua dell'Aquila 89"
-    },
-    {
-      "x": -651722.9,
-      "y": -373365.2,
-      "name": "Statua dell'Aquila 90"
-    },
-    {
-      "x": -644486,
-      "y": -276536.5,
-      "name": "Statua dell'Aquila 91"
-    },
-    {
-      "x": -725188.8,
-      "y": -238441.9,
-      "name": "Statua dell'Aquila 92"
-    },
-    {
-      "x": -714540.9,
-      "y": -458346.6,
-      "name": "Statua dell'Aquila 93"
-    },
-    {
-      "x": -771223.4,
-      "y": -441798.3,
-      "name": "Statua dell'Aquila 94"
-    },
-    {
-      "x": -810648.4,
-      "y": -393963.7,
-      "name": "Statua dell'Aquila 95"
-    },
-    {
-      "x": -865524.3,
-      "y": -352355,
-      "name": "Statua dell'Aquila 96"
-    },
-    {
-      "x": -923275.1,
-      "y": -385109.1,
-      "name": "Statua dell'Aquila 97"
-    },
-    {
-      "x": -886234.2,
-      "y": -483745.9,
-      "name": "Statua dell'Aquila 98"
-    },
-    {
-      "x": 192505.8,
-      "y": -227006.5,
-      "name": "Statua dell'Aquila 99"
-    },
-    {
-      "x": -294830,
-      "y": 152240,
-      "name": "Statua dell'Aquila 100"
-    },
-    {
-      "x": -319000.0,
-      "y": 127170,
-      "name": "Statua dell'Aquila 101"
-    },
-    {
-      "x": -137210,
-      "y": -91340,
-      "name": "Statua dell'Aquila 102"
-    },
-    {
-      "x": -88645.9,
-      "y": -3922.9,
-      "name": "Statua dell'Aquila 103"
-    },
-    {
-      "x": -170400,
-      "y": -29240,
-      "name": "Statua dell'Aquila 104"
-    },
-    {
-      "x": -450320,
-      "y": 112630,
-      "name": "Statua dell'Aquila 105"
-    },
-    {
-      "x": -376750,
-      "y": 124630,
-      "name": "Statua dell'Aquila 106"
-    },
-    {
-      "x": -374180,
-      "y": 63960,
-      "name": "Statua dell'Aquila 107"
-    },
-    {
-      "x": -265980,
-      "y": 268690,
-      "name": "Statua dell'Aquila 108"
-    },
-    {
-      "x": -282110,
-      "y": 355570,
-      "name": "Statua dell'Aquila 109"
-    },
-    {
-      "x": -170718.7,
-      "y": 409753.2,
-      "name": "Statua dell'Aquila 110"
-    },
-    {
-      "x": -221399.3,
-      "y": 330684.5,
-      "name": "Statua dell'Aquila 111"
-    },
-    {
-      "x": -248770.1,
-      "y": 126205.8,
-      "name": "Statua dell'Aquila 112"
-    },
-    {
-      "x": -338560,
-      "y": 107660,
-      "name": "Statua dell'Aquila 113"
-    },
-    {
-      "x": -215388.5,
-      "y": 8854.2,
-      "name": "Statua dell'Aquila 114"
-    },
-    {
-      "x": -195236.2,
-      "y": 36718.5,
-      "name": "Statua dell'Aquila 115"
-    },
-    {
-      "x": 6,
-      "y": 0,
-      "name": "Statua dell'Aquila 116"
-    },
-    {
-      "x": -326403.8,
-      "y": 55136.7,
-      "name": "Statua dell'Aquila 117"
-    },
-    {
-      "x": -349535.5,
-      "y": -4035.1,
-      "name": "Statua dell'Aquila 118"
-    },
-    {
-      "x": -283781,
-      "y": 59352.7,
-      "name": "Statua dell'Aquila 119"
-    },
-    {
-      "x": -218636.8,
-      "y": 58528.1,
-      "name": "Statua dell'Aquila 120"
-    },
-    {
-      "x": -257951.4,
-      "y": 151247.8,
-      "name": "Statua dell'Aquila 121"
-    },
-    {
-      "x": -167684.9,
-      "y": 167519.2,
-      "name": "Statua dell'Aquila 122"
-    },
-    {
-      "x": -221230,
-      "y": 165130,
-      "name": "Statua dell'Aquila 123"
-    },
-    {
-      "x": -237610,
-      "y": 190610,
-      "name": "Statua dell'Aquila 124"
-    },
-    {
-      "x": -151842,
-      "y": 213101.5,
-      "name": "Statua dell'Aquila 125"
-    },
-    {
-      "x": -125476,
-      "y": 201720,
-      "name": "Statua dell'Aquila 126"
-    },
-    {
-      "x": -103435,
-      "y": 234761.2,
-      "name": "Statua dell'Aquila 127"
-    },
-    {
-      "x": -115430,
-      "y": 289090,
-      "name": "Statua dell'Aquila 128"
-    },
-    {
-      "x": -177770,
-      "y": 265010,
-      "name": "Statua dell'Aquila 129"
-    },
-    {
-      "x": -219172.9,
-      "y": 226394.8,
-      "name": "Statua dell'Aquila 130"
-    },
-    {
-      "x": -317777.2,
-      "y": 212103.3,
-      "name": "Statua dell'Aquila 131"
-    },
-    {
-      "x": -342035,
-      "y": 236885,
-      "name": "Statua dell'Aquila 132"
-    },
-    {
-      "x": -314840,
-      "y": 186850,
-      "name": "Statua dell'Aquila 133"
-    },
-    {
-      "x": -358785,
-      "y": 267940,
-      "name": "Statua dell'Aquila 134"
-    },
-    {
-      "x": -346617.6,
-      "y": 191706.6,
-      "name": "Statua dell'Aquila 135"
-    },
-    {
-      "x": -278468,
-      "y": 212679.4,
-      "name": "Statua dell'Aquila 136"
-    },
-    {
-      "x": -302825,
-      "y": 241060,
-      "name": "Statua dell'Aquila 137"
-    }
-  ]
+  }
 }

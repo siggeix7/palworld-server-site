@@ -9,10 +9,12 @@ amministrativa del server di gioco.
 
 - Stato online, freschezza del dato, versione e descrizione del server.
 - Giocatori online, capacita' massima, FPS, frame time, uptime e giorno mondo.
-- Mappa Palworld interattiva con coordinate esatte dei giocatori online.
-- Zoom ancorato al cursore, pan limitato, selezione e cluster di giocatori.
+- Mappe Palpagos e Albero del Mondo 1.0.1 ad alta risoluzione adattiva, con
+  coordinate esatte dei giocatori online.
+- Zoom ancorato al cursore, pan limitato, pinch touch, selezione e cluster di
+  giocatori.
 - Tracce selezionabili da 1 ora a 7 giorni e layer mappa persistenti.
-- Layer opzionali per viaggi rapidi e torri.
+- Layer opzionali con nomi reali per 152 viaggi rapidi e nove torri.
 - Nome, account, livello, ping e numero di costruzioni per giocatore.
 - Storico FPS e giocatori per 6 ore, 24 ore, 7, 30 o 90 giorni.
 - Grafico gap-aware e giudizio FPS sull'ultima ora calibrato sulla cadenza Zabbix.
@@ -37,9 +39,9 @@ amministrativa del server di gioco.
 - Container con filesystem read-only, utente non privilegiato e health check.
 
 L'endpoint Palworld `game-data` non e' necessario. L'API supportata `/players`
-fornisce gia' le coordinate dei giocatori online. Senza `game-data` non e'
-possibile visualizzare posizioni di basi, Pal, NPC, oggetti o costruzioni
-individuali.
+fornisce gia' le coordinate dei giocatori online e il sync di `Level.sav`
+aggiunge le basi. Senza ulteriori sorgenti non e' possibile visualizzare Pal,
+NPC, oggetti o costruzioni individuali.
 
 ## Architettura e porte separate
 
@@ -420,8 +422,10 @@ Questo e' un progetto community non ufficiale. Palworld e la mappa appartengono
 a Pocketpair, Inc. Coordinate, mappa nativa 8192, punti statici e alcune
 funzioni di interfaccia derivano dal progetto MIT
 `RNZ01/palworld-server-dashboard` al commit
-`588fa6390e0c5b6fe909e2c1fd3baddb86ef92c8`. Percorsi, modifiche, esclusioni,
-hash degli asset e testo completo della licenza sono in [NOTICE.md](NOTICE.md).
+`588fa6390e0c5b6fe909e2c1fd3baddb86ef92c8`. La cartografia dell'Albero del
+Mondo e i dati statici 1.0.1 hanno provenienza tecnica documentata dal progetto
+`LukeHollandDev/palworld-live-map`. Percorsi, modifiche, esclusioni, hash degli
+asset e testo completo della licenza sono in [NOTICE.md](NOTICE.md).
 Il notice e' disponibile anche dal footer del sito. La licenza MIT di RNZ01 non
 copre gli asset Palworld: prima di ridistribuire la mappa verifica che l'uso sia
 compatibile con le regole Pocketpair applicabili.

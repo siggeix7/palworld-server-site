@@ -6,9 +6,17 @@ Upstream revision: 588fa6390e0c5b6fe909e2c1fd3baddb86ef92c8
 
 This site adapts portions of the upstream map interaction, player palette and
 roster behavior, FPS health model, payload normalization, themes, static map
-points and map projection. The implementations were modified for a read-only,
+projection and Palpagos overview. The implementations were modified for a read-only,
 privacy-sanitized Django and Zabbix architecture. Detailed source paths, changes,
 asset hashes and exclusions are recorded in the distributed NOTICE.md.
+
+LukeHollandDev/palworld-live-map
+https://github.com/LukeHollandDev/palworld-live-map
+
+The World Tree overview bounds and the minimized fast-travel/tower catalogue
+were generated from its reproducible Palworld 1.0.1 asset export. No application
+or exporter code is included. Exact source/output hashes, bounds and data counts
+are recorded in NOTICE.md.
 
 MIT License
 
@@ -34,9 +42,9 @@ SOFTWARE.
 
 POCKETPAIR MATERIAL
 
-The MIT License above covers RNZ01's software contributions. It does not grant
-rights to Palworld artwork, trademarks or other material owned by Pocketpair,
-Inc. The map appears to originate from Palworld game data. This is an
+The software licenses referenced above do not grant rights to Palworld artwork,
+trademarks or game data owned by Pocketpair, Inc. The maps originate from
+Palworld game data. This is an
 unofficial community dashboard and is not affiliated with or endorsed by
 Pocketpair. Redistributors must independently verify their right to distribute
-and use the map under applicable Pocketpair terms and fan-content rules.
+and use the maps under applicable Pocketpair terms and fan-content rules.
