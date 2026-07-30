@@ -25,7 +25,7 @@ from .vm_metrics import VM_METRICS
 
 logger = logging.getLogger(__name__)
 
-DATASETS = {"info", "metrics", "players", "settings", "status"}
+DATASETS = {"game_data", "info", "metrics", "players", "settings", "status"}
 
 SAFE_SETTING_KEYS = {
     "Difficulty",
@@ -275,12 +275,173 @@ def _sanitize_status(value):
     return {"reachable": value in (1, 1.0, True, "1", "true", "up")}
 
 
+# Mirrors MAP_BOUNDS in management/commands/build_map_catalogue.py so live world
+# objects are projected onto the same Palpagos / World Tree regions.
+WORLD_MAP_BOUNDS = {
+    "palpagos": {
+        "min_x": -1099400,
+        "max_x": 349400,
+        "min_y": -724400,
+        "max_y": 724400,
+    },
+    "world-tree": {
+        "min_x": 347351.5,
+        "max_x": 689148.5,
+        "min_y": -818197,
+        "max_y": -476400,
+    },
+}
+
+MAX_WORLD_OBJECTS = 20000
+
+# Players and bases come from the players dataset and guild sync respectively,
+# so the live world feed only contributes these four actor kinds.
+INCLUDED_WORLD_KINDS = {"wild-pals", "npcs", "companions", "workers"}
+
+_ACTOR_KIND_MAP = {
+    "palbox": "bases",
+    "player": "players",
+    "basecamppal": "workers",
+    "wildpal": "wild-pals",
+    "otomopal": "companions",
+    "npc": "npcs",
+}
+
+
+def _world_object_id(instance_id, kind):
+    return hmac.new(
+        settings.PLAYER_HASH_SECRET.encode("utf-8"),
+        f"world:{kind}:{instance_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:24]
+
+
+def _humanize_class(class_name):
+    text = "" if class_name is None else str(class_name)
+    if text.startswith("BP_"):
+        text = text[3:]
+    if text.endswith("_C"):
+        text = text[:-2]
+    return text.replace("_", " ").strip()
+
+
+def _classify_world_actor(actor):
+    for field in ("UnitType", "Type"):
+        value = actor.get(field)
+        if not isinstance(value, str):
+            continue
+        kind = _ACTOR_KIND_MAP.get(value.strip().lower())
+        if kind:
+            return kind
+    return None
+
+
+def _is_active_value(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1", "yes")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 1
+    return False
+
+
+def _map_for_coords(x, y):
+    for map_id, bounds in WORLD_MAP_BOUNDS.items():
+        if (
+            bounds["min_x"] <= x <= bounds["max_x"]
+            and bounds["min_y"] <= y <= bounds["max_y"]
+        ):
+            return map_id
+    return None
+
+
+def _sanitize_game_data(value):
+    value = _payload(value)
+    if not isinstance(value, dict):
+        raise IngestError("game_data dataset must be an object")
+    actor_data = value.get("ActorData")
+    if not isinstance(actor_data, list):
+        raise IngestError("game_data dataset must contain an ActorData array")
+
+    # First pass: build InstanceID -> public_player_id map from player actors so
+    # companions can be linked to their owning player without exposing raw IDs.
+    player_id_map = {}
+    for actor in actor_data:
+        if not isinstance(actor, dict):
+            continue
+        if _classify_world_actor(actor) != "players":
+            continue
+        instance_id = actor.get("InstanceID")
+        userid = actor.get("userid")
+        if not isinstance(instance_id, str) or not instance_id:
+            continue
+        if not isinstance(userid, str) or not userid:
+            continue
+        player_id_map[instance_id] = _player_id({"userId": userid})
+
+    # Second pass: classify, filter active/in-bounds actors, hash IDs, sanitize
+    # free text and cap the payload so very large worlds stay bounded.
+    objects = []
+    truncated = False
+    for actor in actor_data:
+        if len(objects) >= MAX_WORLD_OBJECTS:
+            truncated = True
+            break
+        if not isinstance(actor, dict):
+            continue
+        kind = _classify_world_actor(actor)
+        if kind not in INCLUDED_WORLD_KINDS:
+            continue
+        if not _is_active_value(actor.get("IsActive")):
+            continue
+        x = _number(actor.get("LocationX"))
+        y = _number(actor.get("LocationY"))
+        if x == 0 and y == 0:
+            continue
+        map_id = _map_for_coords(x, y)
+        if map_id is None:
+            continue
+        instance_id = actor.get("InstanceID")
+        if not isinstance(instance_id, str) or not instance_id:
+            continue
+        nick_name = _clean_text(actor.get("NickName"), 128)
+        class_name = _humanize_class(actor.get("Class"))
+        name = nick_name or class_name or kind
+        obj = {
+            "id": _world_object_id(instance_id, kind),
+            "kind": kind,
+            "name": name,
+            "x": round(x, 2),
+            "y": round(y, 2),
+            "map": map_id,
+        }
+        if class_name and class_name != name:
+            obj["detail"] = class_name
+        level = _integer(actor.get("Level"))
+        if level > 0:
+            obj["level"] = level
+        if kind == "companions":
+            trainer_id = actor.get("TrainerInstanceID")
+            if isinstance(trainer_id, str):
+                owner_id = player_id_map.get(trainer_id)
+                if owner_id:
+                    obj["owner_id"] = owner_id
+        guild_name = _clean_text(actor.get("GuildName"), 128)
+        if guild_name:
+            obj["guild_name"] = guild_name
+        objects.append(obj)
+
+    return {"objects": objects, "count": len(objects), "truncated": truncated}
+
+
 SANITIZERS = {
     "info": _sanitize_info,
     "metrics": _sanitize_metrics,
     "players": _sanitize_players,
     "settings": _sanitize_settings,
     "status": _sanitize_status,
+    "game_data": _sanitize_game_data,
 }
 
 

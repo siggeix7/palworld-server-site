@@ -148,6 +148,6 @@ class ConnectorDiagnosticsTests(TestCase):
         self.assertEqual(len(payload["vm"]["missing"]), len(VM_METRICS) - 1)
         self.assertEqual(
             sorted(payload["datasets"]),
-            ["info", "metrics", "players", "settings", "status"],
+            ["game_data", "info", "metrics", "players", "settings", "status"],
         )
         self.assertFalse(payload["datasets"]["status"]["received"])

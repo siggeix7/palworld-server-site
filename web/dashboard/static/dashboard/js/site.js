@@ -20,12 +20,23 @@
     },
   }
   const MAP_POINT_GROUPS = [
+    { id: 'live', label: 'Live · game-data', kinds: ['live-wild-pals', 'live-npcs', 'live-companions', 'live-workers'] },
     { id: 'encounters', label: 'Incontri', kinds: ['alpha-pals', 'bosses', 'bounties', 'oil-rigs'] },
     { id: 'exploration', label: 'Esplorazione', kinds: ['waypoints', 'watchtowers', 'dungeon-entrances'] },
     { id: 'collectibles', label: 'Collezionabili', kinds: ['effigies', 'journals', 'ancient-shrine-pickups'] },
     { id: 'characters', label: 'Personaggi', kinds: ['npc-locations'] },
   ]
+  const LIVE_KIND_MAP = {
+    'wild-pals': 'live-wild-pals',
+    'npcs': 'live-npcs',
+    'companions': 'live-companions',
+    'workers': 'live-workers',
+  }
   const MAP_POINT_KINDS = {
+    'live-wild-pals': { label: 'Pal selvatici', color: '#a3e635', symbol: 'W', aliases: 'wild pal selvatico creature live', live: true },
+    'live-npcs': { label: 'NPC live', color: '#c084fc', symbol: 'N', aliases: 'npc personaggio merchant live', live: true },
+    'live-companions': { label: 'Pal companion', color: '#fb7185', symbol: 'C', aliases: 'companion pal compagno otomo live', live: true },
+    'live-workers': { label: 'Pal lavoratori', color: '#fcd34d', symbol: 'L', aliases: 'worker lavoratore base camp pal live', live: true },
     'alpha-pals': { label: 'Alpha Pal', color: '#ff735c', symbol: 'A', aliases: 'field alpha pal boss' },
     bosses: { label: 'Boss delle torri', color: '#e5b85c', symbol: 'B', aliases: 'tower boss torre' },
     bounties: { label: 'Taglie', color: '#f08a5d', symbol: '$', aliases: 'bounty taglia ricercato' },
@@ -59,6 +70,8 @@
     mapKinds: new Set(DEFAULT_MAP_POINT_KINDS),
     mapQuery: '',
     mapCatalogueLoaded: false,
+    worldObjects: { objects: [], stale: true, updated_at: null },
+    worldObjectTimer: null,
     bases: [],
     guildNames: {},
     guildColors: {},
@@ -2951,6 +2964,66 @@
     }, 300000)
   }
 
+  function mergeLiveWorldObjects(objects) {
+    for (const mapId of Object.keys(state.points)) {
+      state.points[mapId] = state.points[mapId].filter((point) => !point._live)
+      state.pointById.delete(`${mapId}:live`)
+    }
+    for (const obj of objects || []) {
+      const liveKind = LIVE_KIND_MAP[obj.kind]
+      if (!liveKind || !MAP_POINT_KINDS[liveKind]) continue
+      const mapId = obj.map || mapForLocation(obj.x, obj.y)
+      if (!mapId || !state.points[mapId]) continue
+      const point = {
+        id: `live:${obj.id}`,
+        kind: liveKind,
+        x: Number(obj.x),
+        y: Number(obj.y),
+        name: obj.name || MAP_POINT_KINDS[liveKind].label,
+        _live: true,
+      }
+      if (obj.detail) point.detail = obj.detail
+      if (Number.isFinite(obj.level) && obj.level > 0) point.level = obj.level
+      if (obj.owner_id) {
+        point.detail = `Pal di ${formatOwnerName(obj.owner_id)}`
+        point.owner_id = obj.owner_id
+      }
+      if (obj.guild_name) point.guild_name = obj.guild_name
+      state.points[mapId].push(point)
+      state.pointById.set(point.id, point)
+    }
+  }
+
+  function formatOwnerName(ownerId) {
+    const player = (state.snapshot?.players || []).find((p) => p.id === ownerId)
+    return player ? player.name : 'esploratore'
+  }
+
+  async function loadWorldObjects() {
+    if (!elements.mapViewport) return
+    try {
+      const data = await requestJson('/api/v1/world/objects', 'worldObjects', 15000)
+      state.worldObjects.objects = Array.isArray(data.objects) ? data.objects : []
+      state.worldObjects.stale = Boolean(data.stale)
+      state.worldObjects.updated_at = data.updated_at || null
+      mergeLiveWorldObjects(state.worldObjects.objects)
+      if (state.mapCatalogueLoaded) {
+        renderMapExplorer()
+        renderStaticPoints()
+      }
+    } catch (_error) {
+      // Live world objects are optional; the static catalogue remains available.
+    }
+  }
+
+  function scheduleWorldObjectPoll() {
+    window.clearTimeout(state.worldObjectTimer)
+    state.worldObjectTimer = window.setTimeout(async () => {
+      if (!document.hidden) await loadWorldObjects()
+      scheduleWorldObjectPoll()
+    }, 300000)
+  }
+
   function renderWorldSaveStatus(data) {
     if (!elements.worldSaveStatus) return
     state.worldSaveData = data
@@ -3136,10 +3209,12 @@
       if (elements.telemetryStats) loadTelemetryStats()
       if (elements.worldDiff) loadWorldDiff()
       if (elements.mapViewport) loadBases().then(scheduleBasePoll)
+      if (elements.mapViewport) loadWorldObjects().then(scheduleWorldObjectPoll)
       if (elements.worldSaveStatus) loadWorldSaveStatus().then(scheduleWorldSavePoll)
     })
     if (elements.mapViewport) loadStaticPoints()
     if (elements.mapViewport) loadBases().then(scheduleBasePoll)
+    if (elements.mapViewport) loadWorldObjects().then(scheduleWorldObjectPoll)
     snapshotLoop(true)
     if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
     if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)

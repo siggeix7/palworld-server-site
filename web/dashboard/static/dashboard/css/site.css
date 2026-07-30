@@ -209,6 +209,8 @@ main { overflow-x: hidden; }
 .map-marker.tower > span { width: 15px; height: 15px; transform: none; background: var(--gold); clip-path: polygon(50% 0, 100% 100%, 0 100%); filter: drop-shadow(0 0 4px var(--gold)); }
 .map-marker.map-poi > span { width: 23px; height: 23px; transform: none; border: 2px solid color-mix(in srgb, var(--marker-color) 68%, white); border-radius: 50% 50% 50% 3px; color: #061719; background: var(--marker-color); box-shadow: 0 3px 9px rgba(0,0,0,.55), 0 0 0 3px color-mix(in srgb, var(--marker-color) 20%, transparent); font-family: ui-monospace, monospace; font-size: .63rem; font-weight: 900; }
 .map-marker.map-poi.selected > span { border-color: white; box-shadow: 0 0 0 6px color-mix(in srgb, var(--marker-color) 35%, transparent), 0 0 19px var(--marker-color); }
+.map-marker.map-poi[data-kind^="live-"] > span { border-radius: 50%; animation: pulse-live 2s ease-in-out infinite; }
+@keyframes pulse-live { 0%, 100% { box-shadow: 0 3px 9px rgba(0,0,0,.55), 0 0 0 3px color-mix(in srgb, var(--marker-color) 20%, transparent); } 50% { box-shadow: 0 3px 9px rgba(0,0,0,.55), 0 0 0 7px color-mix(in srgb, var(--marker-color) 38%, transparent); } }
 .map-marker.map-cluster > span { width: 34px; height: 34px; transform: none; border: 2px solid var(--paper); border-radius: 50%; color: #061719; background: var(--marker-color); box-shadow: 0 0 0 5px color-mix(in srgb, var(--marker-color) 25%, transparent), 0 4px 14px rgba(0,0,0,.6); font-weight: 850; }
 .map-marker.fast:hover, .map-marker.fast:focus-visible, .map-marker.tower:hover, .map-marker.tower:focus-visible, .map-marker.base:hover, .map-marker.base:focus-visible, .map-marker.map-poi:hover, .map-marker.map-poi:focus-visible, .map-marker.map-cluster:hover, .map-marker.map-cluster:focus-visible { background: rgba(6,23,25,.42); outline: 1px solid var(--marker-color, var(--teal)); }
 .map-marker.base { z-index: 2; }
@@ -308,6 +310,7 @@ main { overflow-x: hidden; }
 .legend-tower { background: var(--gold); clip-path: polygon(50% 0,100% 100%,0 100%); }
 .legend-base { border: 2px solid var(--paper); border-radius: 3px; background: var(--gold); }
 .legend-heat { background: var(--coral); opacity: .6; border-radius: 2px; }
+.legend-live-wild { border-radius: 50%; background: #a3e635; }
 .empty-copy { color: var(--paper-dim); font-size: .8rem; }
 
 .heatmap-layer { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 1; }

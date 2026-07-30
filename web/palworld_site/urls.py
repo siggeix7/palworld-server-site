@@ -99,6 +99,7 @@ urlpatterns = [
     path("api/v1/leaderboard", views.leaderboard, name="leaderboard-api"),
     path("api/v1/activity/heatmap", views.activity_heatmap, name="activity-heatmap"),
     path("api/v1/map/heatmap", views.map_heatmap, name="map-heatmap"),
+    path("api/v1/world/objects", views.world_objects, name="world-objects"),
     path("api/v1/telemetry/stats", views.telemetry_stats, name="telemetry-stats"),
     path("api/v1/world/diff", views.world_diff, name="world-diff"),
     path("api/v1/vm/snapshot", views.vm_snapshot, name="vm-snapshot"),

@@ -247,6 +247,25 @@ zabbix_export:
               value: settings
             - tag: integration
               value: palworld-site
+        - uuid: 7c2a9f3e6b1d4a8e9c5d2f1b8a7e6d5c
+          name: 'Palworld: Game Data'
+          type: HTTP_AGENT
+          key: palworld.game_data
+          delay: 5m
+          history: 1h
+          value_type: TEXT
+          timeout: 10s
+          url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/game-data'
+          headers:
+            - name: Accept
+              value: application/json
+            - name: Authorization
+              value: 'Basic {$PALAPIKEY}'
+          tags:
+            - tag: dataset
+              value: game_data
+            - tag: integration
+              value: palworld-site
         - uuid: aeaf4c2c417448a9ac470ad481b4dc93
           name: 'Site VM: CPU utilization'
           type: CALCULATED

@@ -1198,6 +1198,29 @@ def map_heatmap(request):
     })
 
 
+@require_GET
+@never_cache
+def world_objects(request):
+    dataset = LatestDataset.objects.filter(key="game_data").first()
+    if not dataset:
+        return JsonResponse({
+            "objects": [],
+            "count": 0,
+            "stale": True,
+            "updated_at": None,
+        })
+    now = timezone.now()
+    source_clock = dataset.source_clock
+    payload = dataset.payload or {}
+    return JsonResponse({
+        "objects": payload.get("objects", []),
+        "count": payload.get("count", 0),
+        "truncated": bool(payload.get("truncated", False)),
+        "stale": source_clock < now - timedelta(minutes=10),
+        "updated_at": _iso(source_clock),
+    })
+
+
 def _uptime_pct(window, now):
     since = now - window
     times = list(
