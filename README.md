@@ -14,7 +14,11 @@ amministrativa del server di gioco.
 - Zoom ancorato al cursore, pan limitato, pinch touch, selezione e cluster di
   giocatori.
 - Tracce selezionabili da 1 ora a 7 giorni e layer mappa persistenti.
-- Layer opzionali con nomi reali per 152 viaggi rapidi e nove torri.
+- Catalogo ricercabile di 1.146 luoghi in 11 categorie: Alpha Pal, boss delle
+  torri, taglie, piattaforme petrolifere, viaggi rapidi, torri di osservazione,
+  dungeon, effigi Lifmunk, diari, santuari antichi e NPC.
+- Filtri persistenti, dettagli e ricompense, culling del viewport e cluster dei
+  punti di interesse; esploratore laterale su desktop e drawer su telefono.
 - Nome, account, livello, ping e numero di costruzioni per giocatore.
 - Storico FPS e giocatori per 6 ore, 24 ore, 7, 30 o 90 giorni.
 - Grafico gap-aware e giudizio FPS sull'ultima ora calibrato sulla cadenza Zabbix.
@@ -40,8 +44,9 @@ amministrativa del server di gioco.
 
 L'endpoint Palworld `game-data` non e' necessario. L'API supportata `/players`
 fornisce gia' le coordinate dei giocatori online e il sync di `Level.sav`
-aggiunge le basi. Senza ulteriori sorgenti non e' possibile visualizzare Pal,
-NPC, oggetti o costruzioni individuali.
+aggiunge le basi. Pal, NPC e oggetti del catalogo sono riferimenti statici della
+cartografia 1.0.1; senza ulteriori sorgenti sanitizzate non e' possibile mostrare
+in tempo reale istanze individuali, oggetti raccolti o costruzioni.
 
 ## Architettura e porte separate
 
@@ -101,6 +106,19 @@ make shell  apre una shell Django nel container
 make test   esegue check, verifica migrazioni e test automatici
 make clean  elimina l'archivio Docker in /tmp
 ```
+
+Il catalogo statico e' riproducibile dal checkout upstream fissato nel notice:
+
+```sh
+DJANGO_SECRET_KEY=build-only PLAYER_HASH_SECRET=build-only \
+PUBLIC_SITE_URL=https://build.invalid SITE_ADMIN_USERS=build@example.invalid \
+ZABBIX_SOURCE_HOST=build-host \
+python3 web/manage.py build_map_catalogue \
+  --source /percorso/palworld-live-map
+```
+
+Il comando verifica versione, hash, conteggi, categorie e bounds prima di
+sostituire `web/dashboard/static/dashboard/data/map-points.json`.
 
 Esempi:
 
@@ -419,13 +437,13 @@ make test
 ## Note legali
 
 Questo e' un progetto community non ufficiale. Palworld e la mappa appartengono
-a Pocketpair, Inc. Coordinate, mappa nativa 8192, punti statici e alcune
-funzioni di interfaccia derivano dal progetto MIT
-`RNZ01/palworld-server-dashboard` al commit
+a Pocketpair, Inc. La mappa nativa di Palpagos e alcuni concetti di interfaccia
+provengono da `RNZ01/palworld-server-dashboard` al commit
 `588fa6390e0c5b6fe909e2c1fd3baddb86ef92c8`. La cartografia dell'Albero del
-Mondo e i dati statici 1.0.1 hanno provenienza tecnica documentata dal progetto
-`LukeHollandDev/palworld-live-map`. Percorsi, modifiche, esclusioni, hash degli
-asset e testo completo della licenza sono in [NOTICE.md](NOTICE.md).
-Il notice e' disponibile anche dal footer del sito. La licenza MIT di RNZ01 non
-copre gli asset Palworld: prima di ridistribuire la mappa verifica che l'uso sia
-compatibile con le regole Pocketpair applicabili.
+Mondo e tutti i 1.146 punti statici 1.0.1 provengono dal progetto MIT
+`LukeHollandDev/palworld-live-map` al commit
+`19f3e3f8e684481bde58fef6c76845f811d57614`. Percorsi, modifiche, esclusioni,
+hash degli asset e testi delle licenze sono in [NOTICE.md](NOTICE.md).
+Un notice sintetico e' disponibile anche dal footer del sito. Le licenze MIT
+non coprono gli asset o i dati Palworld: prima di ridistribuirli verifica che
+l'uso sia compatibile con le regole Pocketpair applicabili.

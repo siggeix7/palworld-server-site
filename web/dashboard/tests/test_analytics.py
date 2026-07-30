@@ -206,8 +206,12 @@ class NewPageTests(TestCase):
         self.assertContains(response, 'data-map-region="world-tree"')
         self.assertContains(response, "mapTouchActivate")
         self.assertContains(response, "palworld-map-world-tree-2048")
+        self.assertContains(response, "mapExplorerToggle")
+        self.assertContains(response, "mapSearch")
+        self.assertContains(response, "mapFilterGroups")
+        self.assertContains(response, "showMapPoints")
 
-    def test_map_catalogue_contains_named_v1_points_for_both_regions(self):
+    def test_map_catalogue_contains_all_v1_categories_for_both_regions(self):
         path = (
             settings.BASE_DIR
             / "dashboard"
@@ -218,16 +222,17 @@ class NewPageTests(TestCase):
         )
         data = json.loads(path.read_text())
 
-        self.assertEqual(data["game_version"], "1.0.1.100619")
-        self.assertEqual(len(data["maps"]["palpagos"]["fast_travel"]), 137)
-        self.assertEqual(len(data["maps"]["palpagos"]["boss_tower"]), 8)
-        self.assertEqual(len(data["maps"]["world-tree"]["fast_travel"]), 15)
-        self.assertEqual(len(data["maps"]["world-tree"]["boss_tower"]), 1)
+        self.assertEqual(data["source"]["game_version"], "1.0.1.100619")
+        self.assertEqual(data["schema_version"], 3)
+        self.assertEqual(data["total_count"], 1146)
+        self.assertEqual(len(data["category_counts"]), 11)
+        self.assertEqual(len(data["maps"]["palpagos"]["points"]), 1064)
+        self.assertEqual(len(data["maps"]["world-tree"]["points"]), 82)
         names = [
             point["name"]
             for map_data in data["maps"].values()
-            for points in map_data.values()
-            for point in points
+            for point in map_data["points"]
         ]
         self.assertNotIn("Statua dell'Aquila 1", names)
-        self.assertEqual(len(names), len(set(names)))
+        self.assertIn("Chillet", names)
+        self.assertIn("Arena Merchant", names)

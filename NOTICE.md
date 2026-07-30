@@ -36,7 +36,7 @@ Adapted material and modifications:
   Its matching bounds are `[349400, 724400, -1099400, -724400]`. Local 2048
   and 4096 WebP derivatives reduce transfer and decode cost on smaller screens.
 
-The public site exposes the full notice below through
+The public site exposes a condensed notice through
 `web/dashboard/static/dashboard/THIRD_PARTY_NOTICES.txt`.
 
 No RNZ01 administrative proxy, authentication, password storage, kick/ban,
@@ -51,6 +51,10 @@ by the reproducible exporter documented at:
 
 https://github.com/LukeHollandDev/palworld-live-map
 
+Pinned upstream revision:
+
+`19f3e3f8e684481bde58fef6c76845f811d57614`
+
 Pinned game-data version: `1.0.1.100619`.
 
 - `assets/palworld/maps/world-tree.jpg`: native 8192x8192 World Tree overview,
@@ -62,14 +66,49 @@ Pinned game-data version: `1.0.1.100619`.
   `8a08427dc41f25189dbab4c8e15ad529c35b0e36b2901e426203a4ff5dd03ec2`.
   Its matching bounds are `[689148.5, -476400, 347351.5, -818197]`. Local 2048
   and 4096 WebP derivatives are served adaptively.
-- `assets/palworld/landmarks/catalogue/navigation.json` and
-  `assets/palworld/landmarks/manifest.json`: factual names and coordinates were
-  minimized into `web/dashboard/static/dashboard/data/map-points.json`. It
-  contains 137 Palpagos and 15 World Tree fast-travel points, plus eight
-  Palpagos and one World Tree boss towers. Internal object paths, instance IDs,
-  state keys and unrelated game data are not included.
+- `assets/palworld/landmarks/manifest.json` and the `encounter-additions`,
+  `navigation`, `collectibles` and `npc-locations` catalogues: factual names,
+  coordinates, levels, descriptions and public rewards were minimized into
+  `web/dashboard/static/dashboard/data/map-points.json`. It contains 1,146
+  locations across 11 categories: 1,064 in Palpagos and 82 in the World Tree
+  region. Internal game IDs, object paths, instance IDs, state keys, class names,
+  icon paths and source objects are not included. Source IDs are replaced with
+  deterministic one-way hashes. Output SHA-256:
+  `c3b747e3f1686952e1a871c6785779275ef087af07caab44db260afdf5cb02e6`.
+- `web/dashboard/management/commands/build_map_catalogue.py` is the local,
+  independently written minimizer. It validates the pinned source manifests,
+  hashes, counts, categories and map bounds before producing deterministic JSON.
+- Search, category filtering, marker details, viewport culling, grid clustering
+  and responsive explorer behavior in `site.js`, `site.css` and `map.html` were
+  implemented locally for the existing privacy-sanitized Django map after
+  reviewing the upstream React interface. No React or Go application code is
+  included.
 
 No application or exporter code from this project is included.
+
+### Luke Holland MIT License
+
+MIT License
+
+Copyright (c) 2026 Luke Holland
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ### RNZ01 MIT License
 

@@ -19,6 +19,26 @@
       minY: -818197,
     },
   }
+  const MAP_POINT_GROUPS = [
+    { id: 'encounters', label: 'Incontri', kinds: ['alpha-pals', 'bosses', 'bounties', 'oil-rigs'] },
+    { id: 'exploration', label: 'Esplorazione', kinds: ['waypoints', 'watchtowers', 'dungeon-entrances'] },
+    { id: 'collectibles', label: 'Collezionabili', kinds: ['effigies', 'journals', 'ancient-shrine-pickups'] },
+    { id: 'characters', label: 'Personaggi', kinds: ['npc-locations'] },
+  ]
+  const MAP_POINT_KINDS = {
+    'alpha-pals': { label: 'Alpha Pal', color: '#ff735c', symbol: 'A', aliases: 'field alpha pal boss' },
+    bosses: { label: 'Boss delle torri', color: '#e5b85c', symbol: 'B', aliases: 'tower boss torre' },
+    bounties: { label: 'Taglie', color: '#f08a5d', symbol: '$', aliases: 'bounty taglia ricercato' },
+    'oil-rigs': { label: 'Piattaforme petrolifere', color: '#e0a84f', symbol: 'O', aliases: 'oil rig petrolio piattaforma' },
+    waypoints: { label: 'Viaggi rapidi', color: '#63b7ff', symbol: '+', aliases: 'waypoint fast travel viaggio rapido' },
+    watchtowers: { label: 'Torri di osservazione', color: '#8fd3ff', symbol: 'W', aliases: 'watchtower torre osservazione' },
+    'dungeon-entrances': { label: 'Ingressi dungeon', color: '#a78bfa', symbol: 'D', aliases: 'dungeon grotta ingresso' },
+    effigies: { label: 'Effigi Lifmunk', color: '#4ce0c1', symbol: 'E', aliases: 'effigy lifmunk effigie' },
+    journals: { label: 'Diari', color: '#d6c49a', symbol: 'J', aliases: 'journal diario nota' },
+    'ancient-shrine-pickups': { label: 'Santuari antichi', color: '#f3d56b', symbol: 'S', aliases: 'ancient shrine santuario schematic progetto' },
+    'npc-locations': { label: 'NPC e mercanti', color: '#f59ac0', symbol: 'N', aliases: 'npc merchant mercante dealer venditore' },
+  }
+  const DEFAULT_MAP_POINT_KINDS = new Set(['waypoints', 'bosses'])
   // Palette and interaction concepts adapted from RNZ01/palworld-server-dashboard.
   // This implementation uses deterministic public IDs; see THIRD_PARTY_NOTICES.txt.
   const PLAYER_COLORS = [
@@ -31,8 +51,14 @@
     snapshot: null,
     worldSaveData: null,
     selectedPlayer: null,
-    map: { active: 'palpagos', scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, follow: false, pointers: new Map(), pinchDistance: 0, pinchScale: 1, imageResolution: 0, imagePendingMap: null, imagePendingResolution: 0, imageRequest: 0, viewportWidth: 0, viewportHeight: 0 },
-    points: {},
+    selectedMapPoint: null,
+    map: { active: 'palpagos', scale: 1, panX: 0, panY: 0, dragging: false, pointerX: 0, pointerY: 0, frame: null, renderTimer: null, explorerFocusTimer: null, follow: false, pointers: new Map(), pinchDistance: 0, pinchScale: 1, imageResolution: 0, imagePendingMap: null, imagePendingResolution: 0, imageRequest: 0, viewportWidth: 0, viewportHeight: 0 },
+    points: { palpagos: [], 'world-tree': [] },
+    pointById: new Map(),
+    pointCounts: {},
+    mapKinds: new Set(DEFAULT_MAP_POINT_KINDS),
+    mapQuery: '',
+    mapCatalogueLoaded: false,
     bases: [],
     guildNames: {},
     guildColors: {},
@@ -92,8 +118,7 @@
     mapEmpty: $('#mapEmpty'),
     playerLayer: $('#playerLayer'),
     baseLayer: $('#baseLayer'),
-    fastTravelLayer: $('#fastTravelLayer'),
-    towerLayer: $('#towerLayer'),
+    mapPointLayer: $('#mapPointLayer'),
     trailLayer: $('#trailLayer'),
     heatmapLayer: $('#heatmapLayer'),
     heatmapRange: $('#heatmapRange'),
@@ -101,6 +126,24 @@
     followPlayer: $('#followPlayer'),
     copyCoordinate: $('#copyCoordinate'),
     fullscreenMap: $('#fullscreenMap'),
+    showMapPoints: $('#showMapPoints'),
+    mapExplorer: $('#mapExplorer'),
+    mapExplorerToggle: $('#mapExplorerToggle'),
+    mapExplorerClose: $('#mapExplorerClose'),
+    mapExplorerHandle: $('#mapExplorerHandle'),
+    mapExplorerBackdrop: $('#mapExplorerBackdrop'),
+    mapExplorerCount: $('#mapExplorerCount'),
+    mapSearch: $('#mapSearch'),
+    clearMapSearch: $('#clearMapSearch'),
+    mapFilterGroups: $('#mapFilterGroups'),
+    mapResultStatus: $('#mapResultStatus'),
+    mapResults: $('#mapResults'),
+    mapPlaceDetail: $('#mapPlaceDetail'),
+    mapPlaceKind: $('#mapPlaceKind'),
+    mapPlaceName: $('#mapPlaceName'),
+    mapPlaceDescription: $('#mapPlaceDescription'),
+    mapPlaceRewards: $('#mapPlaceRewards'),
+    mapPlaceCoordinates: $('#mapPlaceCoordinates'),
     mapRoster: $('#mapRoster'),
     rosterCount: $('#rosterCount'),
     mapSelection: $('#mapSelection'),
@@ -460,6 +503,7 @@
     window.clearTimeout(state.map.renderTimer)
     state.map.renderTimer = window.setTimeout(() => {
       state.map.renderTimer = null
+      renderStaticPoints()
       if (state.snapshot) renderMap(state.snapshot.players || [])
     }, 120)
   }
@@ -520,6 +564,7 @@
     clearSelection()
     dismissMapTooltip()
     applyMapTransform()
+    scheduleMapRender()
   }
 
   function setActiveMap(mapId, persist = true, preserveSelection = false, initialScale = 1) {
@@ -533,6 +578,7 @@
     state.heatmap.loaded = false
     if (preserveSelection) clearTrail()
     else clearSelection(false)
+    clearMapPointSelection()
     dismissMapTooltip()
     drawHeatmapLayer()
     setText(elements.mapCoordinate, 'X -- / Y --')
@@ -548,6 +594,7 @@
     updateMapImageResolution(true)
     applyMapTransform()
     renderStaticPoints()
+    renderMapExplorer()
     renderBases()
     if (state.snapshot) renderMap(state.snapshot.players || [])
     if (state.heatmap.enabled) loadHeatmap()
@@ -572,6 +619,7 @@
     }
     applyMapTransform()
     updateMapImageResolution()
+    renderStaticPoints()
     renderMap(state.snapshot?.players || [])
     if ($('#showTrail')?.checked) loadTrail(player.id)
   }
@@ -591,6 +639,7 @@
     state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
     state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
     applyMapTransform()
+    renderStaticPoints()
   }
 
   function marker(type, point, label = '') {
@@ -663,32 +712,404 @@
     state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
     applyMapTransform()
     updateMapImageResolution()
+    renderStaticPoints()
     renderMap(state.snapshot?.players || [])
   }
 
-  function renderStaticPoints() {
-    if (!elements.fastTravelLayer || !elements.towerLayer) return
-    elements.fastTravelLayer.replaceChildren()
-    elements.towerLayer.replaceChildren()
-    const points = state.points[state.map.active] || {}
-    for (const point of points.fast_travel || []) {
-      const node = marker('fast', point)
-      const name = point.name || 'Viaggio rapido'
-      node.dataset.name = point.id || name
-      node.setAttribute('aria-label', `Viaggio rapido: ${name}`)
-      bindMapTooltip(node, { title: name, rows: [{ text: 'Viaggio rapido' }] })
-      elements.fastTravelLayer.appendChild(node)
+  function mapPointKind(kind) {
+    return MAP_POINT_KINDS[kind] || { label: kind, color: '#4ce0c1', symbol: '?' }
+  }
+
+  function normalizeMapSearch(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('it')
+      .trim()
+  }
+
+  function mapPointSearchText(point) {
+    if (point._search) return point._search
+    const kind = mapPointKind(point.kind)
+    const rewards = (point.rewards || []).map((reward) => reward.name).join(' ')
+    point._search = normalizeMapSearch(`${point.name} ${point.detail || ''} ${kind.label} ${kind.aliases || ''} ${rewards}`)
+    return point._search
+  }
+
+  function mapPointMatchesSearch(point) {
+    const query = normalizeMapSearch(state.mapQuery)
+    return !query || mapPointSearchText(point).includes(query)
+  }
+
+  function mapPointTooltip(point) {
+    const kind = mapPointKind(point.kind)
+    const rows = [{ text: kind.label }]
+    if (point.detail) {
+      rows.push({ text: point.detail.length > 180 ? `${point.detail.slice(0, 177)}...` : point.detail })
     }
-    for (const point of points.boss_tower || []) {
-      const node = marker('tower', point)
-      const name = point.name || 'Torre'
-      node.dataset.name = point.id || name
-      node.setAttribute('aria-label', `Torre: ${name}`)
-      bindMapTooltip(node, {
-        title: name,
-        rows: [{ text: point.detail || 'Torre del boss' }],
+    if (Number.isFinite(point.level)) rows.push({ text: `Livello ${formatNumber(point.level)}` })
+    if (point.rewards?.length) {
+      rows.push({
+        text: `Ricompense: ${point.rewards.map((reward) => `${formatNumber(reward.count)} ${reward.name}`).join(' · ')}`,
       })
-      elements.towerLayer.appendChild(node)
+    }
+    rows.push({ text: `X ${formatNumber(point.x)} / Y ${formatNumber(point.y)}` })
+    return { title: point.name, rows }
+  }
+
+  function visibleMapPercentBounds(overscan = 60) {
+    const rect = elements.mapViewport?.getBoundingClientRect()
+    if (!rect?.width || !rect.height) return { left: 0, right: 100, top: 0, bottom: 100 }
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+    const localX = (visualX) => centerX + (visualX - centerX - state.map.panX) / state.map.scale
+    const localY = (visualY) => centerY + (visualY - centerY - state.map.panY) / state.map.scale
+    return {
+      left: (localX(-overscan) / rect.width) * 100,
+      right: (localX(rect.width + overscan) / rect.width) * 100,
+      top: (localY(-overscan) / rect.height) * 100,
+      bottom: (localY(rect.height + overscan) / rect.height) * 100,
+    }
+  }
+
+  function visibleStaticPoints() {
+    const bounds = visibleMapPercentBounds()
+    return (state.points[state.map.active] || []).filter((point) => {
+      if (!state.mapKinds.has(point.kind) || !mapPointMatchesSearch(point)) return false
+      const position = worldToPercent(point.x, point.y)
+      point._position = position
+      return position.left >= bounds.left
+        && position.left <= bounds.right
+        && position.top >= bounds.top
+        && position.top <= bounds.bottom
+    })
+  }
+
+  function groupStaticPoints(points) {
+    if (state.map.scale >= 4.25 || points.length < 2) return points.map((point) => [point])
+    const rect = elements.mapViewport?.getBoundingClientRect()
+    if (!rect?.width || !rect.height) return points.map((point) => [point])
+    const cells = new Map()
+    const cellSize = state.map.scale >= 2.5 ? 42 : 50
+    for (const point of points) {
+      const position = point._position || worldToPercent(point.x, point.y)
+      const screenX = rect.width / 2 + ((position.left / 100) * rect.width - rect.width / 2) * state.map.scale + state.map.panX
+      const screenY = rect.height / 2 + ((position.top / 100) * rect.height - rect.height / 2) * state.map.scale + state.map.panY
+      const key = `${Math.floor(screenX / cellSize)}:${Math.floor(screenY / cellSize)}`
+      if (!cells.has(key)) cells.set(key, [])
+      cells.get(key).push(point)
+    }
+    const groups = []
+    for (const group of cells.values()) {
+      const selected = group.find((point) => point.id === state.selectedMapPoint)
+      if (selected && group.length > 1) {
+        groups.push([selected])
+        const remaining = group.filter((point) => point !== selected)
+        if (remaining.length) groups.push(remaining)
+      } else {
+        groups.push(group)
+      }
+    }
+    return groups
+  }
+
+  function centerMapPoints(points, zoomStep = 1.15) {
+    if (!points.length || !elements.mapViewport) return
+    const x = points.reduce((total, point) => total + Number(point.x), 0) / points.length
+    const y = points.reduce((total, point) => total + Number(point.y), 0) / points.length
+    const position = worldToPercent(x, y)
+    const rect = elements.mapViewport.getBoundingClientRect()
+    state.map.scale = Math.min(5, Math.max(2.7, state.map.scale + zoomStep))
+    state.map.panX = ((50 - position.left) / 100) * rect.width * state.map.scale
+    state.map.panY = ((50 - position.top) / 100) * rect.height * state.map.scale
+    dismissMapTooltip()
+    applyMapTransform()
+    updateMapImageResolution()
+    renderStaticPoints()
+    if (state.snapshot) renderMap(state.snapshot.players || [])
+  }
+
+  function renderMapPlaceDetail(point = null) {
+    if (!elements.mapPlaceDetail) return
+    const selected = point || state.pointById.get(state.selectedMapPoint)
+    elements.mapPlaceDetail.hidden = !selected
+    if (!selected) return
+    const kind = mapPointKind(selected.kind)
+    setText(elements.mapPlaceKind, kind.label)
+    elements.mapPlaceKind.style.setProperty('--kind-color', kind.color)
+    setText(elements.mapPlaceName, selected.name)
+    const description = [
+      selected.detail || '',
+      Number.isFinite(selected.level) ? `Livello ${formatNumber(selected.level)}` : '',
+    ].filter(Boolean).join(' · ')
+    setText(elements.mapPlaceDescription, description || 'Punto di interesse cartografico.')
+    elements.mapPlaceRewards.replaceChildren()
+    for (const reward of selected.rewards || []) {
+      const item = document.createElement('li')
+      item.textContent = `${formatNumber(reward.count)} × ${reward.name}`
+      elements.mapPlaceRewards.appendChild(item)
+    }
+    const altitude = Number.isFinite(selected.z) ? ` · Z ${formatNumber(selected.z)}` : ''
+    setText(elements.mapPlaceCoordinates, `X ${formatNumber(selected.x)} / Y ${formatNumber(selected.y)}${altitude}`)
+  }
+
+  function selectMapPoint(point, center = false) {
+    if (!point) return
+    state.selectedMapPoint = point.id
+    renderMapPlaceDetail(point)
+    for (const node of elements.mapPointLayer?.querySelectorAll('[data-point-id]') || []) {
+      const selected = node.dataset.pointId === point.id
+      node.classList.toggle('selected', selected)
+      node.setAttribute('aria-pressed', String(selected))
+    }
+    for (const node of elements.mapResults?.querySelectorAll('[data-point-id]') || []) {
+      node.classList.toggle('selected', node.dataset.pointId === point.id)
+    }
+    if (center) {
+      centerMapPoints([point], Math.max(0, 2.7 - state.map.scale))
+      const drawer = mapExplorerIsDrawer()
+      setMapExplorerOpen(false)
+      if (!drawer) elements.mapViewport?.focus({ preventScroll: true })
+    }
+  }
+
+  function clearMapPointSelection() {
+    state.selectedMapPoint = null
+    renderMapPlaceDetail()
+    for (const node of document.querySelectorAll('[data-point-id].selected')) {
+      node.classList.remove('selected')
+      if (node.matches('.map-marker')) node.setAttribute('aria-pressed', 'false')
+    }
+  }
+
+  function renderStaticPoint(point) {
+    const kind = mapPointKind(point.kind)
+    const node = marker('map-poi', point)
+    node.dataset.pointId = point.id
+    node.dataset.kind = point.kind
+    node.style.setProperty('--marker-color', kind.color)
+    node.querySelector('span').textContent = kind.symbol
+    node.classList.toggle('selected', point.id === state.selectedMapPoint)
+    node.setAttribute('aria-label', `${kind.label}: ${point.name}`)
+    node.setAttribute('aria-pressed', String(point.id === state.selectedMapPoint))
+    bindMapTooltip(node, mapPointTooltip(point))
+    node.addEventListener('click', () => selectMapPoint(point))
+    elements.mapPointLayer.appendChild(node)
+  }
+
+  function renderStaticCluster(points) {
+    const x = points.reduce((total, point) => total + Number(point.x), 0) / points.length
+    const y = points.reduce((total, point) => total + Number(point.y), 0) / points.length
+    const kinds = new Set(points.map((point) => point.kind))
+    const onlyKind = kinds.size === 1 ? mapPointKind(points[0].kind) : null
+    const node = marker('map-cluster', [x, y])
+    node.style.setProperty('--marker-color', onlyKind?.color || '#4ce0c1')
+    node.querySelector('span').textContent = String(points.length)
+    const counts = new Map()
+    for (const point of points) counts.set(point.kind, (counts.get(point.kind) || 0) + 1)
+    const rows = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([kind, count]) => ({ text: `${mapPointKind(kind).label}: ${formatNumber(count)}` }))
+    node.setAttribute('aria-label', `Avvicina ${points.length} luoghi`)
+    bindMapTooltip(node, { title: `${formatNumber(points.length)} luoghi`, rows }, false)
+    node.addEventListener('click', () => centerMapPoints(points))
+    elements.mapPointLayer.appendChild(node)
+  }
+
+  function renderStaticPoints() {
+    if (!elements.mapPointLayer) return
+    if (mapTooltipTarget?.closest('#mapPointLayer')) dismissMapTooltip()
+    elements.mapPointLayer.replaceChildren()
+    if (elements.showMapPoints && !elements.showMapPoints.checked) return
+    for (const group of groupStaticPoints(visibleStaticPoints())) {
+      if (group.length === 1) renderStaticPoint(group[0])
+      else renderStaticCluster(group)
+    }
+  }
+
+  function persistMapKinds() {
+    writeStorage('observatory.map.kinds', JSON.stringify([...state.mapKinds].sort()))
+  }
+
+  function ensureMapPointsVisible() {
+    if (!elements.showMapPoints || elements.showMapPoints.checked) return
+    elements.showMapPoints.checked = true
+    elements.mapPointLayer?.classList.add('visible')
+    writeStorage('observatory.map.locations', '1')
+  }
+
+  function updateMapKinds(kinds, enabled) {
+    for (const kind of kinds) {
+      if (enabled) state.mapKinds.add(kind)
+      else state.mapKinds.delete(kind)
+    }
+    if (enabled) ensureMapPointsVisible()
+    persistMapKinds()
+    renderMapFilterGroups()
+    renderMapResults()
+    renderStaticPoints()
+  }
+
+  function currentMapKindCounts() {
+    const counts = Object.fromEntries(Object.keys(MAP_POINT_KINDS).map((kind) => [kind, 0]))
+    for (const point of state.points[state.map.active] || []) counts[point.kind] = (counts[point.kind] || 0) + 1
+    return counts
+  }
+
+  function renderMapFilterGroups() {
+    if (!elements.mapFilterGroups) return
+    const focusedKind = document.activeElement?.dataset?.mapKind
+    const focusedGroup = document.activeElement?.dataset?.mapGroup
+    const counts = currentMapKindCounts()
+    const fragment = document.createDocumentFragment()
+    for (const group of MAP_POINT_GROUPS) {
+      const section = document.createElement('section')
+      section.className = 'map-filter-group'
+      const header = document.createElement('header')
+      const title = document.createElement('strong')
+      title.textContent = group.label
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.dataset.mapGroup = group.id
+      const availableKinds = group.kinds.filter((kind) => counts[kind] > 0)
+      const allEnabled = availableKinds.length > 0 && availableKinds.every((kind) => state.mapKinds.has(kind))
+      toggle.textContent = allEnabled ? 'Nessuno' : 'Tutti'
+      toggle.disabled = availableKinds.length === 0
+      toggle.addEventListener('click', () => updateMapKinds(availableKinds, !allEnabled))
+      header.append(title, toggle)
+      const options = document.createElement('div')
+      for (const kind of group.kinds) {
+        const metadata = mapPointKind(kind)
+        const label = document.createElement('label')
+        const input = document.createElement('input')
+        const icon = document.createElement('i')
+        const name = document.createElement('span')
+        const count = document.createElement('small')
+        input.type = 'checkbox'
+        input.dataset.mapKind = kind
+        input.checked = state.mapKinds.has(kind)
+        input.disabled = counts[kind] === 0
+        input.addEventListener('change', (event) => updateMapKinds([kind], event.target.checked))
+        icon.textContent = metadata.symbol
+        icon.style.setProperty('--kind-color', metadata.color)
+        name.textContent = metadata.label
+        count.textContent = formatNumber(counts[kind] || 0)
+        label.classList.toggle('unavailable', counts[kind] === 0)
+        label.append(input, icon, name, count)
+        options.appendChild(label)
+      }
+      section.append(header, options)
+      fragment.appendChild(section)
+    }
+    elements.mapFilterGroups.replaceChildren(fragment)
+    if (focusedKind) elements.mapFilterGroups.querySelector(`[data-map-kind="${focusedKind}"]`)?.focus({ preventScroll: true })
+    else if (focusedGroup) elements.mapFilterGroups.querySelector(`[data-map-group="${focusedGroup}"]`)?.focus({ preventScroll: true })
+  }
+
+  function renderMapResults() {
+    if (!elements.mapResults || !elements.mapResultStatus) return
+    elements.mapResults.replaceChildren()
+    if (!state.mapCatalogueLoaded) {
+      setText(elements.mapResultStatus, 'Caricamento catalogo...')
+      return
+    }
+    const query = normalizeMapSearch(state.mapQuery)
+    const points = (state.points[state.map.active] || [])
+      .filter((point) => mapPointMatchesSearch(point) && (query || state.mapKinds.has(point.kind)))
+      .sort((a, b) => {
+        const enabledDifference = Number(state.mapKinds.has(b.kind)) - Number(state.mapKinds.has(a.kind))
+        return enabledDifference || a.name.localeCompare(b.name, 'it', { sensitivity: 'base' })
+      })
+    const limit = 80
+    const shown = points.slice(0, limit)
+    const activeCount = (state.points[state.map.active] || []).filter((point) => state.mapKinds.has(point.kind)).length
+    const status = query
+      ? `${formatNumber(points.length)} risultati in ${activeMap().label}`
+      : `${formatNumber(activeCount)} luoghi attivi in ${activeMap().label}`
+    setText(elements.mapResultStatus, points.length > limit ? `${status} · primi ${limit}` : status)
+    if (!shown.length) {
+      const empty = document.createElement('p')
+      empty.className = 'empty-copy'
+      empty.textContent = query ? 'Nessun luogo corrisponde alla ricerca.' : 'Attiva una categoria per mostrare i luoghi.'
+      elements.mapResults.appendChild(empty)
+      return
+    }
+    const fragment = document.createDocumentFragment()
+    for (const point of shown) {
+      const kind = mapPointKind(point.kind)
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'map-result'
+      button.dataset.pointId = point.id
+      button.classList.toggle('selected', point.id === state.selectedMapPoint)
+      button.classList.toggle('inactive-kind', !state.mapKinds.has(point.kind))
+      const icon = document.createElement('i')
+      icon.textContent = kind.symbol
+      icon.style.setProperty('--kind-color', kind.color)
+      const copy = document.createElement('span')
+      const name = document.createElement('strong')
+      const detail = document.createElement('small')
+      name.textContent = point.name
+      detail.textContent = `${kind.label}${Number.isFinite(point.level) ? ` · Lv.${formatNumber(point.level)}` : ''}${state.mapKinds.has(point.kind) ? '' : ' · categoria nascosta'}`
+      copy.append(name, detail)
+      button.append(icon, copy)
+      button.addEventListener('click', () => {
+        ensureMapPointsVisible()
+        if (!state.mapKinds.has(point.kind)) {
+          state.mapKinds.add(point.kind)
+          persistMapKinds()
+          renderMapFilterGroups()
+        }
+        state.selectedMapPoint = point.id
+        renderMapResults()
+        selectMapPoint(point, true)
+      })
+      fragment.appendChild(button)
+    }
+    elements.mapResults.appendChild(fragment)
+  }
+
+  function renderMapExplorer() {
+    if (!state.mapCatalogueLoaded) return
+    setText(elements.mapExplorerCount, formatNumber((state.points[state.map.active] || []).length))
+    renderMapFilterGroups()
+    renderMapResults()
+    renderMapPlaceDetail()
+  }
+
+  function mapExplorerIsDrawer() {
+    return window.matchMedia('(max-width: 700px)').matches
+      || elements.mapCard?.classList.contains('fullscreen')
+      || document.fullscreenElement === elements.mapCard
+  }
+
+  function setMapExplorerOpen(open) {
+    if (!elements.mapExplorer) return
+    window.clearTimeout(state.map.explorerFocusTimer)
+    if (!mapExplorerIsDrawer()) {
+      elements.mapExplorer.classList.remove('open')
+      elements.mapExplorerBackdrop.hidden = true
+      elements.mapExplorer.inert = false
+      elements.mapExplorer.removeAttribute('aria-hidden')
+      elements.mapExplorer.removeAttribute('aria-modal')
+      elements.mapExplorer.removeAttribute('role')
+      document.body.classList.remove('map-explorer-open')
+      elements.mapExplorerToggle?.setAttribute('aria-expanded', 'false')
+      return
+    }
+    const wasOpen = elements.mapExplorer.classList.contains('open')
+    elements.mapExplorer.classList.toggle('open', open)
+    elements.mapExplorerBackdrop.hidden = !open
+    elements.mapExplorer.inert = !open
+    elements.mapExplorer.setAttribute('aria-hidden', String(!open))
+    elements.mapExplorer.setAttribute('aria-modal', 'true')
+    elements.mapExplorer.setAttribute('role', 'dialog')
+    document.body.classList.toggle('map-explorer-open', open)
+    elements.mapExplorerToggle?.setAttribute('aria-expanded', String(open))
+    if (open) {
+      state.map.explorerFocusTimer = window.setTimeout(() => elements.mapSearch?.focus({ preventScroll: true }), 180)
+    } else if (wasOpen) {
+      state.map.explorerFocusTimer = window.setTimeout(() => elements.mapExplorerToggle?.focus({ preventScroll: true }), 0)
     }
   }
 
@@ -1988,6 +2409,8 @@
     }
     syncMapOptions()
     compactMapControls.addEventListener?.('change', syncMapOptions)
+    const compactMapExplorer = window.matchMedia('(max-width: 700px)')
+    compactMapExplorer.addEventListener?.('change', () => setMapExplorerOpen(false))
 
     const regionButtons = [...document.querySelectorAll('[data-map-region]')]
     for (const [index, button] of regionButtons.entries()) {
@@ -2007,8 +2430,6 @@
 
     const layerPreferences = [
       ['showPlayers', elements.playerLayer, 'players', true],
-      ['showFastTravel', elements.fastTravelLayer, 'fastTravel', false],
-      ['showTowers', elements.towerLayer, 'towers', false],
       ['showBases', elements.baseLayer, 'bases', true],
     ]
     for (const [inputId, layer, key, defaultVisible] of layerPreferences) {
@@ -2023,6 +2444,35 @@
         if (!event.target.checked && mapTooltipTarget?.closest(`#${layer.id}`)) dismissMapTooltip()
         if (key === 'bases' && event.target.checked) renderBases()
         writeStorage(`observatory.map.${key}`, event.target.checked ? '1' : '0')
+      })
+    }
+    try {
+      const storedKinds = readStorage('observatory.map.kinds')
+      if (storedKinds !== null) {
+        const parsedKinds = JSON.parse(storedKinds)
+        if (Array.isArray(parsedKinds)) {
+          state.mapKinds = new Set(parsedKinds.filter((kind) => MAP_POINT_KINDS[kind]))
+        }
+      } else {
+        const legacyFastTravel = readStorage('observatory.map.fastTravel')
+        const legacyTowers = readStorage('observatory.map.towers')
+        if (legacyFastTravel !== null || legacyTowers !== null) {
+          state.mapKinds = new Set()
+          if (legacyFastTravel === '1') state.mapKinds.add('waypoints')
+          if (legacyTowers === '1') state.mapKinds.add('bosses')
+        }
+      }
+    } catch (_error) {
+      state.mapKinds = new Set(DEFAULT_MAP_POINT_KINDS)
+    }
+    if (elements.showMapPoints && elements.mapPointLayer) {
+      elements.showMapPoints.checked = readStorage('observatory.map.locations', '1') !== '0'
+      elements.mapPointLayer.classList.toggle('visible', elements.showMapPoints.checked)
+      elements.showMapPoints.addEventListener('change', (event) => {
+        elements.mapPointLayer.classList.toggle('visible', event.target.checked)
+        if (!event.target.checked && mapTooltipTarget?.closest('#mapPointLayer')) dismissMapTooltip()
+        writeStorage('observatory.map.locations', event.target.checked ? '1' : '0')
+        renderStaticPoints()
       })
     }
     const trailToggle = $('#showTrail')
@@ -2097,6 +2547,77 @@
         }
       })
     }
+    const openMapExplorer = () => {
+      if (mapExplorerIsDrawer()) setMapExplorerOpen(true)
+      else {
+        elements.mapExplorer?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        elements.mapSearch?.focus({ preventScroll: true })
+      }
+    }
+    elements.mapExplorerToggle?.addEventListener('click', openMapExplorer)
+    elements.mapExplorerClose?.addEventListener('click', () => setMapExplorerOpen(false))
+    elements.mapExplorerBackdrop?.addEventListener('click', () => setMapExplorerOpen(false))
+    elements.mapExplorerHandle?.addEventListener('click', () => {
+      if (mapExplorerIsDrawer()) setMapExplorerOpen(!elements.mapExplorer?.classList.contains('open'))
+    })
+    elements.mapSearch?.addEventListener('input', (event) => {
+      state.mapQuery = event.target.value
+      if (elements.clearMapSearch) elements.clearMapSearch.hidden = !event.target.value
+      renderMapResults()
+      renderStaticPoints()
+    })
+    elements.clearMapSearch?.addEventListener('click', () => {
+      state.mapQuery = ''
+      elements.mapSearch.value = ''
+      elements.clearMapSearch.hidden = true
+      elements.mapSearch.focus()
+      renderMapResults()
+      renderStaticPoints()
+    })
+    $('#showAllMapKinds')?.addEventListener('click', () => updateMapKinds(Object.keys(MAP_POINT_KINDS), true))
+    $('#hideAllMapKinds')?.addEventListener('click', () => updateMapKinds(Object.keys(MAP_POINT_KINDS), false))
+    $('#resetMapKinds')?.addEventListener('click', () => {
+      state.mapKinds = new Set(DEFAULT_MAP_POINT_KINDS)
+      ensureMapPointsVisible()
+      persistMapKinds()
+      renderMapExplorer()
+      renderStaticPoints()
+    })
+    $('#clearMapPlace')?.addEventListener('click', clearMapPointSelection)
+    $('#copyMapPlace')?.addEventListener('click', async () => {
+      const point = state.pointById.get(state.selectedMapPoint)
+      if (!point) return
+      try {
+        await navigator.clipboard.writeText(`${point.x}, ${point.y}`)
+        const button = $('#copyMapPlace')
+        button.textContent = 'Copiato'
+        window.setTimeout(() => { button.textContent = 'Copia coordinate' }, 1500)
+      } catch (_error) {
+        showToast('Copia non disponibile in questo browser', true)
+      }
+    })
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab' && elements.mapExplorer?.classList.contains('open')) {
+        const focusable = [...elements.mapExplorer.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex]:not([tabindex="-1"])')]
+          .filter((node) => node.offsetParent !== null)
+        if (!focusable.length) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (!elements.mapExplorer.contains(document.activeElement)) {
+          event.preventDefault()
+          (event.shiftKey ? last : first).focus()
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first.focus()
+        }
+      } else if (event.key === 'Escape' && elements.mapExplorer?.classList.contains('open')) {
+        setMapExplorerOpen(false)
+      }
+    })
+    setMapExplorerOpen(false)
 
     const setTouchMapActive = (active) => {
       elements.mapViewport.classList.toggle('touch-active', active)
@@ -2122,15 +2643,25 @@
     const fullscreenButton = elements.fullscreenMap
     if (fullscreenButton) {
       let wasFullscreen = false
+      let fullscreenFrame = null
       const updateFullscreenState = () => {
         const card = elements.mapCard
         if (!card) return
         const isFs = document.fullscreenElement === card || card.classList.contains('fullscreen')
+        const fullscreenChanged = wasFullscreen !== isFs
         if (wasFullscreen && !isFs) setTouchMapActive(false)
         wasFullscreen = isFs
+        if (isFs && elements.mapExplorer?.parentNode !== card) {
+          card.append(elements.mapExplorer, elements.mapExplorerBackdrop)
+        } else if (!isFs && elements.mapExplorer?.parentNode === card) {
+          card.after(elements.mapExplorer, elements.mapExplorerBackdrop)
+        }
+        if (fullscreenChanged) setMapExplorerOpen(false)
         fullscreenButton.textContent = isFs ? 'Esci' : 'Espandi'
         fullscreenButton.setAttribute('aria-label', isFs ? 'Esci da schermo intero' : 'Attiva schermo intero')
-        window.requestAnimationFrame(() => {
+        window.cancelAnimationFrame(fullscreenFrame)
+        fullscreenFrame = window.requestAnimationFrame(() => {
+          fullscreenFrame = null
           if (isFs) {
             const toolbar = card.querySelector('.map-toolbar')
             const statusHeight = elements.mapRegionStatus?.offsetHeight || 0
@@ -2142,10 +2673,13 @@
           } else {
             card.style.removeProperty('--map-fullscreen-size')
           }
-          applyMapTransform()
-          if (state.snapshot) renderMap(state.snapshot.players || [])
-          drawHeatmapLayer()
-          updateMapImageResolution()
+          if (fullscreenChanged) {
+            applyMapTransform()
+            renderStaticPoints()
+            if (state.snapshot) renderMap(state.snapshot.players || [])
+            drawHeatmapLayer()
+            updateMapImageResolution()
+          }
         })
       }
       fullscreenButton.addEventListener('click', async () => {
@@ -2248,6 +2782,7 @@
       if (state.map.pointers.size === 0) {
         state.map.dragging = false
         elements.mapViewport.classList.remove('dragging')
+        scheduleMapRender()
       } else if (state.map.pointers.size === 1) {
         const [p] = [...state.map.pointers.values()]
         state.map.dragging = true
@@ -2274,6 +2809,7 @@
       event.preventDefault()
       dismissMapTooltip()
       applyMapTransform()
+      scheduleMapRender()
     })
     elements.mapViewport.addEventListener('click', (event) => {
       if (!event.target.closest('.map-marker, .map-touch-activate, .map-touch-exit')) {
@@ -2285,12 +2821,27 @@
   async function loadStaticPoints() {
     try {
       const data = await requestJson('/static/dashboard/data/map-points.json', 'points', 5000)
-      state.points = data?.maps && typeof data.maps === 'object'
-        ? data.maps
-        : { palpagos: data || {} }
+      if (data?.schema_version !== 3 || !data.maps || typeof data.maps !== 'object') {
+        throw new Error('unsupported map catalogue')
+      }
+      state.points = Object.fromEntries(Object.entries(MAPS).map(([mapId]) => {
+        const points = data.maps[mapId]?.points
+        if (!Array.isArray(points)) throw new Error(`missing ${mapId} map catalogue`)
+        return [mapId, points]
+      }))
+      state.pointById = new Map()
+      for (const points of Object.values(state.points)) {
+        for (const point of points) {
+          if (!MAP_POINT_KINDS[point.kind] || state.pointById.has(point.id)) throw new Error('invalid map catalogue point')
+          state.pointById.set(point.id, point)
+        }
+      }
+      state.pointCounts = data.category_counts || {}
+      state.mapCatalogueLoaded = true
       renderStaticPoints()
+      renderMapExplorer()
     } catch (_error) {
-      // Static POIs are optional; live player positions remain available.
+      setText(elements.mapResultStatus, 'Catalogo cartografico temporaneamente non disponibile.')
     }
   }
 
@@ -2566,6 +3117,7 @@
       resizeFrame = window.requestAnimationFrame(() => {
         applyMapTransform()
         updateMapImageResolution()
+        renderStaticPoints()
         if (state.snapshot) renderMap(state.snapshot.players || [])
         drawChart()
         drawHeatmapLayer()

@@ -10,7 +10,7 @@
   <div>
     <p class="eyebrow">Cartografia Palpagos</p>
     <h1 id="pageMapTitle">Mappa</h1>
-    <p>Palpagos e l'area dell'Albero del Mondo introdotta in Palworld 1.0, con cartografia adattiva ad alta risoluzione. Seleziona un giocatore per seguirne la traccia recente.</p>
+    <p>Palpagos e l'area dell'Albero del Mondo introdotta in Palworld 1.0, con cartografia adattiva ad alta risoluzione. Cerca tra 1.146 luoghi oppure seleziona un giocatore per seguirne la traccia recente.</p>
   </div>
 </section>
 
@@ -28,6 +28,7 @@
             <button type="button" id="zoomOut" aria-label="Riduci zoom">−</button>
             <button type="button" id="resetMap" aria-label="Ripristina posizione e zoom della mappa">Centra</button>
             <button type="button" id="copyCoordinate" aria-label="Copia le coordinate correnti">Copia</button>
+            <button type="button" id="mapExplorerToggle" aria-expanded="false" aria-controls="mapExplorer">Esplora</button>
             <button type="button" id="fullscreenMap" aria-label="Attiva modalità schermo intero">Espandi</button>
           </div>
         </div>
@@ -35,8 +36,7 @@
           <summary>Livelli e dati <span aria-hidden="true">＋</span></summary>
           <div class="layer-tools">
             <label><input type="checkbox" id="showPlayers" checked> Giocatori</label>
-            <label><input type="checkbox" id="showFastTravel"> Viaggi rapidi</label>
-            <label><input type="checkbox" id="showTowers"> Torri</label>
+            <label><input type="checkbox" id="showMapPoints" checked> Luoghi</label>
             <label><input type="checkbox" id="showBases" checked> Basi</label>
             <label><input type="checkbox" id="showTrail" checked> Traccia</label>
             <label><input type="checkbox" id="showHeatmap"> Calore presenze</label>
@@ -78,8 +78,7 @@
                draggable="false" decoding="async" fetchpriority="high">
           <svg class="trail-layer" id="trailLayer" viewBox="0 0 1000 1000" aria-hidden="true"><polyline></polyline></svg>
           <canvas class="heatmap-layer" id="heatmapLayer" aria-hidden="true"></canvas>
-          <div class="poi-layer fast-travel-layer" id="fastTravelLayer" role="group" aria-label="Viaggi rapidi"></div>
-          <div class="poi-layer tower-layer" id="towerLayer" role="group" aria-label="Torri dei boss"></div>
+          <div class="poi-layer map-point-layer" id="mapPointLayer" role="group" aria-label="Luoghi e punti di interesse"></div>
           <div class="poi-layer base-layer" id="baseLayer" role="group" aria-label="Basi dei giocatori"></div>
           <div class="player-layer" id="playerLayer" role="group" aria-label="Giocatori online"></div>
         </div>
@@ -101,23 +100,61 @@
       </div>
     </div>
 
-    <aside class="roster-card">
-      <div class="roster-head"><span>Online adesso</span><strong id="rosterCount">0</strong></div>
-      <div class="selection-card" id="mapSelection" hidden>
-        <span>Esploratore seguito</span>
-        <strong id="selectedPlayerName">--</strong>
-        <small id="selectedPlayerDetail">--</small>
-        <button type="button" id="clearSelection">Interrompi traccia</button>
+    <aside class="roster-card map-explorer" id="mapExplorer" aria-label="Esplora la mappa">
+      <div class="map-explorer-head">
+        <button type="button" class="map-explorer-handle" id="mapExplorerHandle" aria-label="Espandi o riduci il pannello">
+          <span>Esplora la mappa</span>
+          <strong id="mapExplorerCount">1.146</strong>
+        </button>
+        <button type="button" class="map-explorer-close" id="mapExplorerClose" aria-label="Chiudi esploratore">Chiudi</button>
       </div>
-      <div class="roster" id="mapRoster"><p class="empty-copy">Nessun esploratore rilevato.</p></div>
+      <div class="map-explorer-scroll">
+        <div class="map-search">
+          <label for="mapSearch">Cerca luogo, Pal o ricompensa</label>
+          <div>
+            <input type="search" id="mapSearch" placeholder="Es. Chillet, dungeon, mercante..." autocomplete="off" spellcheck="false">
+            <button type="button" id="clearMapSearch" aria-label="Cancella ricerca" hidden>×</button>
+          </div>
+        </div>
+        <div class="map-filter-actions" aria-label="Azioni filtri">
+          <button type="button" id="showAllMapKinds">Mostra tutto</button>
+          <button type="button" id="hideAllMapKinds">Nascondi tutto</button>
+          <button type="button" id="resetMapKinds">Ripristina</button>
+        </div>
+        <div class="map-filter-groups" id="mapFilterGroups" aria-label="Categorie mappa"></div>
+        <section class="map-place-detail" id="mapPlaceDetail" hidden aria-live="polite">
+          <div>
+            <span id="mapPlaceKind">Luogo</span>
+            <button type="button" id="clearMapPlace" aria-label="Chiudi dettaglio">×</button>
+          </div>
+          <strong id="mapPlaceName">--</strong>
+          <p id="mapPlaceDescription"></p>
+          <ul id="mapPlaceRewards"></ul>
+          <small id="mapPlaceCoordinates">--</small>
+          <button type="button" id="copyMapPlace">Copia coordinate</button>
+        </section>
+        <section class="map-results" aria-labelledby="mapResultStatus">
+          <p id="mapResultStatus" role="status">Caricamento catalogo...</p>
+          <div id="mapResults"></div>
+        </section>
+        <details class="map-online-panel" open>
+          <summary><span>Online adesso</span><strong id="rosterCount">0</strong></summary>
+          <div class="selection-card" id="mapSelection" hidden>
+            <span>Esploratore seguito</span>
+            <strong id="selectedPlayerName">--</strong>
+            <small id="selectedPlayerDetail">--</small>
+            <button type="button" id="clearSelection">Interrompi traccia</button>
+          </div>
+          <div class="roster" id="mapRoster"><p class="empty-copy">Nessun esploratore rilevato.</p></div>
+        </details>
+      </div>
       <div class="map-legend">
         <span><i class="legend-player"></i> Giocatore</span>
-        <span><i class="legend-fast"></i> Viaggio rapido</span>
-        <span><i class="legend-tower"></i> Torre</span>
         <span><i class="legend-base"></i> Base</span>
         <span><i class="legend-heat"></i> Calore presenze</span>
       </div>
     </aside>
+    <button type="button" class="map-explorer-backdrop" id="mapExplorerBackdrop" aria-label="Chiudi esploratore" hidden></button>
   </div>
 </section>
 {% endblock %}
