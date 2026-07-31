@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -19,6 +20,7 @@ from dashboard.models import (
 @override_settings(SITE_AUTH_REQUIRED=False)
 class AnalyticsApiTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.now = timezone.now()
         self.player = Player.objects.create(
             public_id="leaderboard-player",

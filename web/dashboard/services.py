@@ -86,6 +86,10 @@ class IngestError(ValueError):
     pass
 
 
+def _duration_seconds(start, end):
+    return max(0, int((end - start).total_seconds()))
+
+
 def _clean_text(value, limit=128):
     text = "" if value is None else str(value)
     text = "".join(char for char in text if char.isprintable()).strip()
@@ -727,6 +731,8 @@ def _save_players(payload, source_clock):
         PlayerSession.objects.create(
             player=player, started_at=source_clock, last_seen=source_clock
         )
+        player.session_count_lifetime += 1
+        player.save(update_fields=["session_count_lifetime"])
         ServerEvent.objects.create(
             player=player, event_type=ServerEvent.JOIN, source_clock=source_clock
         )
@@ -736,8 +742,15 @@ def _save_players(payload, source_clock):
             continue
         session.ended_at = source_clock
         session.save(update_fields=["ended_at"])
+        duration = _duration_seconds(session.started_at, source_clock)
+        player = session.player
+        player.minutes_lifetime += duration // 60
+        player.longest_session_minutes = max(
+            player.longest_session_minutes, duration // 60
+        )
+        player.save(update_fields=["minutes_lifetime", "longest_session_minutes"])
         ServerEvent.objects.create(
-            player=session.player,
+            player=player,
             event_type=ServerEvent.LEAVE,
             source_clock=source_clock,
         )
@@ -761,6 +774,10 @@ def cleanup_if_due():
     ServerEvent.objects.filter(
         source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
     ).delete()
+    PlayerSession.objects.filter(
+        started_at__lt=now - timedelta(days=settings.SESSION_RETENTION_DAYS),
+        ended_at__isnull=False,
+    ).delete()
     state.value = {"last": int(now.timestamp())}
     state.save(update_fields=["value", "updated_at"])
 
@@ -774,8 +791,15 @@ def _close_stale_sessions(now):
         ended_at = session.last_seen + timedelta(seconds=settings.DATA_STALE_SECONDS)
         session.ended_at = min(ended_at, now)
         session.save(update_fields=["ended_at"])
+        duration = _duration_seconds(session.started_at, session.ended_at)
+        player = session.player
+        player.minutes_lifetime += duration // 60
+        player.longest_session_minutes = max(
+            player.longest_session_minutes, duration // 60
+        )
+        player.save(update_fields=["minutes_lifetime", "longest_session_minutes"])
         ServerEvent.objects.create(
-            player=session.player,
+            player=player,
             event_type=ServerEvent.LEAVE,
             source_clock=session.ended_at,
         )
@@ -811,3 +835,32 @@ def store_dataset(dataset, value, source_clock=None):
 def run_maintenance():
     _close_stale_sessions(timezone.now())
     cleanup_if_due()
+
+
+def recompute_lifetime_rollups(player):
+    """Recompute lifetime rollup columns from all sessions for *player*.
+
+    Used by the backfill migration and tests. In production the rollups are
+    maintained incrementally on session create/close; this helper must not be
+    called after pruning, because it would undercount pruned sessions.
+    """
+    sessions = list(
+        PlayerSession.objects.filter(player=player).values_list(
+            "started_at", "ended_at", "last_seen"
+        )
+    )
+    closed_seconds = 0
+    longest = 0
+    for started_at, ended_at, last_seen in sessions:
+        if ended_at is not None:
+            duration = max(0, int((ended_at - started_at).total_seconds()))
+            closed_seconds += duration
+            longest = max(longest, duration)
+    player.minutes_lifetime = closed_seconds // 60
+    player.session_count_lifetime = len(sessions)
+    player.longest_session_minutes = longest // 60
+    player.save(update_fields=[
+        "minutes_lifetime",
+        "session_count_lifetime",
+        "longest_session_minutes",
+    ])

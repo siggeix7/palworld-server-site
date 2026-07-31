@@ -3,6 +3,7 @@ from datetime import timedelta
 from statistics import median
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import connection
 from django.db.models import Avg, Count, Max, Min, Prefetch
 from django.http import HttpResponse, JsonResponse
@@ -21,6 +22,20 @@ from .models import (
     ServerEvent,
 )
 from .accounts import is_site_admin
+
+
+# Server-side cache TTL for heavy read-only aggregations. The collector refreshes
+# the underlying data every 15-30s, so a 5s cache is invisible to users while
+# collapsing redundant work across concurrent dashboard clients.
+API_CACHE_TTL = 5
+
+
+def _cached_payload(key, compute):
+    payload = cache.get(key)
+    if payload is None:
+        payload = compute()
+        cache.set(key, payload, API_CACHE_TTL)
+    return payload
 
 
 RANGES = {
@@ -370,64 +385,64 @@ def health(request):
 @require_GET
 @never_cache
 def snapshot(request):
-    now = timezone.now()
-    datasets = _dataset_map()
+    def compute():
+        now = timezone.now()
+        datasets = _dataset_map()
 
-    def payload(key, default):
-        return datasets[key].payload if key in datasets else default
+        def payload(key, default):
+            return datasets[key].payload if key in datasets else default
 
-    info = payload("info", {})
-    metrics = payload("metrics", {})
-    players_payload = payload("players", {"players": []})
-    server_settings = payload("settings", {})
-    status = payload("status", {"reachable": False})
-    source_times = [dataset.source_clock for dataset in datasets.values()]
-    last_updated = max(source_times) if source_times else None
-    metric_time = datasets.get("metrics").source_clock if datasets.get("metrics") else None
-    age = int((now - metric_time).total_seconds()) if metric_time else None
-    online = bool(status.get("reachable")) and age is not None and age <= settings.DATA_STALE_SECONDS
-    uptime = metrics.get("uptime")
-    started_at = (
-        metric_time - timedelta(seconds=uptime)
-        if metric_time and isinstance(uptime, (int, float))
-        else None
-    )
-
-    players_time = datasets.get("players").source_clock if datasets.get("players") else None
-    players_age = int((now - players_time).total_seconds()) if players_time else None
-    players_stale = players_age is None or players_age > settings.DATA_STALE_SECONDS
-    players = [] if players_stale else players_payload.get("players", [])
-    stats = _session_stats([player["id"] for player in players], now)
-    for player in players:
-        player["session"] = stats.get(player["id"], {})
-        x = player.get("location_x")
-        y = player.get("location_y")
-        player["location_available"] = (
-            isinstance(x, (int, float))
-            and isinstance(y, (int, float))
-            and (x != 0 or y != 0)
+        info = payload("info", {})
+        metrics = payload("metrics", {})
+        players_payload = payload("players", {"players": []})
+        server_settings = payload("settings", {})
+        status = payload("status", {"reachable": False})
+        source_times = [dataset.source_clock for dataset in datasets.values()]
+        last_updated = max(source_times) if source_times else None
+        metric_time = datasets.get("metrics").source_clock if datasets.get("metrics") else None
+        age = int((now - metric_time).total_seconds()) if metric_time else None
+        online = bool(status.get("reachable")) and age is not None and age <= settings.DATA_STALE_SECONDS
+        uptime = metrics.get("uptime")
+        started_at = (
+            metric_time - timedelta(seconds=uptime)
+            if metric_time and isinstance(uptime, (int, float))
+            else None
         )
 
-    recent_events = [
-        {
-            "type": event.event_type,
-            "player": event.player.name,
-            "player_id": event.player.public_id,
-            "timestamp": _iso(event.source_clock),
-        }
-        for event in ServerEvent.objects.select_related("player")[:16]
-    ]
+        players_time = datasets.get("players").source_clock if datasets.get("players") else None
+        players_age = int((now - players_time).total_seconds()) if players_time else None
+        players_stale = players_age is None or players_age > settings.DATA_STALE_SECONDS
+        players = [dict(p) for p in (players_payload.get("players", []) if not players_stale else [])]
+        stats = _session_stats([player["id"] for player in players], now)
+        for player in players:
+            player["session"] = stats.get(player["id"], {})
+            x = player.get("location_x")
+            y = player.get("location_y")
+            player["location_available"] = (
+                isinstance(x, (int, float))
+                and isinstance(y, (int, float))
+                and (x != 0 or y != 0)
+            )
 
-    since = now - timedelta(hours=24)
-    aggregates = MetricSample.objects.filter(source_clock__gte=since).aggregate(
-        peak_players=Max("current_players"),
-        average_players=Avg("current_players"),
-        average_fps=Avg("server_fps_average"),
-        minimum_fps=Min("server_fps"),
-    )
+        recent_events = [
+            {
+                "type": event.event_type,
+                "player": event.player.name,
+                "player_id": event.player.public_id,
+                "timestamp": _iso(event.source_clock),
+            }
+            for event in ServerEvent.objects.select_related("player")[:16]
+        ]
 
-    response = JsonResponse(
-        {
+        since = now - timedelta(hours=24)
+        aggregates = MetricSample.objects.filter(source_clock__gte=since).aggregate(
+            peak_players=Max("current_players"),
+            average_players=Avg("current_players"),
+            average_fps=Avg("server_fps_average"),
+            minimum_fps=Min("server_fps"),
+        )
+
+        return {
             "status": {
                 "online": online,
                 "reachable": bool(status.get("reachable")),
@@ -450,7 +465,8 @@ def snapshot(request):
             },
             "version": settings.APP_VERSION,
         }
-    )
+
+    response = JsonResponse(_cached_payload("snapshot:v1", compute))
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -530,14 +546,16 @@ def history(request):
     )
 
 
-@require_GET
-@never_cache
-def players(request):
+def _compute_players_archive():
     now = timezone.now()
     since_30d = now - timedelta(days=30)
     since_365d = now - timedelta(days=365)
+    session_window = now - timedelta(days=settings.SESSION_RETENTION_DAYS)
     queryset = Player.objects.prefetch_related(
-        Prefetch("sessions", queryset=PlayerSession.objects.order_by("-started_at"))
+        Prefetch(
+            "sessions",
+            queryset=PlayerSession.objects.filter(started_at__gte=session_window).order_by("-started_at"),
+        )
     ).order_by("-last_seen", "name")
     archive = []
 
@@ -626,21 +644,22 @@ def players(request):
     for player in queryset:
         seconds_30d = 0
         seconds_365d = 0
-        seconds_all = 0
         online = False
         periods = []
-        durations = []
+        open_seconds = 0
+        open_longest = 0
         active_dates_30d = set()
         sessions = list(player.sessions.all())
 
         for session in sessions:
             ended_at, active = _session_end(session, now)
             duration = _duration_seconds(session.started_at, ended_at)
-            durations.append(duration)
-            seconds_all += duration
             seconds_30d += _duration_seconds(max(session.started_at, since_30d), ended_at)
             seconds_365d += _duration_seconds(max(session.started_at, since_365d), ended_at)
             online = online or active
+            if session.ended_at is None:
+                open_seconds += duration
+                open_longest = max(open_longest, duration)
             active_start = max(session.started_at, since_30d)
             if ended_at > active_start:
                 day = timezone.localdate(active_start)
@@ -659,6 +678,10 @@ def players(request):
                     // 60,
                 }
             )
+
+        seconds_all = player.minutes_lifetime * 60 + open_seconds
+        session_count = player.session_count_lifetime
+        longest_session = max(player.longest_session_minutes * 60, open_longest)
 
         normalized_name = player.name.strip().casefold()
         matches = saved_by_name.get(normalized_name, [])
@@ -681,16 +704,14 @@ def players(request):
                 "first_seen": _iso(player.first_seen),
                 "last_seen": _iso(player.last_seen),
                 "online": online,
-                "session_count": len(sessions),
+                "session_count": session_count,
                 "minutes_30d": seconds_30d // 60,
                 "minutes_365d": seconds_365d // 60,
                 "minutes_all": seconds_all // 60,
                 "average_session_minutes": (
-                    round(seconds_all / len(durations) / 60) if durations else 0
+                    round(seconds_all / 60 / session_count) if session_count else 0
                 ),
-                "longest_session_minutes": (
-                    max(durations) // 60 if durations else 0
-                ),
+                "longest_session_minutes": longest_session // 60,
                 "active_days_30d": len(active_dates_30d),
                 "ping_7d": ping_stats.get(player.id),
                 "periods": periods,
@@ -731,14 +752,20 @@ def players(request):
 
     archive.sort(key=lambda player: player["name"].casefold())
 
-    return JsonResponse(
-        {
-            "generated_at": _iso(now),
-            "windows": {"month_days": 30, "year_days": 365},
-            "save_updated_at": _iso(snapshot.updated_at) if snapshot else None,
-            "players": archive,
-        }
-    )
+    return {
+        "generated_at": _iso(now),
+        "windows": {"month_days": 30, "year_days": 365},
+        "save_updated_at": _iso(snapshot.updated_at) if snapshot else None,
+        "players": archive,
+    }
+
+
+@require_GET
+@never_cache
+def players(request):
+    response = JsonResponse(_cached_payload("players:v1", _compute_players_archive))
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 ACTIVITY_RANGES = {
@@ -804,14 +831,17 @@ VANILLA_DEFAULTS = {
 def _playtime_windows(player, now, since_30d, since_365d):
     total_30d = 0
     total_365d = 0
-    total_all = 0
     online = False
+    open_seconds = 0
     for session in player.sessions.all():
         ended_at, active = _session_end(session, now)
-        total_all += _duration_seconds(session.started_at, ended_at)
+        duration = _duration_seconds(session.started_at, ended_at)
         total_30d += _duration_seconds(max(session.started_at, since_30d), ended_at)
         total_365d += _duration_seconds(max(session.started_at, since_365d), ended_at)
         online = online or active
+        if session.ended_at is None:
+            open_seconds += duration
+    total_all = player.minutes_lifetime * 60 + open_seconds
     return {
         "minutes_30d": total_30d // 60,
         "minutes_365d": total_365d // 60,
@@ -820,14 +850,16 @@ def _playtime_windows(player, now, since_30d, since_365d):
     }
 
 
-@require_GET
-@never_cache
-def leaderboard(request):
+def _compute_leaderboard():
     now = timezone.now()
     since_30d = now - timedelta(days=30)
     since_365d = now - timedelta(days=365)
+    session_window = now - timedelta(days=settings.SESSION_RETENTION_DAYS)
     queryset = Player.objects.prefetch_related(
-        Prefetch("sessions", queryset=PlayerSession.objects.order_by("-started_at"))
+        Prefetch(
+            "sessions",
+            queryset=PlayerSession.objects.filter(started_at__gte=session_window).order_by("-started_at"),
+        )
     )
     entries = []
     for player in queryset:
@@ -849,7 +881,7 @@ def leaderboard(request):
         return sorted(entries, key=lambda e: (e[key], e["level"], e["name"].casefold()), reverse=True)[:LEADERBOARD_LIMIT]
 
     by_level = sorted(entries, key=lambda e: (e["level"], e["minutes_365d"], e["name"].casefold()), reverse=True)[:LEADERBOARD_LIMIT]
-    return JsonResponse({
+    return {
         "generated_at": _iso(now),
         "windows": {"month_days": 30, "year_days": 365},
         "by_playtime": {
@@ -859,7 +891,15 @@ def leaderboard(request):
         },
         "by_level": by_level,
         "total_players": len(entries),
-    })
+    }
+
+
+@require_GET
+@never_cache
+def leaderboard(request):
+    response = JsonResponse(_cached_payload("leaderboard:v1", _compute_leaderboard))
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _session_hour_buckets(started_at, ended_at, now):
@@ -873,13 +913,7 @@ def _session_hour_buckets(started_at, ended_at, now):
         cursor = chunk_end
 
 
-@require_GET
-@never_cache
-def activity_heatmap(request):
-    range_name = request.GET.get("range", "30d")
-    duration = ACTIVITY_RANGES.get(range_name)
-    if not duration:
-        return JsonResponse({"error": "unsupported range"}, status=400)
+def _compute_activity_heatmap(range_name, duration):
     now = timezone.now()
     since = now - duration
     grid = [[0.0 for _ in range(24)] for _ in range(7)]
@@ -899,7 +933,7 @@ def activity_heatmap(request):
             day_totals[dow] += minutes
     peak_hour = max(range(24), key=lambda h: hour_totals[h]) if any(hour_totals) else None
     peak_day = max(range(7), key=lambda d: day_totals[d]) if any(day_totals) else None
-    return JsonResponse({
+    return {
         "generated_at": _iso(now),
         "range": range_name,
         "weekday_labels": WEEKDAY_LABELS,
@@ -910,7 +944,21 @@ def activity_heatmap(request):
         "peak_day": WEEKDAY_LABELS[peak_day] if peak_day is not None else None,
         "session_count": session_count,
         "total_minutes": round(sum(hour_totals), 1),
-    })
+    }
+
+
+@require_GET
+@never_cache
+def activity_heatmap(request):
+    range_name = request.GET.get("range", "30d")
+    duration = ACTIVITY_RANGES.get(range_name)
+    if not duration:
+        return JsonResponse({"error": "unsupported range"}, status=400)
+    response = JsonResponse(
+        _cached_payload(f"activity_heatmap:{range_name}", lambda: _compute_activity_heatmap(range_name, duration))
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @require_GET
@@ -984,12 +1032,9 @@ def _uptime_pct(window, now):
     return pct, gaps[:10]
 
 
-@require_GET
-@never_cache
-def telemetry_stats(request):
+def _compute_telemetry_stats():
     now = timezone.now()
     since_24h = now - timedelta(hours=24)
-    since_7d = now - timedelta(days=7)
     uptime_24h, gaps_24h = _uptime_pct(timedelta(hours=24), now)
     uptime_7d, _ = _uptime_pct(timedelta(days=7), now)
     fps_values = list(
@@ -1021,7 +1066,7 @@ def telemetry_stats(request):
         payload = metrics.payload or {}
         world_days = payload.get("days")
         uptime_seconds = payload.get("uptime")
-    return JsonResponse({
+    return {
         "generated_at": _iso(now),
         "uptime": {
             "pct_24h": round(uptime_24h, 2),
@@ -1045,25 +1090,37 @@ def telemetry_stats(request):
             "uptime_seconds": uptime_seconds,
         },
         "data_age_threshold_seconds": DATA_GAP_THRESHOLD,
-    })
+    }
+
+
+@require_GET
+@never_cache
+def telemetry_stats(request):
+    response = JsonResponse(_cached_payload("telemetry_stats:v1", _compute_telemetry_stats))
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @require_GET
 @never_cache
 def world_diff(request):
-    settings_payload = LatestDataset.objects.filter(key="settings").first()
-    current = (settings_payload.payload or {}) if settings_payload else {}
-    diffs = []
-    for key, vanilla in VANILLA_DEFAULTS.items():
-        if key not in current:
-            continue
-        value = current[key]
-        if value == vanilla:
-            continue
-        diffs.append({"key": key, "vanilla": vanilla, "current": value})
-    return JsonResponse({
-        "generated_at": _iso(timezone.now()),
-        "diffs": diffs,
-        "total": len(diffs),
-        "has_settings": bool(current),
-    })
+    def compute():
+        settings_payload = LatestDataset.objects.filter(key="settings").first()
+        current = (settings_payload.payload or {}) if settings_payload else {}
+        diffs = []
+        for key, vanilla in VANILLA_DEFAULTS.items():
+            if key not in current:
+                continue
+            value = current[key]
+            if value == vanilla:
+                continue
+            diffs.append({"key": key, "vanilla": vanilla, "current": value})
+        return {
+            "generated_at": _iso(timezone.now()),
+            "diffs": diffs,
+            "total": len(diffs),
+            "has_settings": bool(current),
+        }
+    response = JsonResponse(_cached_payload("world_diff:v1", compute))
+    response.headers["Cache-Control"] = "no-store"
+    return response

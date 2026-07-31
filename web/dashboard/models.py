@@ -35,6 +35,9 @@ class Player(models.Model):
     last_seen = models.DateTimeField(db_index=True)
     level = models.PositiveIntegerField(default=0)
     building_count = models.PositiveIntegerField(default=0)
+    minutes_lifetime = models.PositiveIntegerField(default=0)
+    session_count_lifetime = models.PositiveIntegerField(default=0)
+    longest_session_minutes = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["name"]

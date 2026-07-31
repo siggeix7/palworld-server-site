@@ -2,6 +2,7 @@ import time
 from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest import mock
 
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from dashboard.models import (
@@ -12,11 +13,13 @@ from dashboard.models import (
     PlayerSession,
     PositionSample,
 )
+from dashboard.services import recompute_lifetime_rollups
 
 
 @override_settings(SITE_AUTH_REQUIRED=False)
 class PublicApiTests(TestCase):
     def setUp(self):
+        cache.clear()
         now = datetime.fromtimestamp(int(time.time()), tz=dt_timezone.utc)
         LatestDataset.objects.create(
             key="status", payload={"reachable": True}, source_clock=now
@@ -112,6 +115,13 @@ class PublicApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["players"][0]["location_available"])
+
+    def test_snapshot_serves_repeated_polls_from_cache(self):
+        self.client.get("/api/v1/snapshot")
+        with self.assertNumQueries(0):
+            response = self.client.get("/api/v1/snapshot")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["status"]["online"])
 
     def test_history(self):
         response = self.client.get("/api/v1/history?range=24h")
@@ -217,6 +227,7 @@ class PublicApiTests(TestCase):
                 last_seen=last_seen,
                 ended_at=ended_at,
             )
+        recompute_lifetime_rollups(self.player)
 
         stale_player = Player.objects.create(
             public_id="stale-player-id",
@@ -230,6 +241,7 @@ class PublicApiTests(TestCase):
             started_at=now - timedelta(hours=3),
             last_seen=now - timedelta(hours=2),
         )
+        recompute_lifetime_rollups(stale_player)
 
         with mock.patch("dashboard.views.timezone.now", return_value=now):
             response = self.client.get("/api/v1/players")
@@ -249,7 +261,7 @@ class PublicApiTests(TestCase):
         self.assertEqual(player["average_session_minutes"], 56)
         self.assertEqual(player["longest_session_minutes"], 120)
         self.assertEqual(player["active_days_30d"], 3)
-        self.assertEqual(len(player["periods"]), 5)
+        self.assertEqual(len(player["periods"]), 4)
         self.assertTrue(player["periods"][0]["active"])
         self.assertIsNone(player["periods"][0]["ended_at"])
 

@@ -177,6 +177,32 @@ class DirectDatasetTests(TestCase):
         self.assertNotIn("raw-player-id", serialized)
         self.assertNotIn("192.0.2.20", serialized)
 
+    def test_player_rollups_track_lifetime_playtime_across_pruning(self):
+        start = timezone.now() - timedelta(minutes=10)
+        store_dataset("players", {"players": [{
+            "userId": "u1", "playerId": "p1", "name": "Rollup Tester",
+            "location_x": 1, "location_y": 2, "level": 1, "ping": 5,
+        }]}, start)
+        player = Player.objects.get()
+        self.assertEqual(player.session_count_lifetime, 1)
+        self.assertEqual(player.minutes_lifetime, 0)
+
+        end = timezone.now()
+        store_dataset("players", {"players": []}, end)
+        player.refresh_from_db()
+        session = PlayerSession.objects.get(player=player)
+        self.assertIsNotNone(session.ended_at)
+        expected_minutes = int((session.ended_at - session.started_at).total_seconds()) // 60
+        self.assertEqual(player.minutes_lifetime, expected_minutes)
+        self.assertEqual(player.longest_session_minutes, expected_minutes)
+        self.assertGreater(player.session_count_lifetime, 0)
+
+        PlayerSession.objects.filter(started_at__lt=end - timedelta(seconds=1), ended_at__isnull=False).delete()
+        player.refresh_from_db()
+        self.assertFalse(PlayerSession.objects.filter(player=player).exists())
+        self.assertEqual(player.minutes_lifetime, expected_minutes)
+        self.assertEqual(player.session_count_lifetime, 1)
+
 
 @override_settings(
     PRIVATE_API_TOKEN="test-private-token",
