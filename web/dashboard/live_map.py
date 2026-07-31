@@ -23,7 +23,7 @@ from .services import WORLD_MAP_BOUNDS
 UPSTREAM_REVISION = "19f3e3f8e684481bde58fef6c76845f811d57614"
 CATALOGUE_PATH = Path(settings.BASE_DIR) / "dashboard/data/live-map-catalogue.json"
 CATALOGUE_METADATA = {
-    "gameVersion": "1.0.1.100619",
+    "gameVersion": "1.0.2.101103",
     "generator": "palworld-asset-exporter/4",
     "decoder": "CUE4Parse/1.2.2.202607",
 }

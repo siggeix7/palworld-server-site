@@ -499,14 +499,14 @@ function LiveMap({ config }: { config: PublicConfig }) {
     ? landmarkCatalogueCompatibility(config.landmarkCatalogue.gameVersion, playerState.server.version)
     : 'compatible'
   if (catalogueCompatibility === 'mismatch') {
-    const catalogueNotice = `World catalogue version mismatch: locations were exported for Palworld ${config.landmarkCatalogue.gameVersion}, but this server reports ${playerState?.server.version}. Static locations may be outdated; regenerate them with make game-assets.`
+    const catalogueNotice = `World catalogue version mismatch: locations were exported for Palworld ${config.landmarkCatalogue.gameVersion}, but this server reports ${playerState?.server.version}. Static locations may be outdated; regenerate the catalogue from current Palworld assets.`
     objectNotice = objectNotice ? `${objectNotice} ${catalogueNotice}` : catalogueNotice
   } else if (catalogueCompatibility === 'unverifiable') {
     const reportedVersion = playerState?.server.version?.trim()
     const reason = reportedVersion
       ? `the server reports an unrecognised version (${reportedVersion})`
       : 'the server did not report a version'
-    const catalogueNotice = `World catalogue compatibility could not be verified because ${reason}. Static locations may be outdated; regenerate them with make game-assets after confirming the installed game version.`
+    const catalogueNotice = `World catalogue compatibility could not be verified because ${reason}. Static locations may be outdated; regenerate the catalogue from current Palworld assets after confirming the installed game version.`
     objectNotice = objectNotice ? `${objectNotice} ${catalogueNotice}` : catalogueNotice
   }
 

@@ -52,6 +52,7 @@ class LiveMapTests(TestCase):
             payload["upstreamRevision"],
             "19f3e3f8e684481bde58fef6c76845f811d57614",
         )
+        self.assertEqual(payload["landmarkCatalogue"]["gameVersion"], "1.0.2.101103")
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
 
@@ -61,7 +62,7 @@ class LiveMapTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["gameVersion"], "1.0.1.100619")
+        self.assertEqual(payload["gameVersion"], "1.0.2.101103")
         self.assertEqual(len(payload["locations"]), 1146)
         self.assertEqual(
             Counter(item["kind"] for item in payload["locations"]),

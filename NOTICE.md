@@ -36,7 +36,7 @@ integration.
 ## LukeHollandDev/palworld-live-map
 
 The authenticated map embeds and adapts the MIT-licensed React interface and
-the Palworld 1.0.1 map/catalogue assets from:
+the Palworld map/catalogue workflow from:
 
 https://github.com/LukeHollandDev/palworld-live-map
 
@@ -44,7 +44,8 @@ Pinned upstream revision:
 
 `19f3e3f8e684481bde58fef6c76845f811d57614`
 
-Pinned game-data version: `1.0.1.100619`.
+Pinned map-asset version: `1.0.1.100619`.
+Current catalogue game-data version: `1.0.2.101103`.
 
 - `web/live-map/` contains the upstream React 19, TypeScript, Vite and Tailwind
   client. Local changes point it at authenticated Django endpoints, add a return
@@ -56,11 +57,16 @@ Pinned game-data version: `1.0.1.100619`.
   `9961632d5c38a0a67fd18713fa63af0ac6f192e71fadeb5ba53ae696b8914dd1`
   and `77fee7b2bb90fa62f26eeb862396d54dbc8c7d2f0f5b12339c12585474f7c521`.
 - `web/dashboard/data/live-map-catalogue.json` is the Django API projection of
-  the pinned upstream landmark datasets. It contains 1,146 locations across 11
+  the landmark datasets. It contains 1,146 locations across 11
   categories, with internal game IDs, object paths, instance IDs, state keys,
   class names, icon paths and source objects removed. Source IDs use the prior
-  deterministic one-way projection. Output SHA-256:
-  `74117867dc9444e48b568a3ab20d735bcab12ca962b6b678e9f986ba13ccfb6b`.
+  deterministic one-way projection. The `1.0.2.101103` export was verified
+  against Pocketpair's official `ghcr.io/pocketpairjp/palserver` image digest
+  `sha256:09343cac3d92b997634f034ade4ce702388e156ec726668c85ad3bc47faa33f4`;
+  its `Pal-LinuxServer.pak` SHA-256 is
+  `94a364adc846c148c27af907231b37a20f1096f0f93c3022636b68de40f5294c`.
+  All 1,146 projected locations are unchanged from `1.0.1.100619`. Output
+  SHA-256: `04a51a485cdad67d6b207fe5e2778fa0346bafbc62645ba7142dbc939e4acbff`.
 - `web/dashboard/live_map.py` adapts only already-sanitized Django snapshots to
   the upstream `PublicConfig`, `PlayerState`, `ObjectState` and
   `WorldCatalogue` contracts. The browser never receives raw Palworld player,

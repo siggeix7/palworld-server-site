@@ -14,11 +14,12 @@ Upstream revision: 19f3e3f8e684481bde58fef6c76845f811d57614
 
 The site embeds the upstream React map interface, original 8192x8192 Palpagos
 and World Tree images, and a minimized projection of 1,146 static locations in
-11 categories. The client was adapted to authenticated Django APIs backed only
-by sanitized snapshots. No upstream Go server or exporter source is included.
+11 categories, verified against Palworld 1.0.2.101103. The client was adapted
+to authenticated Django APIs backed only by sanitized snapshots. No upstream
+Go server or exporter source is included.
 Exact source/output hashes, modifications and data counts are in NOTICE.md.
 The projected catalogue SHA-256 is
-74117867dc9444e48b568a3ab20d735bcab12ca962b6b678e9f986ba13ccfb6b.
+04a51a485cdad67d6b207fe5e2778fa0346bafbc62645ba7142dbc939e4acbff.
 
 MIT License
 

@@ -429,7 +429,9 @@ describe('App', () => {
     expect(within(explorer).getByText(/World catalogue version mismatch:/)).toHaveTextContent(
       'locations were exported for Palworld 1.0.1.100619, but this server reports v1.0.1.100620'
     )
-    expect(within(explorer).getByText(/World catalogue version mismatch:/)).toHaveTextContent('make game-assets')
+    expect(within(explorer).getByText(/World catalogue version mismatch:/)).toHaveTextContent(
+      'regenerate the catalogue from current Palworld assets'
+    )
   })
 
   it('accepts an exact numeric server release with a leading v', async () => {
