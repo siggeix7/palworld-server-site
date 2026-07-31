@@ -10,7 +10,7 @@ TEST_ENV := DJANGO_SECRET_KEY=test-key PLAYER_HASH_SECRET=test-player-key \
 	PRIVATE_API_TOKEN=test-private-token \
 	DATABASE_PATH=/tmp/palworld-server-site-test.sqlite3
 
-.PHONY: all build save run shell test clean
+.PHONY: all build save run shell test test-frontend lint test-all clean
 
 all: save
 
@@ -49,6 +49,14 @@ test:
 	$(TEST_ENV) $(PYTHON) web/manage.py check
 	$(TEST_ENV) $(PYTHON) web/manage.py makemigrations --check --dry-run
 	$(TEST_ENV) $(PYTHON) web/manage.py test dashboard
+
+test-frontend:
+	cd web/live-map && npm ci && npm run check && npm test
+
+lint:
+	$(PYTHON) -m compileall -q web/dashboard web/palworld_site
+
+test-all: lint test test-frontend
 
 clean:
 	rm -f $(TMP_IMAGE)

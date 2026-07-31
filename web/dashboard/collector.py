@@ -169,6 +169,7 @@ class PalworldCollector:
             while not self.stop_event.is_set():
                 close_old_connections()
                 now = self.monotonic()
+                self._write_state("running")
                 for dataset in sorted(DATASETS, key=lambda key: self.next_run[key]):
                     if self.stop_event.is_set():
                         break
@@ -224,6 +225,11 @@ class PalworldCollector:
             state["failures"] += 1
             state["error"] = "database_busy"
             logger.warning("Palworld REST dataset %s delayed by database contention", dataset)
+            return False
+        except Exception:
+            state["failures"] += 1
+            state["error"] = "unexpected"
+            logger.exception("Palworld REST dataset %s raised an unexpected error", dataset)
             return False
         finally:
             state["duration_ms"] = max(0, int((self.monotonic() - started) * 1000))

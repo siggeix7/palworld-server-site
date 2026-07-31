@@ -14,3 +14,13 @@ venv
 **/node_modules
 web/live-map/node_modules
 web/live-map/dist
+Dockerfile
+docker-compose.yml
+.dockerignore
+Makefile
+README.md
+NOTICE.md
+LICENSE
+.env.example
+ops
+zabbix

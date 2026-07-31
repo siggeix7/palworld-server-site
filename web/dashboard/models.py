@@ -43,7 +43,7 @@ class Player(models.Model):
 class PlayerSession(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="sessions")
     started_at = models.DateTimeField(db_index=True)
-    last_seen = models.DateTimeField()
+    last_seen = models.DateTimeField(db_index=True)
     ended_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:

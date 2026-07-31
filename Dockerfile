@@ -36,7 +36,10 @@ RUN useradd --create-home --uid 1000 palworld-site \
     && mkdir -p /data /app/staticfiles \
     && chown -R palworld-site:palworld-site /data /app/staticfiles
 
-COPY . .
+COPY web/palworld_site/ ./web/palworld_site/
+COPY web/dashboard/ ./web/dashboard/
+COPY web/manage.py ./web/
+COPY docker/ ./docker/
 COPY --from=live-map-build /build/dist/ ./web/dashboard/static/dashboard/live-map/
 RUN chmod +x /app/docker/entrypoint.sh \
     && DJANGO_SECRET_KEY=build-collectstatic-key \
@@ -47,7 +50,7 @@ RUN chmod +x /app/docker/entrypoint.sh \
 VOLUME ["/data"]
 EXPOSE 8000 8001
 
-HEALTHCHECK --interval=30s --timeout=6s --start-period=35s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=35s --retries=3 \
     CMD python3 -c "import os,urllib.request; h={'X-Forwarded-Proto':'https'}; [urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:'+os.environ[p]+'/healthz/',headers=h),timeout=4).read() for p in ('SITE_INTERNAL_PORT','PRIVATE_INTERNAL_PORT')]"
 
 USER palworld-site

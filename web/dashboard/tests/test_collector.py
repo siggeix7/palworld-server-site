@@ -170,6 +170,19 @@ class PalworldCollectorTests(TestCase):
             self.assertFalse(collector.collect("status"))
         self.assertEqual(collector.dataset_state["status"]["error"], "database_busy")
 
+    def test_unexpected_exception_is_contained_and_does_not_stop_the_loop(self):
+        collector = PalworldCollector(
+            threading.Event(),
+            client=FakeClient(error=ValueError("payload surprise")),
+        )
+        for dataset in ("info", "metrics", "status"):
+            with self.subTest(dataset=dataset):
+                self.assertFalse(collector.collect(dataset))
+                self.assertEqual(
+                    collector.dataset_state[dataset]["error"], "unexpected"
+                )
+                self.assertEqual(collector.dataset_state[dataset]["failures"], 1)
+
 
 class DirectArchitectureTests(SimpleTestCase):
     @classmethod

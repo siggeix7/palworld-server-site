@@ -18,6 +18,7 @@ private_pid=""
 collector_pid=""
 
 shutdown() {
+  trap - TERM INT EXIT
   local pid running
   local pids=("${public_pid}" "${private_pid}" "${collector_pid}")
   for pid in "${pids[@]}"; do

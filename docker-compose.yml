@@ -52,8 +52,16 @@ services:
       - "${DATA_PATH:-/opt/palworld-server-site/data}:/data"
     read_only: true
     tmpfs:
-      - /tmp:size=64m,mode=1777
+      - /tmp:size=96m,mode=1777
+    user: "1000:1000"
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    pids_limit: 200
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

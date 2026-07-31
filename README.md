@@ -121,6 +121,14 @@ IMAGE=palworld-server-site:<versione> \
   docker compose --env-file /opt/palworld-server-site/.env up -d
 ```
 
+**Prerequisito permessi**: il container gira come uid 1000 e il volume è una
+bind mount host. Prima del primo avvio creare la directory con ownership
+corretta, altrimenti `migrate` non può scrivere il database:
+
+```bash
+install -d -o 1000 -g 1000 "${DATA_PATH:-/opt/palworld-server-site/data}"
+```
+
 Il volume configurato con `DATA_PATH` contiene database SQLite e lock del
 collector. L'entrypoint applica automaticamente le migrazioni e abilita WAL.
 

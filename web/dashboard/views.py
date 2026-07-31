@@ -5,7 +5,7 @@ from statistics import median
 from django.conf import settings
 from django.db import connection
 from django.db.models import Avg, Count, Max, Min, Prefetch
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
@@ -214,15 +214,22 @@ def _session_stats(public_ids, now):
         for player in Player.objects.filter(public_id__in=public_ids)
     }
     since = now - timedelta(days=7)
-    result = {}
-    for public_id, player in players.items():
-        sessions = PlayerSession.objects.filter(
-            player=player,
+    sessions_by_player = defaultdict(list)
+    for session in (
+        PlayerSession.objects.filter(
+            player__public_id__in=public_ids,
             last_seen__gte=since,
         )
+        .select_related("player")
+        .only("player__public_id", "started_at", "last_seen", "ended_at")
+        .order_by("player__public_id")
+    ):
+        sessions_by_player[session.player.public_id].append(session)
+    result = {}
+    for public_id, player in players.items():
         total = 0
         current = 0
-        for session in sessions:
+        for session in sessions_by_player.get(public_id, ()):
             start = max(session.started_at, since)
             end = session.ended_at or now
             duration = _duration_seconds(start, end)
@@ -907,11 +914,10 @@ def activity_heatmap(request):
 
 
 @require_GET
-@never_cache
 def world_objects(request):
     dataset = LatestDataset.objects.filter(key="game_data").first()
     if not dataset:
-        return JsonResponse({
+        response = JsonResponse({
             "available": False,
             "objects": [],
             "count": 0,
@@ -925,10 +931,18 @@ def world_objects(request):
             "stale": True,
             "updated_at": None,
         })
+        response.headers["Cache-Control"] = "no-cache, private"
+        return response
     now = timezone.now()
     source_clock = dataset.source_clock
+    etag = f'"{source_clock.isoformat()}"'
+    if request.headers.get("If-None-Match") == etag:
+        response = HttpResponse(status=304)
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "no-cache, private"
+        return response
     payload = dataset.payload or {}
-    return JsonResponse({
+    response = JsonResponse({
         "available": True,
         "objects": payload.get("objects", []),
         "count": payload.get("count", 0),
@@ -942,6 +956,9 @@ def world_objects(request):
         "stale": source_clock < now - timedelta(seconds=settings.WORLD_DATA_STALE_SECONDS),
         "updated_at": _iso(source_clock),
     })
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "no-cache, private"
+    return response
 
 
 def _uptime_pct(window, now):

@@ -338,7 +338,6 @@ def players(request):
 
 
 @require_GET
-@never_cache
 def objects(request):
     dataset = LatestDataset.objects.filter(key="game_data").first()
     payload = dataset.payload if dataset and isinstance(dataset.payload, dict) else {}
@@ -406,9 +405,20 @@ def objects(request):
         "objects": public_objects,
     }
     if dataset:
-        response_payload["updatedAt"] = _iso(dataset.source_clock)
+        source_clock = dataset.source_clock
+        response_payload["updatedAt"] = _iso(source_clock)
+        etag = f'"{source_clock.isoformat()}"'
     else:
         response_payload["lastError"] = "refresh-failed"
+        etag = None
+
+    if etag and request.headers.get("If-None-Match") == etag:
+        response = HttpResponse(status=304)
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "no-cache, private"
+        return response
     response = JsonResponse(response_payload)
-    response.headers["Cache-Control"] = "no-store, private"
+    if etag:
+        response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "no-cache, private"
     return response
