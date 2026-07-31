@@ -66,13 +66,13 @@ const responses: Record<string, unknown> = {
   }
 }
 
-function mockAPI(resolve: (path: string) => unknown = (path) => responses[path]) {
+function mockAPI(resolve: (path: string) => unknown | Promise<unknown> = (path) => responses[path]) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL | Request) => {
       const path =
         typeof input === 'string' ? input : input instanceof URL ? input.pathname : new URL(input.url).pathname
-      const body = resolve(path)
+      const body = await resolve(path)
       if (body instanceof Error) throw body
       if (body instanceof Response) return body
       return body
@@ -105,11 +105,16 @@ describe('App', () => {
 
   it('clears private map data when authentication expires', async () => {
     let playerRequests = 0
-    mockAPI((path) => {
+    let expireSession = () => {}
+    const sessionExpired = new Promise<void>((resolve) => {
+      expireSession = resolve
+    })
+    mockAPI(async (path) => {
       if (path === '/api/v1/live-map/config') {
         return { ...(responses[path] as object), pollIntervalMs: 250 }
       }
       if (path === '/api/v1/live-map/players' && ++playerRequests > 1) {
+        await sessionExpired
         return new Response(JSON.stringify({ error: 'authentication required' }), { status: 401 })
       }
       return responses[path]
@@ -117,6 +122,7 @@ describe('App', () => {
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Test Realm' })).toBeVisible()
+    expireSession()
     expect(await screen.findByRole('heading', { name: 'Session access expired' })).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Test Realm' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/')
