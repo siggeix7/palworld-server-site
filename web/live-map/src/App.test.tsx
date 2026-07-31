@@ -193,11 +193,15 @@ describe('App', () => {
       'href',
       'https://github.com/LukeHollandDev/palworld-live-map'
     )
-    expect(screen.getByRole('link', { name: 'Back to Palworld Server Observatory' })).toHaveAttribute('href', '/')
+    const observatoryLink = screen.getByRole('link', { name: "Torna all'Osservatorio" })
+    expect(observatoryLink).toHaveAttribute('href', '/')
+    expect(observatoryLink).toHaveClass('min-h-11', 'shadow-[inset_3px_0_#55d4e7]')
+    expect(within(observatoryLink).getByText("Torna all'Osservatorio")).toBeInTheDocument()
+    expect(within(observatoryLink).getByText('Sito')).toHaveClass('max-[420px]:inline')
     expect(screen.queryByRole('link', { name: "Luke Holland's website" })).not.toBeInTheDocument()
     expect(screen.queryByText('Built by Luke')).not.toBeInTheDocument()
     expect(
-      within(screen.getByRole('navigation', { name: 'Project links' })).queryByRole('button', {
+      within(screen.getByRole('navigation', { name: 'Navigazione mappa' })).queryByRole('button', {
         name: 'Leaderboards'
       })
     ).not.toBeInTheDocument()
@@ -1271,7 +1275,7 @@ describe('App', () => {
 
     const statusBar = screen.getByRole('banner')
     const leaderboardOpener = within(statusBar).getByRole('button', { name: 'Leaderboards' })
-    const projectLinks = screen.getByRole('navigation', { name: 'Project links' })
+    const projectLinks = screen.getByRole('navigation', { name: 'Navigazione mappa' })
     expect(within(projectLinks).queryByRole('button', { name: 'Leaderboards' })).not.toBeInTheDocument()
     expect(within(screen.getByRole('main')).queryByRole('button', { name: 'Leaderboards' })).not.toBeInTheDocument()
     expect(leaderboardOpener).toHaveClass('header-panel-control')
