@@ -32,6 +32,8 @@
     'companions': 'live-companions',
     'workers': 'live-workers',
   }
+  const LIVE_MAP_POINT_KINDS = Object.values(LIVE_KIND_MAP)
+  const MAP_KIND_PREFS_VERSION = '2'
   const MAP_POINT_KINDS = {
     'live-wild-pals': { label: 'Pal selvatici', color: '#a3e635', symbol: 'W', aliases: 'wild pal selvatico creature live', live: true },
     'live-npcs': { label: 'NPC live', color: '#c084fc', symbol: 'N', aliases: 'npc personaggio merchant live', live: true },
@@ -49,7 +51,7 @@
     'ancient-shrine-pickups': { label: 'Santuari antichi', color: '#f3d56b', symbol: 'S', aliases: 'ancient shrine santuario schematic progetto' },
     'npc-locations': { label: 'NPC e mercanti', color: '#f59ac0', symbol: 'N', aliases: 'npc merchant mercante dealer venditore' },
   }
-  const DEFAULT_MAP_POINT_KINDS = new Set(['waypoints', 'bosses'])
+  const DEFAULT_MAP_POINT_KINDS = new Set(['waypoints', 'bosses', ...LIVE_MAP_POINT_KINDS])
   // Palette and interaction concepts adapted from RNZ01/palworld-server-dashboard.
   // This implementation uses deterministic public IDs; see THIRD_PARTY_NOTICES.txt.
   const PLAYER_COLORS = [
@@ -757,9 +759,11 @@
   function mapPointTooltip(point) {
     const kind = mapPointKind(point.kind)
     const rows = [{ text: kind.label }]
+    if (kind.live) rows.push({ text: 'Posizione live · game-data', className: 'ok' })
     if (point.detail) {
       rows.push({ text: point.detail.length > 180 ? `${point.detail.slice(0, 177)}...` : point.detail })
     }
+    if (point.guild_name) rows.push({ text: `Gilda: ${point.guild_name}` })
     if (Number.isFinite(point.level)) rows.push({ text: `Livello ${formatNumber(point.level)}` })
     if (point.rewards?.length) {
       rows.push({
@@ -942,6 +946,7 @@
 
   function persistMapKinds() {
     writeStorage('observatory.map.kinds', JSON.stringify([...state.mapKinds].sort()))
+    writeStorage('observatory.map.kindsVersion', MAP_KIND_PREFS_VERSION)
   }
 
   function ensureMapPointsVisible() {
@@ -2465,6 +2470,10 @@
         const parsedKinds = JSON.parse(storedKinds)
         if (Array.isArray(parsedKinds)) {
           state.mapKinds = new Set(parsedKinds.filter((kind) => MAP_POINT_KINDS[kind]))
+          if (readStorage('observatory.map.kindsVersion') !== MAP_KIND_PREFS_VERSION) {
+            for (const kind of LIVE_MAP_POINT_KINDS) state.mapKinds.add(kind)
+            persistMapKinds()
+          }
         }
       } else {
         const legacyFastTravel = readStorage('observatory.map.fastTravel')
@@ -2850,6 +2859,7 @@
         }
       }
       state.pointCounts = data.category_counts || {}
+      mergeLiveWorldObjects(state.worldObjects.objects)
       state.mapCatalogueLoaded = true
       renderStaticPoints()
       renderMapExplorer()
@@ -2967,8 +2977,10 @@
   function mergeLiveWorldObjects(objects) {
     for (const mapId of Object.keys(state.points)) {
       state.points[mapId] = state.points[mapId].filter((point) => !point._live)
-      state.pointById.delete(`${mapId}:live`)
     }
+    state.pointById = new Map(
+      Object.values(state.points).flat().map((point) => [point.id, point]),
+    )
     for (const obj of objects || []) {
       const liveKind = LIVE_KIND_MAP[obj.kind]
       if (!liveKind || !MAP_POINT_KINDS[liveKind]) continue
@@ -3212,9 +3224,8 @@
       if (elements.mapViewport) loadWorldObjects().then(scheduleWorldObjectPoll)
       if (elements.worldSaveStatus) loadWorldSaveStatus().then(scheduleWorldSavePoll)
     })
-    if (elements.mapViewport) loadStaticPoints()
+    if (elements.mapViewport) loadStaticPoints().then(() => loadWorldObjects()).then(scheduleWorldObjectPoll)
     if (elements.mapViewport) loadBases().then(scheduleBasePoll)
-    if (elements.mapViewport) loadWorldObjects().then(scheduleWorldObjectPoll)
     snapshotLoop(true)
     if (elements.historyChart) loadHistory().then(scheduleHistoryPoll)
     if (elements.playerArchive) loadPlayerArchive().then(scheduleArchivePoll)
