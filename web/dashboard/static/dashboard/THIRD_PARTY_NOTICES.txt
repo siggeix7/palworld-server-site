@@ -7,7 +7,7 @@ Upstream revision: 588fa6390e0c5b6fe909e2c1fd3baddb86ef92c8
 This site adapts portions of the upstream map interaction, player palette and
 roster behavior, FPS health model, payload normalization, themes, static map
 projection and Palpagos overview. The implementations were modified for a read-only,
-privacy-sanitized Django and Zabbix architecture. Detailed source paths, changes,
+privacy-sanitized Django architecture. Detailed source paths, changes,
 asset hashes and exclusions are recorded in the distributed NOTICE.md.
 
 LukeHollandDev/palworld-live-map

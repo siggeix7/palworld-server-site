@@ -1,475 +1,196 @@
-# palworld-server-site
+# Palworld Server Observatory
 
-Dashboard riservata, cartografia live e archivio telemetrico per un server
-Palworld dedicato. I dati arrivano tramite un connector HTTP nativo di Zabbix
-7.4: il sito non interroga direttamente Palworld e non possiede la password
-amministrativa del server di gioco.
+Dashboard Django riservata per un server dedicato Palworld. Il container legge
+direttamente le REST API Palworld, sanitizza i payload prima della persistenza e
+integra gli snapshot compatti estratti da `Level.sav` tramite lo script in
+`ops/PalworldGuildSync`.
 
 ## Funzioni
 
-- Stato online, freschezza del dato, versione e descrizione del server.
-- Giocatori online, capacita' massima, FPS, frame time, uptime e giorno mondo.
-- Mappe Palpagos e Albero del Mondo 1.0.1 ad alta risoluzione adattiva, con
-  coordinate esatte dei giocatori online.
-- Zoom ancorato al cursore, pan limitato, pinch touch, selezione e cluster di
-  giocatori.
-- Tracce selezionabili da 1 ora a 7 giorni e layer mappa persistenti.
-- Catalogo ricercabile di 1.146 luoghi in 11 categorie: Alpha Pal, boss delle
-  torri, taglie, piattaforme petrolifere, viaggi rapidi, torri di osservazione,
-  dungeon, effigi Lifmunk, diari, santuari antichi e NPC.
-- Filtri persistenti, dettagli e ricompense, culling del viewport e cluster dei
-  punti di interesse; esploratore laterale su desktop e drawer su telefono.
-- Attori live da `game-data`: Pal selvatici, NPC, companion e lavoratori,
-  con conteggi sorgente, freschezza e truncation visibili nella mappa.
-- Nome, account, livello, ping e numero di costruzioni per giocatore.
-- Storico FPS e giocatori per 6 ore, 24 ore, 7, 30 o 90 giorni.
-- Grafico gap-aware e giudizio FPS sull'ultima ora calibrato sulla cadenza Zabbix.
-- Sessioni, ingressi, uscite e tempo online negli ultimi 7 giorni.
-- Archivio di tutti i giocatori con periodi online e minuti negli ultimi 30
-  giorni, 365 giorni e da sempre.
-- Scheda server con modalita', occupazione, avvio, piattaforme e funzioni attive.
-- Regole pubbliche del mondo divise per categoria, incluso il crossplay.
-- Ricerca impostazioni e giocatori, preferiti locali e colori giocatore stabili.
-- Sette temi visuali persistenti, senza dipendenze frontend esterne.
-- Layout responsive per desktop e mobile.
-- Registrazione con verifica email, notifica agli amministratori, approvazione,
-  revoca, eliminazione account e recupero password.
-- Credenziali di gioco e guida di collegamento visibili soltanto ai membri
-  verificati e approvati.
-- Pagina VM con CPU, memoria, load, disco, rete, uptime e stato Docker.
-- Diagnostica amministrativa dei batch connector, dataset mancanti, record
-  ignorati/rifiutati e freschezza delle metriche.
-- Sanitizzazione prima della persistenza applicativa: SQLite non conserva IP,
-  `userId`, `playerId`, password o porte amministrative.
-- Identificativi pubblici derivati con HMAC e non reversibili.
-- Container con filesystem read-only, utente non privilegiato e health check.
+- Stato server, versione, descrizione, uptime e giorno del mondo.
+- FPS, frame time, giocatori online e storico delle prestazioni.
+- Mappa live con giocatori, basi, lavoratori, companion, NPC e Pal selvatici.
+- Archivio presenze, sessioni, classifiche, heatmap e statistiche ping.
+- Regole del mondo confrontate con i valori vanilla.
+- Gilde, basi, progressione storica e avvisi derivati dal salvataggio.
+- Registrazione, verifica email, approvazione amministrativa e accettazione
+  delle condizioni d'uso.
 
-L'endpoint Palworld `/v1/api/game-data` e' necessario per gli attori live e deve
-essere abilitato sul server di gioco con `-enable-gamedata-api` oppure con
-`ENABLE_GAMEDATA_API=true` nell'immagine Docker Palworld. Palworld include nello
-snapshot soltanto gli attori che considera caricati e attivi: un conteggio zero
-per Pal selvatici, NPC o companion significa che il server non li ha forniti in
-quel ciclo, non che il browser li abbia nascosti. Le 90 posizioni NPC del
-catalogo 1.0.1 restano invece riferimenti statici sempre disponibili.
-
-## Architettura e porte separate
-
-Il container avvia due processi WSGI isolati:
+## Architettura
 
 ```text
-porta container 8000 -> dashboard e API protette da login, nessun endpoint ingest
-porta container 8001 -> receiver Zabbix, nessuna pagina pubblica
+Palworld REST API
+        |
+        | Basic Auth, richieste in uscita dal container
+        v
+collector Django -> sanitizer -> SQLite -> sito autenticato :8000
+
+Level.sav -> PalworldGuildSync -> API privata :8001 -> SQLite
+                                      |
+                                      +-> health e controllo collector
 ```
 
-Flusso dei dati:
+Il container avvia tre processi:
 
-```text
-Palworld REST API <- Zabbix HTTP Agent
-                         |
-                         | HTTPS NDJSON + Bearer token
-                         v
-                  porta ingest del sito
-                         |
-                         v
-                 SQLite WAL in /data
-                         |
-                         v
-                  porta web protetta
-```
+- Gunicorn pubblico su `8000` per pagine e API consultabili dagli utenti;
+- Gunicorn privato su `8001` per health, stato collector e upload save;
+- `manage.py runcollector` per interrogare direttamente Palworld.
 
-Il refresh Palworld resta quello del template Zabbix: `game-data` ogni 15
-secondi e `metrics`/`players` ogni 20 secondi. Il numero di visitatori del sito
-non aggiunge richieste al server di gioco. Il polling browser si sospende quando
-la scheda non e' visibile e applica un backoff progressivo in caso di errore.
-La history di Zabbix conserva invece per un'ora i payload grezzi necessari al
-connector, che possono contenere identificativi, IP e password: proteggi
-database, backup e accesso alla history come descritto in
-[zabbix/connector.md](zabbix/connector.md).
+La porta privata non espone pagine, file statici o API pubbliche. Deve essere
+pubblicata soltanto sulla rete amministrativa necessaria allo script save. Il
+collector non richiede richieste in ingresso: contatta autonomamente l'origine
+configurata in `PALWORLD_API_URL`.
 
-## Build
+## Raccolta REST
 
-```sh
-make build
-```
+| Dataset | Endpoint Palworld | Intervallo |
+| --- | --- | ---: |
+| stato TCP | origine REST | 30 secondi |
+| metriche | `/v1/api/metrics` | 20 secondi |
+| giocatori | `/v1/api/players` | 20 secondi |
+| game data | `/v1/api/game-data` | 15 secondi |
+| informazioni | `/v1/api/info` | 30 minuti |
+| impostazioni | `/v1/api/settings` | 4 ore |
 
-Build e salvataggio dell'immagine in `/tmp`:
+Il collector usa timeout separati, non segue redirect, limita la dimensione di
+ogni risposta e conserva l'ultimo snapshot valido quando un payload fallisce la
+validazione. Un lock su `/data/palworld-collector.lock` impedisce l'avvio di due
+collector sullo stesso volume.
 
-```sh
-make save
-```
+## Privacy
 
-Il file prodotto di default e':
+I payload REST grezzi non vengono salvati. La sanitizzazione avviene prima di
+ogni scrittura nel database:
 
-```text
-/tmp/palworld-server-site-latest.tar
-```
+- `userId`, `playerId`, `InstanceID`, `TrainerInstanceID`, `GuildID` e IP non
+  vengono persistiti;
+- gli identificativi necessari ai join diventano HMAC opachi con
+  `PLAYER_HASH_SECRET`;
+- password, indirizzi e impostazioni non in allowlist vengono scartati;
+- da `game-data` restano solo oggetti mappa minimizzati e diagnostica aggregata;
+- dallo script save arrivano solo identificativi opachi, aggregati e campi
+  espressamente validati.
 
-Target disponibili:
+Usare secret distinti per `DJANGO_SECRET_KEY`, `PLAYER_HASH_SECRET` e
+`PRIVATE_API_TOKEN`. Il file di produzione `.env` deve avere permessi `0600` e
+non deve essere incluso nel repository.
 
-```text
-make build  crea palworld-server-site:latest
-make save   crea anche l'archivio Docker in /tmp
-make run    avvia entrambe le porte per sviluppo locale
-make shell  apre una shell Django nel container
-make test   esegue check, verifica migrazioni e test automatici
-make clean  elimina l'archivio Docker in /tmp
-```
+## Configurazione
 
-Il catalogo statico e' riproducibile dal checkout upstream fissato nel notice:
+Creare `/opt/palworld-server-site/.env` partendo da `.env.example`. Variabili
+principali:
 
-```sh
-DJANGO_SECRET_KEY=build-only PLAYER_HASH_SECRET=build-only \
-PUBLIC_SITE_URL=https://build.invalid SITE_ADMIN_USERS=build@example.invalid \
-ZABBIX_SOURCE_HOST=build-host \
-python3 web/manage.py build_map_catalogue \
-  --source /percorso/palworld-live-map
-```
-
-Il comando verifica versione, hash, conteggi, categorie e bounds prima di
-sostituire `web/dashboard/static/dashboard/data/map-points.json`.
-
-Esempi:
-
-```sh
-make build TAG=v1.0.0
-make save IMAGE=ghcr.io/example/palworld-server-site TAG=v1.0.0
-```
-
-## Docker Compose
-
-Per sviluppo locale copia `.env.example` in `.env` con permessi `0600`. Genera
-tre segreti differenti, configura SMTP, amministratori e credenziali di gioco,
-quindi scegli le due porte host. Esempio completo:
-
-```yaml
-services:
-  palworld-server-site:
-    image: "${IMAGE:-palworld-server-site:latest}"
-    container_name: palworld-server-site
-    restart: unless-stopped
-    ports:
-      # Sito protetto: host 8080 -> container 8000
-      - "${SITE_BIND:-127.0.0.1}:${SITE_PORT:-8080}:8000"
-      # Ingest Zabbix: host 8081 -> container 8001
-      - "${ZABBIX_INGEST_BIND:-127.0.0.1}:${ZABBIX_INGEST_PORT:-8081}:8001"
-    environment:
-      PUBLIC_SITE_URL: "${PUBLIC_SITE_URL}"
-      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS}"
-      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY}"
-      PLAYER_HASH_SECRET: "${PLAYER_HASH_SECRET}"
-      ZABBIX_CONNECTOR_TOKEN: "${ZABBIX_CONNECTOR_TOKEN}"
-      ZABBIX_SOURCE_HOST: "${ZABBIX_SOURCE_HOST:?ZABBIX_SOURCE_HOST is required}"
-      SITE_ADMIN_USERS: "${SITE_ADMIN_USERS}"
-      AUTH_TRUSTED_PROXY_ADDRESSES: "${AUTH_TRUSTED_PROXY_ADDRESSES:-127.0.0.1,::1}"
-      PALWORLD_PUBLIC_HOST: "${PALWORLD_PUBLIC_HOST}"
-      PALWORLD_PUBLIC_PORT: "${PALWORLD_PUBLIC_PORT:-8211}"
-      PALWORLD_PUBLIC_PASSWORD: "${PALWORLD_PUBLIC_PASSWORD}"
-      EMAIL_HOST: "${EMAIL_HOST}"
-      EMAIL_PORT: "${EMAIL_PORT:-465}"
-      EMAIL_HOST_USER: "${EMAIL_HOST_USER}"
-      EMAIL_HOST_PASSWORD: "${EMAIL_HOST_PASSWORD}"
-      EMAIL_USE_SSL: "${EMAIL_USE_SSL:-true}"
-      EMAIL_USE_TLS: "${EMAIL_USE_TLS:-false}"
-      DEFAULT_FROM_EMAIL: "${DEFAULT_FROM_EMAIL}"
-      DJANGO_USE_X_FORWARDED_HOST: "false"
-      DJANGO_SECURE_SSL_REDIRECT: "true"
-      DJANGO_SECURE_HSTS_SECONDS: "86400"
-      INGEST_MAX_BYTES: "67108864"
-      DATA_STALE_SECONDS: "90"
-      WORLD_DATA_STALE_SECONDS: "90"
-      POSITION_RETENTION_DAYS: "7"
-      METRIC_RETENTION_DAYS: "90"
-      CONNECTOR_AUDIT_RETENTION_DAYS: "7"
-      VM_DATA_STALE_SECONDS: "180"
-      TIME_ZONE: "Europe/Rome"
-    volumes:
-      - "${DATA_PATH:-/opt/palworld-server-site/data}:/data"
-    read_only: true
-    tmpfs:
-      - /tmp:size=64m,mode=1777
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-```
-
-Esempio `.env`:
-
-```env
-SITE_PORT=8080
+```dotenv
 SITE_BIND=127.0.0.1
-ZABBIX_INGEST_PORT=8081
-ZABBIX_INGEST_BIND=127.0.0.1
+SITE_PORT=8080
+PRIVATE_BIND=127.0.0.1
+PRIVATE_PORT=8081
 DATA_PATH=/opt/palworld-server-site/data
 
 PUBLIC_SITE_URL=https://palworld.example.com:8443
 DJANGO_ALLOWED_HOSTS=palworld.example.com,localhost,127.0.0.1
-DJANGO_SECRET_KEY=generare-un-segreto-lungo-e-casuale
-PLAYER_HASH_SECRET=generare-un-secondo-segreto-lungo-e-casuale
-ZABBIX_CONNECTOR_TOKEN=generare-un-token-bearer-lungo-e-casuale
-ZABBIX_SOURCE_HOST=VM-PALWORLD
+DJANGO_SECRET_KEY=...
+PLAYER_HASH_SECRET=...
+PRIVATE_API_TOKEN=...
 
-SITE_ADMIN_USERS=admin@example.com
-AUTH_TRUSTED_PROXY_ADDRESSES=127.0.0.1,::1
-PALWORLD_PUBLIC_HOST=palworld.example.com
-PALWORLD_PUBLIC_PORT=8211
-PALWORLD_PUBLIC_PASSWORD=password-del-server-di-gioco
-
-EMAIL_HOST=smtp.example.com
-EMAIL_PORT=465
-EMAIL_HOST_USER=mailer@example.com
-EMAIL_HOST_PASSWORD=password-dell-account-email
-EMAIL_USE_SSL=true
-EMAIL_USE_TLS=false
-EMAIL_TIMEOUT=15
-DEFAULT_FROM_EMAIL=mailer@example.com
-
-DJANGO_SECURE_SSL_REDIRECT=true
-DJANGO_SECURE_HSTS_SECONDS=86400
-INGEST_MAX_BYTES=67108864
-DATA_STALE_SECONDS=90
-WORLD_DATA_STALE_SECONDS=90
-POSITION_RETENTION_DAYS=7
-METRIC_RETENTION_DAYS=90
-TIME_ZONE=Europe/Rome
+PALWORLD_API_URL=https://palworld.example.com:8212
+PALWORLD_API_USER=admin
+PALWORLD_API_PASSWORD=...
+PALWORLD_API_VERIFY_TLS=true
+PALWORLD_API_ALLOW_INSECURE_HTTP=false
+PALWORLD_API_CONNECT_TIMEOUT=3
+COLLECTOR_LOCK_PATH=/data/palworld-collector.lock
 ```
 
-Generazione dei segreti:
+`PALWORLD_API_URL` deve essere un'origine HTTP(S), senza credenziali, path,
+query o fragment. Con HTTPS lasciare `PALWORLD_API_VERIFY_TLS=true` e installare
+una catena di certificati attendibile nel container. Palworld espone normalmente
+la REST API in HTTP: in quel caso `PALWORLD_API_ALLOW_INSECURE_HTTP=true` è un
+opt-in obbligatorio e l'indirizzo deve essere raggiungibile esclusivamente su
+LAN fidata o VPN, perché Basic Auth e payload non sono cifrati.
 
-```sh
-openssl rand -hex 48
-openssl rand -hex 48
-openssl rand -hex 48
+La configurazione completa, inclusi SMTP, accesso al server di gioco, retention
+e privacy, è documentata direttamente in `.env.example`.
+
+## Avvio e deploy
+
+```bash
+make test
+make build TAG=<versione>
+IMAGE=palworld-server-site:<versione> \
+  docker compose --env-file /opt/palworld-server-site/.env up -d
 ```
 
-`EMAIL_HOST_PASSWORD` e `PALWORLD_PUBLIC_PASSWORD` sono segreti runtime: non
-committarli. Con SMTP sulla porta 465 usa normalmente `EMAIL_USE_SSL=true` e
-`EMAIL_USE_TLS=false`; per STARTTLS configura invece la porta prevista dal
-provider, SSL disabilitato e TLS abilitato.
+Il volume configurato con `DATA_PATH` contiene database SQLite e lock del
+collector. L'entrypoint applica automaticamente le migrazioni e abilita WAL.
 
-## Primo amministratore e membri
+Verifiche locali:
 
-`PUBLIC_SITE_URL` deve essere un'origine HTTPS completa, senza percorso. I link
-di verifica e recupero password usano esclusivamente questa origine e
-l'applicazione rifiuta di avviarsi se non è valida.
-
-`SITE_ADMIN_USERS` è obbligatorio e contiene username o email separati da
-virgola, confrontati
-senza distinzione fra maiuscole e minuscole. I valori con `@` sono sempre
-interpretati come email; gli altri come username. Gli username registrabili non
-possono contenere `@` e quelli indicati come amministratori sono riservati. Un
-amministratore configurato tramite username deve quindi essere creato prima
-dell'apertura delle registrazioni; per il primo avvio è consigliata l'email.
-Per inizializzare il sito:
-
-1. Configura in `SITE_ADMIN_USERS` l'email del primo amministratore.
-2. Registra un account usando esattamente quell'indirizzo.
-3. Apri il collegamento ricevuto via email e conferma esplicitamente nella
-   pagina mostrata.
-4. L'account viene abilitato automaticamente e può aprire **Membri** dalla
-   dashboard.
-
-Gli altri utenti devono verificare l'email e attendere l'approvazione. La revoca
-ha effetto dalla richiesta successiva. Il pannello non consente di revocare un
-amministratore configurato. Il gate della dashboard non è disattivabile tramite
-variabili d'ambiente. Pagine e API protette inviano header `Cache-Control` che
-ne vietano la memorizzazione.
-
-Quando un utente verifica l'email, tutti gli amministratori configurati ricevono
-una notifica con il collegamento al pannello membri. Un invio riuscito viene
-registrato; in caso di errore SMTP il sito ritenta dalla pagina di attesa. Dal
-pannello un amministratore può revocare l'accesso oppure eliminare definitivamente
-un account non amministrativo dopo una seconda conferma.
-
-Preparazione del volume e avvio, da eseguire soltanto quando si vuole realmente
-pubblicare il servizio:
-
-```sh
-install -d -o 1000 -g 1000 /opt/palworld-server-site/data
-install -m 644 docker-compose.yml /opt/palworld-server-site/docker-compose.yml
-install -m 600 .env.example /opt/palworld-server-site/.env
-# Sostituisci tutti i placeholder nel file .env prima dell'avvio.
-chmod 600 /opt/palworld-server-site/.env
-docker compose --env-file /opt/palworld-server-site/.env \
-  -f /opt/palworld-server-site/docker-compose.yml up -d
+```bash
+curl -fsS http://127.0.0.1:8080/healthz/
+curl -fsS http://127.0.0.1:8081/healthz/
+docker inspect --format '{{.State.Health.Status}}' palworld-server-site
+docker logs --since 10m palworld-server-site
 ```
 
-Compose carica automaticamente `.env` solo dalla directory del progetto. Il
-comando esplicito qui sopra evita di dipendere dalla directory corrente e
-mantiene il file dei segreti escluso dal repository e dall'immagine.
+Lo stato dettagliato richiede il bearer token privato:
 
-Login, registrazione e invio email hanno limiti di frequenza condivisi nel
-database. Applica comunque limiti anche sul reverse proxy, in particolare alle
-route sotto `/accounts/`.
+```bash
+curl -fsS -H "Authorization: Bearer $PRIVATE_API_TOKEN" \
+  http://127.0.0.1:8081/api/v1/collector/status
+```
 
-## Reverse proxy HTTPS
+## Sincronizzazione Save
 
-Il container serve HTTP; TLS rimane responsabilita' del reverse proxy. Servono
-due listener HTTPS separati, per esempio:
+`ops/PalworldGuildSync` contiene il job separato che legge `Level.sav`. Sul
+server Palworld configurare almeno:
+
+```dotenv
+SITE_URL=https://<endpoint-privato>
+SITE_TOKEN=<stesso valore di PRIVATE_API_TOKEN>
+VERIFY_SSL=true
+ALLOW_INSECURE_HTTP=false
+SAVE_PATH=/percorso/al/mondo/Level.sav
+```
+
+Se l'upload resta in HTTP, limitarlo a una LAN fidata o VPN e non pubblicare la
+porta privata su Internet: il bearer token e lo snapshot non sarebbero cifrati.
+
+La procedura di installazione e il cron sono in
+[`ops/PalworldGuildSync/README.md`](ops/PalworldGuildSync/README.md).
+
+## API
+
+Porta pubblica, autenticazione sito obbligatoria salvo health e pagine account:
 
 ```text
-https://palworld.example.com:8443 -> http://HOST_DOCKER:8080
-https://palworld.example.com:9443 -> http://HOST_DOCKER:8081
+GET /healthz/
+GET /api/v1/snapshot
+GET /api/v1/history?range=24h
+GET /api/v1/players
+GET /api/v1/leaderboard
+GET /api/v1/activity/heatmap?range=30d
+GET /api/v1/map/heatmap?range=24h&map=palpagos
+GET /api/v1/world/objects
+GET /api/v1/telemetry/stats
+GET /api/v1/world/diff
+GET /api/v1/player/<public_id>/trail?range=6h
+GET /api/v1/guild/data
 ```
 
-La prima porta e' raggiungibile dagli utenti ma richiede un account approvato.
-La seconda e' destinata esclusivamente al connector Zabbix e, se possibile,
-deve avere un'allowlist per l'IP del server Zabbix.
-Il bind web predefinito è `127.0.0.1`, così il reverse proxy locale non può
-essere aggirato. Usa un IP LAN o `0.0.0.0` soltanto per un proxy remoto e limita
-la porta web al solo indirizzo del proxy tramite firewall.
-Il bind ingest predefinito e' `127.0.0.1`: cambialo con l'IP LAN del Docker host
-o con `0.0.0.0` soltanto se il reverse proxy si trova su un'altra macchina,
-aggiungendo in quel caso una regola firewall per il solo server Zabbix.
-Entrambe devono inoltrare:
-
-```text
-Host
-X-Forwarded-Host
-X-Forwarded-Proto: https
-X-Forwarded-For
-```
-
-Sul listener ingest configura un limite body di almeno 64 MiB e timeout
-superiori ai 45 secondi del connector. Per nginx, ad esempio:
-
-```nginx
-client_max_body_size 64m;
-proxy_read_timeout 70s;
-proxy_send_timeout 70s;
-```
-
-Imposta `AUTH_TRUSTED_PROXY_ADDRESSES` con gli indirizzi sorgente del reverse
-proxy così come sono visti dal container. Solo da questi indirizzi il limiter
-accetta `X-Forwarded-For`; con un singolo proxy, sostituisci il valore ricevuto
-dal client invece di fidarti di una catena arbitraria, per esempio in nginx con
-`proxy_set_header X-Forwarded-For $remote_addr`.
-
-La porta HTTPS non standard deve comparire sia in `PUBLIC_SITE_URL` sia nella
-URL del connector. `DJANGO_ALLOWED_HOSTS` contiene solo il nome host, senza
-schema e senza porta. Mantieni `localhost,127.0.0.1` per il health check interno.
-
-## Zabbix 7.4
-
-Il repository contiene:
-
-```text
-zabbix/palworld-server-site.yaml  template importabile
-zabbix/connector.md               procedura completa del connector
-```
-
-Procedura sintetica:
-
-1. Importa `zabbix/palworld-server-site.yaml`.
-2. Sostituisci il vecchio template sul relativo host, senza collegarli insieme.
-3. Configura `{$PALAPISCHEME}`, `{$PALAPIIP}`, `{$PALAPIPORT}` e il secret `{$PALAPIKEY}`.
-4. Abilita `StartConnectors=1` in `zabbix_server.conf`.
-5. Crea un connector di tipo `Item values`.
-6. Seleziona esplicitamente `Numeric (unsigned)`, `Numeric (float)`, `Text` e
-   `Binary`, con un massimo di 3 record per messaggio.
-7. Usa `https://palworld.example.com:9443/api/v1/zabbix/ingest` come URL.
-8. Seleziona autenticazione Bearer con `ZABBIX_CONNECTOR_TOKEN`.
-9. Filtra `integration Equals palworld-site`.
-10. Abilita entrambe le verifiche TLS.
-
-Il connector manda batch NDJSON contenenti gli item Palworld sanitizzabili, gli
-dodici chunk binari di `game-data` e gli item calcolati numerici VM definiti nello
-stesso template:
-
-```text
-dataset=status
-dataset=info
-dataset=metrics
-dataset=players
-dataset=settings
-dataset=game_data_chunk
-dataset=vm, metric=<metrica canonica>
-```
-
-Un tag `integration` applicato soltanto all'host non viene ereditato dai valori
-item del connector. Reimporta il template aggiornato: gli item `Site VM: ...`
-leggono soltanto valori sorgente recenti dai template `Linux by Zabbix agent
-active` e `Docker by Zabbix agent 2` e possiedono direttamente i tag richiesti.
-
-Consulta [zabbix/connector.md](zabbix/connector.md) per retry, timeout e primo
-caricamento dei dati.
-
-L'API Palworld usa normalmente HTTP con Basic Auth. Base64 non cifra la
-password amministrativa: il collegamento fra Zabbix e Palworld deve quindi
-restare su LAN/VPN fidata. In alternativa anteponi un proxy TLS e imposta
-`{$PALAPISCHEME}=https`. Non pubblicare mai la porta REST API su Internet.
-
-`ZABBIX_SOURCE_HOST` e' obbligatorio: deve corrispondere esattamente al campo
-tecnico `host` dell'host Zabbix. I record provenienti da host diversi vengono
-ignorati e i relativi metadati non vengono conservati.
-
-## Persistenza e retention
-
-Il database SQLite usa modalita' WAL e vive in:
-
-```text
-/data/palworld-site.sqlite3
-```
-
-Il container puo' essere ricreato senza perdere storico. Le posizioni vengono
-conservate per 7 giorni e metriche/eventi, incluse quelle VM, per 90 giorni. La
-diagnostica dei batch connector viene conservata per 7 giorni. La pulizia
-avviene al massimo una volta all'ora durante l'ingest.
-
-I dati storici iniziano dal momento in cui il connector viene attivato. Il sito
-non esegue backfill dalla Zabbix API.
-
-## Endpoint
-
-Porta web, container `8000`:
-
-```text
-GET /                              dashboard protetta
-GET /vm/                           telemetria VM protetta
-GET /healthz/                      health check
-GET /api/v1/snapshot              stato corrente protetto
-GET /api/v1/history?range=24h      storico telemetria protetto
-GET /api/v1/players                archivio giocatori protetto
-GET /api/v1/player/<id>/trail      traccia sanitizzata protetta
-GET /api/v1/world/objects          attori game-data sanitizzati protetti
-GET /api/v1/vm/snapshot            stato VM corrente protetto
-GET /api/v1/vm/history?range=24h   storico VM protetto
-GET /api/v1/connector/status       diagnostica connector, solo admin
-```
-
-`/healthz/`, registrazione, login, verifica email e recupero password restano
-accessibili senza sessione. Le API protette rispondono `401` agli anonimi e
-`403` agli account non ancora abilitati.
-
-Porta ingest, container `8001`:
+Porta privata:
 
 ```text
 GET  /healthz/
-POST /api/v1/zabbix/ingest
+GET  /api/v1/collector/status
+POST /api/v1/guild/ingest
 ```
 
-Una richiesta ingest inviata alla porta web restituisce `404`. La dashboard
-richiesta sulla porta ingest restituisce `404`.
+## Test
 
-## Test locale senza Docker
-
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+```bash
 make test
 ```
 
-## Note legali
-
-Questo e' un progetto community non ufficiale. Palworld e la mappa appartengono
-a Pocketpair, Inc. La mappa nativa di Palpagos e alcuni concetti di interfaccia
-provengono da `RNZ01/palworld-server-dashboard` al commit
-`588fa6390e0c5b6fe909e2c1fd3baddb86ef92c8`. La cartografia dell'Albero del
-Mondo e tutti i 1.146 punti statici 1.0.1 provengono dal progetto MIT
-`LukeHollandDev/palworld-live-map` al commit
-`19f3e3f8e684481bde58fef6c76845f811d57614`. Percorsi, modifiche, esclusioni,
-hash degli asset e testi delle licenze sono in [NOTICE.md](NOTICE.md).
-Un notice sintetico e' disponibile anche dal footer del sito. Le licenze MIT
-non coprono gli asset o i dati Palworld: prima di ridistribuirli verifica che
-l'uso sia compatibile con le regole Pocketpair applicabili.
+Il target esegue i check Django, verifica che non manchino migrazioni e lancia
+l'intera suite `dashboard`.

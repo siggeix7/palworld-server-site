@@ -124,42 +124,6 @@ class AuthThrottle(models.Model):
     attempts = models.PositiveIntegerField(default=0)
 
 
-class VmMetricSample(models.Model):
-    metric = models.CharField(max_length=64, db_index=True)
-    source_clock = models.DateTimeField(db_index=True)
-    value = models.FloatField()
-    received_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["source_clock"]
-        indexes = [
-            models.Index(
-                fields=["metric", "-source_clock"],
-                name="vm_metric_latest_idx",
-            )
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["metric", "source_clock"],
-                name="unique_vm_metric_sample",
-            )
-        ]
-
-
-class ConnectorBatch(models.Model):
-    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    record_count = models.PositiveIntegerField(default=0)
-    accepted = models.PositiveIntegerField(default=0)
-    ignored = models.PositiveIntegerField(default=0)
-    rejected = models.PositiveIntegerField(default=0)
-    datasets = models.JSONField(default=list)
-    source_hosts = models.JSONField(default=list)
-    ignored_items = models.JSONField(default=list)
-
-    class Meta:
-        ordering = ["-received_at"]
-
-
 class GuildSnapshot(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
     payload = models.JSONField(default=dict)

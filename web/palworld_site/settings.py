@@ -114,20 +114,71 @@ if (
     raise ImproperlyConfigured("PUBLIC_SITE_URL must be an absolute HTTPS origin")
 del public_site_port
 CSRF_TRUSTED_ORIGINS = [PUBLIC_SITE_URL]
-ZABBIX_CONNECTOR_TOKEN = os.getenv("ZABBIX_CONNECTOR_TOKEN", "")
-ZABBIX_SOURCE_HOST = os.getenv("ZABBIX_SOURCE_HOST", "").strip()
-if not ZABBIX_SOURCE_HOST:
-    raise ImproperlyConfigured("ZABBIX_SOURCE_HOST is required")
 PLAYER_HASH_SECRET = os.getenv("PLAYER_HASH_SECRET", SECRET_KEY)
-INGEST_MAX_BYTES = int(os.getenv("INGEST_MAX_BYTES", "67108864"))
+PRIVATE_API_TOKEN = os.getenv("PRIVATE_API_TOKEN", "")
+PRIVATE_API_MAX_BYTES = int(os.getenv("PRIVATE_API_MAX_BYTES", "67108864"))
+PALWORLD_API_URL = os.getenv("PALWORLD_API_URL", "").strip().rstrip("/")
+PALWORLD_API_USER = os.getenv("PALWORLD_API_USER", "admin")
+PALWORLD_API_PASSWORD = os.getenv("PALWORLD_API_PASSWORD", "")
+PALWORLD_API_VERIFY_TLS = os.getenv("PALWORLD_API_VERIFY_TLS", "true").lower() == "true"
+PALWORLD_API_ALLOW_INSECURE_HTTP = (
+    os.getenv("PALWORLD_API_ALLOW_INSECURE_HTTP", "false").lower() == "true"
+)
+PALWORLD_API_CONNECT_TIMEOUT = float(os.getenv("PALWORLD_API_CONNECT_TIMEOUT", "3"))
+if PALWORLD_API_URL:
+    palworld_api = urlsplit(PALWORLD_API_URL)
+    try:
+        palworld_api.port
+    except ValueError as exc:
+        raise ImproperlyConfigured("PALWORLD_API_URL contains an invalid port") from exc
+    if (
+        palworld_api.scheme not in {"http", "https"}
+        or not palworld_api.hostname
+        or palworld_api.username
+        or palworld_api.password
+        or palworld_api.query
+        or palworld_api.fragment
+        or palworld_api.path not in {"", "/"}
+    ):
+        raise ImproperlyConfigured("PALWORLD_API_URL must be an HTTP(S) origin")
+    if palworld_api.scheme == "http" and not PALWORLD_API_ALLOW_INSECURE_HTTP:
+        raise ImproperlyConfigured(
+            "HTTP PALWORLD_API_URL requires PALWORLD_API_ALLOW_INSECURE_HTTP=true"
+        )
+PALWORLD_API_INTERVALS = {
+    "status": 30,
+    "info": 30 * 60,
+    "metrics": 20,
+    "players": 20,
+    "settings": 4 * 60 * 60,
+    "game_data": 15,
+}
+PALWORLD_API_TIMEOUTS = {
+    "info": 5,
+    "metrics": 5,
+    "players": 5,
+    "settings": 5,
+    "game_data": 10,
+}
+PALWORLD_API_TOTAL_TIMEOUTS = {
+    "info": 15,
+    "metrics": 15,
+    "players": 15,
+    "settings": 15,
+    "game_data": 30,
+}
+PALWORLD_API_MAX_BYTES = {
+    "info": 1024 * 1024,
+    "metrics": 1024 * 1024,
+    "players": 4 * 1024 * 1024,
+    "settings": 4 * 1024 * 1024,
+    "game_data": 32 * 1024 * 1024,
+}
+COLLECTOR_LOCK_PATH = os.getenv("COLLECTOR_LOCK_PATH", "/data/palworld-collector.lock")
 DATA_STALE_SECONDS = int(os.getenv("DATA_STALE_SECONDS", "90"))
 WORLD_DATA_STALE_SECONDS = int(os.getenv("WORLD_DATA_STALE_SECONDS", "90"))
 POSITION_RETENTION_DAYS = int(os.getenv("POSITION_RETENTION_DAYS", "7"))
 METRIC_RETENTION_DAYS = int(os.getenv("METRIC_RETENTION_DAYS", "90"))
-CONNECTOR_AUDIT_RETENTION_DAYS = int(
-    os.getenv("CONNECTOR_AUDIT_RETENTION_DAYS", "7")
-)
-VM_DATA_STALE_SECONDS = int(os.getenv("VM_DATA_STALE_SECONDS", "180"))
 SITE_AUTH_REQUIRED = True
 AUTH_TRUSTED_PROXY_ADDRESSES = {
     value.strip()
@@ -150,7 +201,7 @@ PRIVACY_CONTROLLER_NAME = os.getenv(
 ).strip()
 PRIVACY_CONTACT_EMAIL = os.getenv(
     "PRIVACY_CONTACT_EMAIL",
-    os.getenv("DEFAULT_FROM_EMAIL", os.getenv("EMAIL_HOST_USER", "guidi.zabbix@libero.it")),
+    os.getenv("DEFAULT_FROM_EMAIL", os.getenv("EMAIL_HOST_USER", "privacy@example.invalid")),
 ).strip()
 PALWORLD_PUBLIC_HOST = os.getenv("PALWORLD_PUBLIC_HOST", "").strip()
 PALWORLD_PUBLIC_PORT = os.getenv("PALWORLD_PUBLIC_PORT", "8211").strip()
@@ -161,7 +212,7 @@ EMAIL_BACKEND = os.getenv(
 )
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.libero.it")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "guidi.zabbix@libero.it")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "true").lower() == "true"
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "false").lower() == "true"

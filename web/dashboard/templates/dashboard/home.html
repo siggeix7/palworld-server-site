@@ -10,7 +10,7 @@
   <div class="hero-copy">
     <p class="eyebrow">Registro spedizione / accesso membri</p>
     <h1 id="serverName">Nichelino Palworld Server</h1>
-    <p class="hero-description" id="serverDescription">In attesa della prima trasmissione Zabbix.</p>
+    <p class="hero-description" id="serverDescription">In attesa del primo aggiornamento Palworld.</p>
     <div class="hero-actions">
       <a class="primary-link" href="{% url 'map' %}">Esplora la mappa <span aria-hidden="true">↘</span></a>
       <span class="update-label">Server <b id="serverVersion">--</b> · ultimo dato <time id="lastUpdate">mai</time></span>
@@ -40,13 +40,13 @@
     <article><span>Giorno mondo</span><strong id="heroDayHome">--</strong><small>giorno di gioco</small></article>
     <article><span>Server FPS</span><strong id="heroFpsHome">--</strong><small>frame al secondo</small></article>
     <article><span>Uptime</span><strong id="heroUptimeHome">--</strong><small>tempo di attività</small></article>
-    <article><span>Ultimo dato</span><strong><time id="lastUpdateHome">mai</time></strong><small>trasmissione</small></article>
+    <article><span>Ultimo dato</span><strong><time id="lastUpdateHome">mai</time></strong><small>raccolta REST</small></article>
   </div>
 
   <div class="home-columns">
     <section class="home-recent" aria-labelledby="homeRecentTitle">
       <div class="section-heading compact">
-        <div><p class="eyebrow">Registro trasmissioni</p><h2 id="homeRecentTitle">Attività recente</h2></div>
+        <div><p class="eyebrow">Registro attività</p><h2 id="homeRecentTitle">Attività recente</h2></div>
         <a class="section-nav-cta" href="{% url 'activity' %}">Vai all'attività <span aria-hidden="true">↘</span></a>
       </div>
       <div id="homeRecentActivity"><p class="empty-copy">Caricamento...</p></div>
@@ -92,12 +92,6 @@
         <span class="eyebrow">Configurazione mondo</span>
         <strong>Mondo</strong>
         <p>Regole attive, modalità e differenze vs vanilla.</p>
-        <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
-      </a>
-      <a class="section-nav-card" href="{% url 'vm-dashboard' %}">
-        <span class="eyebrow">Nodo host</span>
-        <strong>Stato VM</strong>
-        <p>Risorse di sistema, Docker e diagnostica connector.</p>
         <span class="section-nav-cta">Apri <span aria-hidden="true">↘</span></span>
       </a>
     </nav>

@@ -1,20 +1,14 @@
-import base64
-import binascii
 import hashlib
 import hmac
 import json
-import logging
 import math
-import threading
-import time
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from .models import (
-    ConnectorBatch,
     LatestDataset,
     MetricSample,
     Player,
@@ -22,16 +16,10 @@ from .models import (
     PositionSample,
     RuntimeState,
     ServerEvent,
-    VmMetricSample,
 )
-from .vm_metrics import VM_METRICS
-
-
-logger = logging.getLogger(__name__)
 
 DATASETS = {
     "game_data",
-    "game_data_chunk",
     "info",
     "metrics",
     "players",
@@ -139,46 +127,6 @@ def _payload(value):
         except json.JSONDecodeError as exc:
             raise IngestError(f"dataset value is not valid JSON: {exc.msg}") from exc
     raise IngestError("dataset value must be a JSON object or string")
-
-
-def _source_time(record):
-    try:
-        seconds = int(record["clock"])
-        nanoseconds = int(record.get("ns", 0))
-    except (KeyError, TypeError, ValueError, OverflowError, OSError) as exc:
-        raise IngestError("record clock is missing or invalid") from exc
-    try:
-        value = datetime.fromtimestamp(seconds, tz=dt_timezone.utc).replace(
-            microsecond=max(0, min(999999, nanoseconds // 1000))
-        )
-    except (OverflowError, OSError, ValueError) as exc:
-        raise IngestError("record clock is outside the supported range") from exc
-    if value > timezone.now() + timedelta(minutes=5):
-        raise IngestError("record clock is too far in the future")
-    return value
-
-
-def _record_route(record):
-    item_tags = record.get("item_tags")
-    if not isinstance(item_tags, list):
-        return None, None
-    tags = {
-        str(entry.get("tag", "")): str(entry.get("value", ""))
-        for entry in item_tags
-        if isinstance(entry, dict)
-    }
-    dataset = tags.get("dataset")
-    host = record.get("host") if isinstance(record.get("host"), dict) else {}
-    if settings.ZABBIX_SOURCE_HOST and host.get("host") != settings.ZABBIX_SOURCE_HOST:
-        return None, None
-    if tags.get("integration") != "palworld-site":
-        return None, None
-    if dataset in DATASETS:
-        return dataset, None
-    metric = tags.get("metric")
-    if dataset == "vm" and metric in VM_METRICS:
-        return "vm", metric
-    return None, None
 
 
 def _player_id(raw):
@@ -332,16 +280,6 @@ WORLD_MAP_BOUNDS = {
 
 MAX_WORLD_OBJECTS = 20000
 BASE_ASSOCIATION_RADIUS_SQ = (3500 * 1.025) ** 2
-GAME_DATA_CHUNK_COUNT = 12
-MAX_GAME_DATA_CHUNK_ENCODED_BYTES = 16 * 1024 * 1024
-MAX_GAME_DATA_CHUNK_DECODED_BYTES = 12 * 1024 * 1024
-MAX_GAME_DATA_SNAPSHOT_BYTES = 32 * 1024 * 1024
-GAME_DATA_CHUNK_TTL_SECONDS = 120
-GAME_DATA_PENDING_SNAPSHOTS = 2
-
-_GAME_DATA_CHUNK_LOCK = threading.Lock()
-_GAME_DATA_CHUNKS = {}
-_GAME_DATA_COMPLETED_CHUNKS = {}
 
 WORLD_ACTOR_KINDS = (
     "bases",
@@ -704,132 +642,6 @@ def _sanitize_game_data(value):
     }
 
 
-def _decode_game_data_chunk(record):
-    item_tags = record.get("item_tags")
-    chunk_values = [
-        str(entry.get("value", ""))
-        for entry in item_tags or []
-        if isinstance(entry, dict) and entry.get("tag") == "chunk"
-    ]
-    if len(chunk_values) != 1:
-        raise IngestError("game_data_chunk must have one chunk tag")
-    try:
-        chunk_index = int(chunk_values[0])
-    except (TypeError, ValueError) as exc:
-        raise IngestError("game_data_chunk index is invalid") from exc
-    if not 0 <= chunk_index < GAME_DATA_CHUNK_COUNT:
-        raise IngestError("game_data_chunk index is invalid")
-    value = record.get("value")
-    if not isinstance(value, str) or not value:
-        raise IngestError("game_data_chunk value must be Base64 text")
-    if len(value) > MAX_GAME_DATA_CHUNK_ENCODED_BYTES:
-        raise IngestError("game_data_chunk exceeds the Zabbix binary item limit")
-    try:
-        decoded = base64.b64decode(value, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise IngestError("game_data_chunk is not valid Base64") from exc
-    if len(decoded) > MAX_GAME_DATA_CHUNK_DECODED_BYTES:
-        raise IngestError("game_data_chunk decoded value is too large")
-    return chunk_index, decoded
-
-
-def _expire_game_data_chunks(key):
-    with _GAME_DATA_CHUNK_LOCK:
-        pending = _GAME_DATA_CHUNKS.get(key)
-        if not pending:
-            return
-        remaining = GAME_DATA_CHUNK_TTL_SECONDS - (
-            time.monotonic() - pending["updated"]
-        )
-        if remaining > 0:
-            timer = threading.Timer(remaining, _expire_game_data_chunks, args=(key,))
-            timer.daemon = True
-            pending["timer"] = timer
-            timer.start()
-            return
-        del _GAME_DATA_CHUNKS[key]
-
-
-def _collect_game_data_chunk(record, source_clock):
-    chunk_index, decoded = _decode_game_data_chunk(record)
-    key = (int(source_clock.timestamp()), int(record.get("ns", 0)))
-    now = time.monotonic()
-    with _GAME_DATA_CHUNK_LOCK:
-        for pending_key, pending in list(_GAME_DATA_CHUNKS.items()):
-            if now - pending["updated"] > GAME_DATA_CHUNK_TTL_SECONDS:
-                del _GAME_DATA_CHUNKS[pending_key]
-        for completed_key, completed_at in list(_GAME_DATA_COMPLETED_CHUNKS.items()):
-            if now - completed_at > GAME_DATA_CHUNK_TTL_SECONDS:
-                del _GAME_DATA_COMPLETED_CHUNKS[completed_key]
-        if key in _GAME_DATA_COMPLETED_CHUNKS:
-            return None, key
-        pending = _GAME_DATA_CHUNKS.setdefault(key, {
-            "chunks": {},
-            "decoded_bytes": 0,
-            "updated": now,
-            "timer": None,
-        })
-        existing = pending["chunks"].get(chunk_index)
-        if existing is not None and existing != decoded:
-            raise IngestError("game_data_chunk changed within snapshot")
-        decoded_bytes = pending["decoded_bytes"] - len(existing or b"") + len(decoded)
-        if decoded_bytes > MAX_GAME_DATA_SNAPSHOT_BYTES:
-            expired = _GAME_DATA_CHUNKS.pop(key)
-            if expired["timer"] is not None:
-                expired["timer"].cancel()
-            raise IngestError("game_data chunks exceed the upstream snapshot limit")
-        pending["chunks"][chunk_index] = decoded
-        pending["decoded_bytes"] = decoded_bytes
-        pending["updated"] = now
-        if pending["timer"] is not None:
-            pending["timer"].cancel()
-        timer = threading.Timer(
-            GAME_DATA_CHUNK_TTL_SECONDS,
-            _expire_game_data_chunks,
-            args=(key,),
-        )
-        timer.daemon = True
-        pending["timer"] = timer
-        timer.start()
-        if len(_GAME_DATA_CHUNKS) > GAME_DATA_PENDING_SNAPSHOTS:
-            # Item-major connector backlogs revisit old clocks after newer ones.
-            # Keep the newest source clocks instead of thrashing by arrival time.
-            oldest = min(_GAME_DATA_CHUNKS)
-            expired = _GAME_DATA_CHUNKS.pop(oldest)
-            expired["timer"].cancel()
-            if oldest == key:
-                return None, key
-        if len(pending["chunks"]) != GAME_DATA_CHUNK_COUNT:
-            return None, key
-        raw_payload = b"".join(
-            pending["chunks"][index] for index in range(GAME_DATA_CHUNK_COUNT)
-        )
-    try:
-        payload = json.loads(raw_payload.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise IngestError("reassembled game_data chunks are not valid UTF-8 JSON") from exc
-    if not isinstance(payload, dict) or not isinstance(payload.get("ActorData"), list):
-        raise IngestError("reassembled game_data has no ActorData array")
-    return payload, key
-
-
-def _complete_game_data_chunks(key):
-    with _GAME_DATA_CHUNK_LOCK:
-        pending = _GAME_DATA_CHUNKS.pop(key, None)
-        if pending and pending["timer"] is not None:
-            pending["timer"].cancel()
-        _GAME_DATA_COMPLETED_CHUNKS[key] = time.monotonic()
-
-
-def _reset_game_data_chunks():
-    with _GAME_DATA_CHUNK_LOCK:
-        for pending in _GAME_DATA_CHUNKS.values():
-            if pending["timer"] is not None:
-                pending["timer"].cancel()
-        _GAME_DATA_CHUNKS.clear()
-        _GAME_DATA_COMPLETED_CHUNKS.clear()
-
-
 SANITIZERS = {
     "info": _sanitize_info,
     "metrics": _sanitize_metrics,
@@ -853,23 +665,6 @@ def _save_metrics(payload, source_clock):
             "base_camps": payload["basecampnum"],
             "uptime": payload["uptime"],
         },
-    )
-
-
-def _save_vm_metric(record, metric, source_clock):
-    try:
-        value_type = int(record.get("type"))
-        value = float(record.get("value"))
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise IngestError(f"VM metric {metric} must be numeric") from exc
-    if value_type not in {0, 3}:
-        raise IngestError(f"VM metric {metric} has unsupported value type")
-    if not math.isfinite(value) or abs(value) > 1e18:
-        raise IngestError(f"VM metric {metric} is outside the supported range")
-    VmMetricSample.objects.update_or_create(
-        metric=metric,
-        source_clock=source_clock,
-        defaults={"value": value},
     )
 
 
@@ -966,13 +761,6 @@ def cleanup_if_due():
     ServerEvent.objects.filter(
         source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
     ).delete()
-    VmMetricSample.objects.filter(
-        source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
-    ).delete()
-    ConnectorBatch.objects.filter(
-        received_at__lt=now
-        - timedelta(days=settings.CONNECTOR_AUDIT_RETENTION_DAYS)
-    ).delete()
     state.value = {"last": int(now.timestamp())}
     state.save(update_fields=["value", "updated_at"])
 
@@ -994,115 +782,32 @@ def _close_stale_sessions(now):
 
 
 @transaction.atomic
-def _process_record(record):
-    if not isinstance(record, dict):
-        raise IngestError("each NDJSON line must contain an object")
-    dataset, metric = _record_route(record)
-    if not dataset:
-        return None
-
-    source_clock = _source_time(record)
-    if dataset == "vm":
-        _save_vm_metric(record, metric, source_clock)
-        return dataset
-    chunk_key = None
-    storage_dataset = dataset
-    if dataset == "game_data_chunk":
-        try:
-            value_type = int(record.get("type"))
-        except (TypeError, ValueError) as exc:
-            raise IngestError("game_data_chunk has no binary value type") from exc
-        if value_type != 5:
-            raise IngestError("game_data_chunk must use a Zabbix binary item")
-        assembled, chunk_key = _collect_game_data_chunk(record, source_clock)
-        if assembled is None:
-            return dataset
-        storage_dataset = "game_data"
-        payload = _sanitize_game_data(assembled)
-    else:
-        payload = SANITIZERS[dataset](record.get("value"))
+def store_dataset(dataset, value, source_clock=None):
+    if dataset not in SANITIZERS:
+        raise IngestError("unsupported dataset")
+    source_clock = source_clock or timezone.now()
+    if source_clock > timezone.now() + timedelta(minutes=5):
+        raise IngestError("dataset clock is too far in the future")
+    payload = SANITIZERS[dataset](value)
     current = (
         LatestDataset.objects.select_for_update()
-        .filter(key=storage_dataset)
+        .filter(key=dataset)
         .first()
     )
     if current and source_clock < current.source_clock:
-        if chunk_key is not None:
-            _complete_game_data_chunks(chunk_key)
-        return None
+        return False
 
     LatestDataset.objects.update_or_create(
-        key=storage_dataset,
+        key=dataset,
         defaults={"payload": payload, "source_clock": source_clock},
     )
-    if storage_dataset == "metrics":
+    if dataset == "metrics":
         _save_metrics(payload, source_clock)
-    elif storage_dataset == "players":
+    elif dataset == "players":
         _save_players(payload, source_clock)
-    if chunk_key is not None:
-        transaction.on_commit(
-            lambda key=chunk_key: _complete_game_data_chunks(key)
-        )
-    return storage_dataset
+    return True
 
 
-def process_records(records):
-    accepted = 0
-    ignored = 0
-    rejected = 0
-    errors = []
-    datasets = set()
-    source_hosts = set()
-    ignored_items = []
-
+def run_maintenance():
     _close_stale_sessions(timezone.now())
-    for index, record in enumerate(records, start=1):
-        source_allowed = False
-        if isinstance(record, dict) and isinstance(record.get("host"), dict):
-            source_host = _clean_text(record["host"].get("host"), 128)
-            source_allowed = source_host == settings.ZABBIX_SOURCE_HOST
-            if source_allowed:
-                source_hosts.add(source_host)
-        try:
-            dataset = _process_record(record)
-        except IngestError as exc:
-            rejected += 1
-            errors.append(f"record {index}: {exc}")
-            continue
-        if dataset is None:
-            ignored += 1
-            if source_allowed and len(ignored_items) < 10 and isinstance(record, dict):
-                ignored_items.append(_clean_text(record.get("name"), 160))
-            continue
-        datasets.add(dataset)
-        accepted += 1
-
     cleanup_if_due()
-    logger.info(
-        "Zabbix batch accepted=%s ignored=%s rejected=%s datasets=%s",
-        accepted,
-        ignored,
-        rejected,
-        ",".join(sorted(datasets)) or "none",
-    )
-    return {
-        "accepted": accepted,
-        "ignored": ignored,
-        "rejected": rejected,
-        "errors": errors[:10],
-        "datasets": sorted(datasets),
-        "source_hosts": sorted(source_hosts)[:8],
-        "ignored_items": [name for name in ignored_items if name],
-    }
-
-
-def record_connector_batch(result, record_count):
-    ConnectorBatch.objects.create(
-        record_count=max(0, int(record_count)),
-        accepted=max(0, int(result.get("accepted", 0))),
-        ignored=max(0, int(result.get("ignored", 0))),
-        rejected=max(0, int(result.get("rejected", 0))),
-        datasets=list(result.get("datasets", []))[:16],
-        source_hosts=list(result.get("source_hosts", []))[:8],
-        ignored_items=list(result.get("ignored_items", []))[:10],
-    )

@@ -1,10 +1,10 @@
 from django.urls import path
 
-from dashboard import admin_views, ingest_views, views
+from dashboard import admin_views, collector_views
 
 
 urlpatterns = [
-    path("healthz/", views.health, name="ingest-health"),
-    path("api/v1/zabbix/ingest", ingest_views.ingest, name="zabbix-ingest"),
+    path("healthz/", collector_views.health, name="private-health"),
+    path("api/v1/collector/status", collector_views.status, name="collector-status"),
     path("api/v1/guild/ingest", admin_views.guild_ingest, name="guild-ingest"),
 ]

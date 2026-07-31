@@ -146,14 +146,14 @@
       const prefix = data.stale ? 'ultimo snapshot' : 'online'
       setText(elements.status, `${formatNumber((data.players || []).length)} ${prefix} · ${formatDate(data.generated_at)}`)
       setNotice(!data.available
-        ? 'Nessuno snapshot giocatori ricevuto da Zabbix.'
+        ? 'Nessuno snapshot giocatori ancora disponibile.'
         : (data.stale ? 'Elenco in ritardo: le righe non rappresentano necessariamente lo stato online corrente.' : ''))
       state.pollFailures = data.stale ? Math.min(state.pollFailures + 1, 4) : 0
       return true
     } catch (error) {
       if (error.name === 'AbortError') return false
       setText(elements.status, 'Non disponibile')
-      setNotice('Snapshot Zabbix temporaneamente non disponibile.', true)
+      setNotice('Snapshot Palworld temporaneamente non disponibile.', true)
       state.pollFailures = Math.min(state.pollFailures + 1, 4)
       return false
     }
@@ -167,7 +167,7 @@
         ['Server', info.servername],
         ['Versione', info.version],
         ['Descrizione', info.description],
-        ['Snapshot Zabbix', formatDate(info.generated_at)],
+        ['Snapshot Palworld', formatDate(info.generated_at)],
         ['Freschezza', info.stale ? 'In ritardo' : 'Regolare'],
       ]
       for (const [label, value] of entries) {

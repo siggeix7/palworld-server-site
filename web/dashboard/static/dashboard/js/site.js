@@ -999,7 +999,7 @@
     const header = document.createElement('header')
     const label = document.createElement('span')
     const freshness = document.createElement('strong')
-    label.textContent = 'Game-data via Zabbix'
+    label.textContent = 'Game-data Palworld'
     freshness.textContent = !data.available
       ? 'Non ricevuto'
       : (data.fetch_error
@@ -1015,7 +1015,7 @@
     }
     const note = document.createElement('p')
     if (!data.available) {
-      note.textContent = 'Il connector non ha ancora consegnato uno snapshot game-data valido.'
+      note.textContent = 'Il collector non ha ancora acquisito uno snapshot game-data valido.'
     } else if (data.fetch_error) {
       note.textContent = 'Aggiornamento temporaneamente fallito: la mappa mantiene l’ultimo snapshot valido.'
     } else if (data.truncated) {
@@ -2239,7 +2239,7 @@
       state.chartHoverIndex = null
       renderFpsHealth(data.fps_health)
       setNotice('history')
-      setText(elements.chartEmpty, 'Lo storico inizierà a popolarsi con le trasmissioni del connector.')
+      setText(elements.chartEmpty, 'Lo storico inizierà a popolarsi con gli aggiornamenti del collector.')
       drawChart()
     } catch (error) {
       if (error.name === 'AbortError') return

@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block title %}Admin Panel · Palworld Server Observatory{% endblock %}
-{% block meta_description %}Pannello diagnostico dei dati Palworld ricevuti tramite Zabbix{% endblock %}
+{% block meta_description %}Pannello diagnostico dei dati raccolti dal server Palworld{% endblock %}
 {% block page_key %}admin{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
   <div>
     <p class="eyebrow">Pannello di amministrazione</p>
     <h1 id="pageAdminTitle">Admin</h1>
-    <p>Diagnostica degli snapshot ricevuti da Zabbix. Il sito non possiede credenziali amministrative e non contatta direttamente le REST API Palworld.</p>
+    <p>Diagnostica degli snapshot raccolti direttamente dalle REST API Palworld e dei dati estratti dal salvataggio di gioco.</p>
   </div>
 </section>
 
@@ -26,7 +26,7 @@
 
 <section class="section-shell">
   <div class="section-heading">
-    <div><p class="eyebrow">Ultimo elenco ricevuto</p><h2>Snapshot Zabbix</h2></div>
+    <div><p class="eyebrow">Ultimo elenco ricevuto</p><h2>Snapshot Palworld</h2></div>
     <div class="archive-controls">
       <button type="button" id="refreshPlayers" class="action-btn">Aggiorna</button>
       <p id="playerListStatus" role="status">Caricamento...</p>

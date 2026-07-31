@@ -1,6 +1,4 @@
-import base64
 import json
-import time
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -10,74 +8,19 @@ from django.utils import timezone
 
 from dashboard.models import LatestDataset
 from dashboard.services import (
-    _GAME_DATA_CHUNKS,
     _player_id,
     _player_id_from_instance,
-    _reset_game_data_chunks,
+    store_dataset,
 )
-
-
-def record(dataset, value, clock=None, name=None):
-    return {
-        "host": {"host": "palworld", "name": "Palworld"},
-        "groups": ["Games"],
-        "item_tags": [
-            {"tag": "integration", "value": "palworld-site"},
-            {"tag": "dataset", "value": dataset},
-        ],
-        "itemid": 10001,
-        "name": name or f"Palworld: {dataset.title()}",
-        "clock": clock or int(time.time()),
-        "ns": 0,
-        "value": json.dumps(value) if isinstance(value, (dict, list)) else value,
-        "type": 4,
-    }
-
-
-def ndjson(*records):
-    return "\n".join(json.dumps(value) for value in records)
-
-
-def chunk_record(index, raw_value, clock):
-    value = base64.b64encode(raw_value).decode("ascii")
-    result = record("game_data_chunk", value, clock, name=f"Game Data Chunk {index}")
-    result["item_tags"].append({"tag": "chunk", "value": str(index)})
-    result["type"] = 5
-    return result
-
-
-def chunk_records(payload, clock):
-    raw_value = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    return [
-        chunk_record(
-            index,
-            raw_value[len(raw_value) * index // 12:len(raw_value) * (index + 1) // 12],
-            clock,
-        )
-        for index in range(12)
-    ]
 
 
 @override_settings(
-    ROOT_URLCONF="palworld_site.ingest_urls",
-    ZABBIX_CONNECTOR_TOKEN="test-connector-token",
-    ZABBIX_SOURCE_HOST="palworld",
     PLAYER_HASH_SECRET="test-player-key",
     SITE_AUTH_REQUIRED=False,
 )
-class WorldObjectsIngestTests(TestCase):
+class WorldObjectsTests(TestCase):
     def setUp(self):
-        _reset_game_data_chunks()
         self.client = Client()
-        self.headers = {"HTTP_AUTHORIZATION": "Bearer test-connector-token"}
-
-    def post(self, body, **headers):
-        return self.client.post(
-            "/api/v1/zabbix/ingest",
-            data=body,
-            content_type="application/x-ndjson",
-            **{**self.headers, **headers},
-        )
 
     def world_objects(self):
         with override_settings(ROOT_URLCONF="palworld_site.urls"):
@@ -198,12 +141,7 @@ class WorldObjectsIngestTests(TestCase):
         return {"ActorData": actors}
 
     def test_game_data_is_ingested_and_exposed_via_world_objects_endpoint(self):
-        clock = int(time.time())
-        response = self.post(
-            ndjson(record("game_data", self._game_data_payload(), clock))
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["accepted"], 1)
+        self.assertTrue(store_dataset("game_data", self._game_data_payload()))
 
         dataset = LatestDataset.objects.get(key="game_data")
         self.assertEqual(dataset.payload["count"], 5)
@@ -277,8 +215,7 @@ class WorldObjectsIngestTests(TestCase):
         self.assertIsNone(payload["updated_at"])
 
     def test_world_objects_endpoint_reports_stale_when_data_is_old(self):
-        response = self.post(ndjson(record("game_data", self._game_data_payload())))
-        self.assertEqual(response.status_code, 200)
+        store_dataset("game_data", self._game_data_payload())
         LatestDataset.objects.filter(key="game_data").update(
             source_clock=timezone.now() - timedelta(minutes=30)
         )
@@ -295,8 +232,7 @@ class WorldObjectsIngestTests(TestCase):
             "LocationX": 348000,
             "LocationY": -600000,
         }]}
-        response = self.post(ndjson(record("game_data", payload)))
-        self.assertEqual(response.status_code, 200)
+        store_dataset("game_data", payload)
         obj = LatestDataset.objects.get(key="game_data").payload["objects"][0]
         self.assertEqual(obj["map"], "world-tree")
 
@@ -327,8 +263,7 @@ class WorldObjectsIngestTests(TestCase):
                 "LocationY": 6,
             },
         ]}
-        response = self.post(ndjson(record("game_data", payload)))
-        self.assertEqual(response.status_code, 200)
+        store_dataset("game_data", payload)
         stored = LatestDataset.objects.get(key="game_data").payload
         self.assertEqual(stored["count"], 1)
         self.assertEqual(stored["objects"][0]["name"], "Merchant")
@@ -361,8 +296,7 @@ class WorldObjectsIngestTests(TestCase):
             },
         ]}
         with patch("dashboard.services.MAX_WORLD_OBJECTS", 2):
-            response = self.post(ndjson(record("game_data", payload)))
-        self.assertEqual(response.status_code, 200)
+            store_dataset("game_data", payload)
         stored = LatestDataset.objects.get(key="game_data").payload
         self.assertTrue(stored["truncated"])
         self.assertEqual(stored["supported_count"], 3)
@@ -370,156 +304,6 @@ class WorldObjectsIngestTests(TestCase):
             [obj["kind"] for obj in stored["objects"]],
             ["bases", "npcs"],
         )
-
-    def test_binary_chunks_reassemble_in_memory_across_connector_batches(self):
-        clock = int(time.time())
-        player_instance = "a" * 32 + ":" + "b" * 32
-        actors = [
-            {
-                "InstanceID": player_instance,
-                "userid": "private-user",
-                "Type": "Character",
-                "UnitType": "Player",
-            },
-            {
-                "Type": "PalBox",
-                "GuildID": "private-guild",
-                "GuildName": "Chunk Guild",
-                "LocationX": -100000,
-                "LocationY": 50000,
-            },
-            {
-                "InstanceID": "private-worker",
-                "Type": "Character",
-                "UnitType": "BaseCampPal",
-                "GuildID": "private-guild",
-                "NickName": "Chunk W\u00f6rker",
-                "LocationX": -100100,
-                "LocationY": 50100,
-            },
-            {
-                "InstanceID": "private-companion",
-                "TrainerInstanceID": player_instance,
-                "Type": "Character",
-                "UnitType": "OtomoPal",
-                "GuildID": "private-guild",
-                "NickName": "Chunk Companion",
-                "LocationX": -200000,
-                "LocationY": 100000,
-            },
-            {
-                "InstanceID": "private-wild",
-                "Type": "Character",
-                "UnitType": "WildPal",
-                "NickName": "Chunk Wild",
-                "LocationX": -300000,
-                "LocationY": 200000,
-            },
-            {
-                "InstanceID": "private-npc",
-                "Type": "Character",
-                "UnitType": "NPC",
-                "NickName": "Chunk NPC",
-                "LocationX": -400000,
-                "LocationY": 300000,
-            },
-        ]
-        chunks = chunk_records({"ActorData": actors}, clock)
-        first = self.post(ndjson(*[
-            chunks[index]
-            for index in range(6)
-        ]))
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(first.json()["accepted"], 6)
-        self.assertFalse(LatestDataset.objects.filter(key="game_data").exists())
-
-        with self.captureOnCommitCallbacks(execute=False) as callbacks:
-            second = self.post(ndjson(*[
-                chunks[index]
-                for index in range(11, 5, -1)
-            ]))
-        self.assertEqual(second.status_code, 200)
-        self.assertEqual(second.json()["accepted"], 6)
-        self.assertIn("game_data", second.json()["datasets"])
-        self.assertTrue(_GAME_DATA_CHUNKS)
-        self.assertEqual(len(callbacks), 1)
-        callbacks[0]()
-        self.assertFalse(_GAME_DATA_CHUNKS)
-        payload = LatestDataset.objects.get(key="game_data").payload
-        self.assertEqual(payload["source_count"], 6)
-        self.assertEqual(payload["count"], 5)
-        self.assertEqual(payload["kind_counts"], {
-            "bases": 1,
-            "workers": 1,
-            "companions": 1,
-            "npcs": 1,
-            "wild-pals": 1,
-        })
-        serialized = json.dumps(payload)
-        for private_value in (
-            "private-user",
-            "private-guild",
-            "private-worker",
-            "private-companion",
-            "private-wild",
-            "private-npc",
-        ):
-            self.assertNotIn(private_value, serialized)
-
-    def test_binary_chunks_keep_newest_clocks_in_item_major_backlog(self):
-        clocks = [int(time.time()) + offset for offset in range(3)]
-        snapshots = {
-            clock: chunk_records({"ActorData": [{
-                "InstanceID": f"npc-{clock}",
-                "Type": "Character",
-                "UnitType": "NPC",
-                "NickName": f"Snapshot {clock}",
-                "LocationX": 1,
-                "LocationY": 2,
-            }]}, clock)
-            for clock in clocks
-        }
-        item_major_records = [
-            snapshots[clock][chunk_index]
-            for chunk_index in range(12)
-            for clock in clocks
-        ]
-
-        for offset in range(0, len(item_major_records), 3):
-            with self.captureOnCommitCallbacks(execute=True):
-                response = self.post(ndjson(*item_major_records[offset:offset + 3]))
-            self.assertEqual(response.status_code, 200)
-
-        stored = LatestDataset.objects.get(key="game_data")
-        self.assertEqual(stored.source_clock, timezone.datetime.fromtimestamp(
-            clocks[-1],
-            tz=timezone.get_current_timezone(),
-        ))
-        self.assertEqual(
-            stored.payload["objects"][0]["name"],
-            f"Snapshot {clocks[-1]}",
-        )
-        self.assertFalse(_GAME_DATA_CHUNKS)
-
-    def test_binary_chunk_rejects_invalid_base64(self):
-        value_record = record("game_data_chunk", "not-base64!", int(time.time()))
-        value_record["item_tags"].append({"tag": "chunk", "value": "0"})
-        value_record["type"] = 5
-        response = self.post(ndjson(value_record))
-        self.assertEqual(response.status_code, 422)
-        self.assertIn("not valid Base64", response.json()["error"])
-
-    def test_incomplete_binary_chunks_expire_from_memory(self):
-        with patch("dashboard.services.GAME_DATA_CHUNK_TTL_SECONDS", 0.02):
-            chunks = chunk_records(
-                {"ActorData": [{"InstanceID": "temporary"}]},
-                int(time.time()),
-            )
-            response = self.post(ndjson(chunks[0]))
-            self.assertEqual(response.status_code, 200)
-            self.assertTrue(_GAME_DATA_CHUNKS)
-            time.sleep(0.08)
-            self.assertFalse(_GAME_DATA_CHUNKS)
 
     def test_duplicate_user_ids_fall_back_to_unique_player_ids(self):
         player_one = "1" * 32
@@ -567,11 +351,8 @@ class WorldObjectsIngestTests(TestCase):
                 "level": 1,
             },
         ]}
-        response = self.post(ndjson(
-            record("game_data", game_data),
-            record("players", players),
-        ))
-        self.assertEqual(response.status_code, 200)
+        store_dataset("game_data", game_data)
+        store_dataset("players", players)
         companion = LatestDataset.objects.get(key="game_data").payload["objects"][0]
         public_players = LatestDataset.objects.get(key="players").payload["players"]
         self.assertEqual(len({player["id"] for player in public_players}), 2)
@@ -586,8 +367,7 @@ class WorldObjectsIngestTests(TestCase):
             "location_y": 2,
             "level": 1,
         }
-        response = self.post(ndjson(record("players", {"players": [raw_player]})))
-        self.assertEqual(response.status_code, 200)
+        store_dataset("players", {"players": [raw_player]})
         stored_player = LatestDataset.objects.get(key="players").payload["players"][0]
         self.assertEqual(stored_player["id"], _player_id(raw_player))
 
@@ -626,11 +406,8 @@ class WorldObjectsIngestTests(TestCase):
             "location_y": 2,
             "level": 1,
         }]}
-        response = self.post(ndjson(
-            record("game_data", game_data),
-            record("players", players),
-        ))
-        self.assertEqual(response.status_code, 200)
+        store_dataset("game_data", game_data)
+        store_dataset("players", players)
         companion = LatestDataset.objects.get(key="game_data").payload["objects"][0]
         public_player = LatestDataset.objects.get(key="players").payload["players"][0]
         self.assertIn(public_player["id"], companion["owner_ids"])

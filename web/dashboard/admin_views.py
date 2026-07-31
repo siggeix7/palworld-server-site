@@ -380,9 +380,9 @@ def palworld_info(request):
 @never_cache
 @csrf_exempt
 def guild_ingest(request):
-    expected = settings.ZABBIX_CONNECTOR_TOKEN
+    expected = settings.PRIVATE_API_TOKEN
     if not expected:
-        return JsonResponse({"error": "connector token is not configured"}, status=503)
+        return JsonResponse({"error": "private API token is not configured"}, status=503)
     authorization = request.headers.get("Authorization", "")
     provided = authorization[7:] if authorization.startswith("Bearer ") else ""
     if not provided or not secrets.compare_digest(
@@ -393,11 +393,11 @@ def guild_ingest(request):
         return JsonResponse({"error": "Content-Type must be application/json"}, status=415)
     content_length = request.META.get("CONTENT_LENGTH")
     try:
-        if content_length and int(content_length) > settings.INGEST_MAX_BYTES:
+        if content_length and int(content_length) > settings.PRIVATE_API_MAX_BYTES:
             return JsonResponse({"error": "request body is too large"}, status=413)
     except ValueError:
         return JsonResponse({"error": "invalid Content-Length"}, status=400)
-    if len(request.body) > settings.INGEST_MAX_BYTES:
+    if len(request.body) > settings.PRIVATE_API_MAX_BYTES:
         return JsonResponse({"error": "request body is too large"}, status=413)
     try:
         body = json.loads(request.body or b"{}")

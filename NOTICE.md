@@ -24,7 +24,7 @@ Adapted material and modifications:
   and ping thresholds were adapted without raw IDs or moderation actions.
 - `components/server-control-cards.tsx`: FPS gap detection and the composite
   health model were moved server-side and rewritten for the local 20-second
-  Zabbix cadence, time-weighted coverage and dynamic gap thresholds.
+  collection cadence, time-weighted coverage and dynamic gap thresholds.
 - `lib/palworld.ts`: alternate player payload field names were added to the
   ingest sanitizer. Raw player/user IDs and IP addresses are still discarded.
 - `lib/theme-context.tsx`: theme names and accent palette were adapted to the
@@ -85,10 +85,9 @@ Pinned game-data version: `1.0.1.100619`.
   included.
 - The `/v1/api/game-data` actor contract, active-state semantics, identity
   deduplication, object priority and worker/base association were independently
-  reimplemented in Django. A local Zabbix dependent-item projection transports
-  the 32 MiB upstream envelope as bounded binary chunks. Palworld REST remains
-  reachable only by Zabbix; Django receives connector records and persists only
-  sanitized fields, opaque HMAC identifiers and aggregate diagnostics.
+  reimplemented in Django. A dedicated collector retrieves the bounded upstream
+  envelope directly from Palworld; Django persists only sanitized fields,
+  opaque HMAC identifiers and aggregate diagnostics.
 
 No Go, React or exporter source code from this project is included.
 

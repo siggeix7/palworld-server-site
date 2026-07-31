@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 import hashlib
 import os
 import sys
+from urllib.parse import urlsplit
 
 import requests
 
@@ -14,9 +15,10 @@ SAVE_PATH = os.getenv(
     "/opt/Palworld/palworld/Pal/Saved/SaveGames/0/"
     "36814278E2A240ADB8F57D42AAF739CD/Level.sav",
 )
-SITE_URL = os.getenv("SITE_URL", "http://10.77.71.50:8081").rstrip("/")
+SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
 SITE_TOKEN = os.getenv("SITE_TOKEN", "")
 VERIFY_SSL = os.getenv("VERIFY_SSL", "true").lower() == "true"
+ALLOW_INSECURE_HTTP = os.getenv("ALLOW_INSECURE_HTTP", "false").lower() == "true"
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 LOW_SANITY_THRESHOLD = 30
 PLAYER_STATUS_NAMES = {
@@ -650,6 +652,13 @@ def validate_world_data(world_data):
 
 
 def main():
+    site = urlsplit(SITE_URL)
+    if site.scheme not in {"http", "https"} or not site.hostname:
+        print("SITE_URL must be an absolute HTTP(S) origin", file=sys.stderr)
+        return 1
+    if site.scheme == "http" and not ALLOW_INSECURE_HTTP:
+        print("HTTP SITE_URL requires ALLOW_INSECURE_HTTP=true", file=sys.stderr)
+        return 1
     if not SITE_TOKEN:
         print("SITE_TOKEN is not set", file=sys.stderr)
         return 1
@@ -708,20 +717,22 @@ def main():
         guilds, bases, players
     )
 
-    response = requests.post(
-        f"{SITE_URL}/api/v1/guild/ingest",
-        json={
-            "schema_version": 3,
-            "guilds": public_guilds,
-            "bases": public_bases,
-            "players": public_players,
-            "world": world,
-            "diagnostics": diagnostics,
-        },
-        headers={"Authorization": f"Bearer {SITE_TOKEN}"},
-        verify=VERIFY_SSL,
-        timeout=15,
-    )
+    with requests.Session() as session:
+        session.trust_env = False
+        response = session.post(
+            f"{SITE_URL}/api/v1/guild/ingest",
+            json={
+                "schema_version": 3,
+                "guilds": public_guilds,
+                "bases": public_bases,
+                "players": public_players,
+                "world": world,
+                "diagnostics": diagnostics,
+            },
+            headers={"Authorization": f"Bearer {SITE_TOKEN}"},
+            verify=VERIFY_SSL,
+            timeout=15,
+        )
     print(
         f"Sent {len(guilds)} guilds, {len(bases)} bases, {len(players)} players, "
         f"and {sum(guild['pal_count'] for guild in guilds)} Pals; "

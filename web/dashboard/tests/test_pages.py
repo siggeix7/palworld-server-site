@@ -51,7 +51,6 @@ class SectionPageTests(TestCase):
             ("access", "Accesso"),
             ("world", "Mondo"),
             ("activity", "Attività"),
-            ("vm-dashboard", "Stato della VM"),
             ("terms", "Condizioni d'uso e informativa privacy"),
         ]
         for name, title in pages:
@@ -60,7 +59,6 @@ class SectionPageTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, title)
                 self.assertContains(response, reverse("map"))
-                self.assertContains(response, reverse("vm-dashboard"))
                 self.assertIn("no-store", response.headers["Cache-Control"])
 
     def test_players_page_explains_save_history_source(self):
@@ -71,7 +69,7 @@ class SectionPageTests(TestCase):
     def test_home_landing_links_to_each_section(self):
         response = self.client.get(reverse("home"))
         self.assertEqual(response.status_code, 200)
-        for name in ("map", "telemetry", "players", "access", "world", "activity", "vm-dashboard"):
+        for name in ("map", "telemetry", "players", "access", "world", "activity"):
             self.assertContains(response, reverse(name))
 
     def test_access_page_exposes_credentials_to_approved_members(self):
@@ -148,7 +146,6 @@ class SectionPageTests(TestCase):
         for name, script in (
             ("guilds", "dashboard/js/guilds.js"),
             ("admin-panel", "dashboard/js/admin.js"),
-            ("vm-dashboard", "dashboard/js/vm.js"),
         ):
             if name == "admin-panel":
                 admin = self.create_user(
@@ -166,10 +163,6 @@ class SectionPageTests(TestCase):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse("login"), response["Location"])
-
-    def test_vm_page_marks_vm_nav_active(self):
-        response = self.client.get(reverse("vm-dashboard"))
-        self.assertContains(response, 'aria-current="page"')
 
     def test_admin_link_only_for_site_admins(self):
         response = self.client.get(reverse("home"))

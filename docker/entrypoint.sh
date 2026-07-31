@@ -2,7 +2,9 @@
 set -euo pipefail
 
 : "${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}"
-: "${ZABBIX_CONNECTOR_TOKEN:?ZABBIX_CONNECTOR_TOKEN is required}"
+: "${PRIVATE_API_TOKEN:?PRIVATE_API_TOKEN is required}"
+: "${PALWORLD_API_URL:?PALWORLD_API_URL is required}"
+: "${PALWORLD_API_PASSWORD:?PALWORLD_API_PASSWORD is required}"
 
 mkdir -p "$(dirname "${DATABASE_PATH}")"
 
@@ -12,24 +14,46 @@ python3 web/manage.py shell -c \
   >/dev/null
 
 public_pid=""
-ingest_pid=""
+private_pid=""
+collector_pid=""
 
 shutdown() {
-  [[ -n "${public_pid}" ]] && kill -TERM "${public_pid}" 2>/dev/null || true
-  [[ -n "${ingest_pid}" ]] && kill -TERM "${ingest_pid}" 2>/dev/null || true
-  wait "${public_pid}" "${ingest_pid}" 2>/dev/null || true
+  local pid running
+  local pids=("${public_pid}" "${private_pid}" "${collector_pid}")
+  for pid in "${pids[@]}"; do
+    [[ -n "${pid}" ]] && kill -TERM "${pid}" 2>/dev/null || true
+  done
+  for _ in {1..30}; do
+    running=false
+    for pid in "${pids[@]}"; do
+      if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+        running=true
+      fi
+    done
+    [[ "${running}" == false ]] && break
+    sleep 1
+  done
+  for pid in "${pids[@]}"; do
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+      kill -KILL "${pid}" 2>/dev/null || true
+    fi
+  done
+  wait "${public_pid}" "${private_pid}" "${collector_pid}" 2>/dev/null || true
 }
 trap shutdown TERM INT EXIT
 
 gunicorn palworld_site.ingest_wsgi:application \
   --chdir /app/web \
-  --bind "0.0.0.0:${INGEST_INTERNAL_PORT}" \
+  --bind "0.0.0.0:${PRIVATE_INTERNAL_PORT}" \
   --workers 1 \
   --threads 1 \
   --timeout 60 \
   --access-logfile - \
   --error-logfile - &
-ingest_pid=$!
+private_pid=$!
+
+python3 web/manage.py runcollector &
+collector_pid=$!
 
 gunicorn palworld_site.wsgi:application \
   --chdir /app/web \
@@ -41,4 +65,4 @@ gunicorn palworld_site.wsgi:application \
   --error-logfile - &
 public_pid=$!
 
-wait -n "${public_pid}" "${ingest_pid}"
+wait -n "${public_pid}" "${private_pid}" "${collector_pid}"

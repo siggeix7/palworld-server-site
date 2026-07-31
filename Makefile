@@ -2,12 +2,12 @@ IMAGE ?= palworld-server-site
 TAG ?= latest
 IMAGE_BASENAME := $(notdir $(IMAGE))
 SITE_PORT ?= 8080
-ZABBIX_INGEST_PORT ?= 8081
+PRIVATE_PORT ?= 8081
 TMP_IMAGE ?= /tmp/$(IMAGE_BASENAME)-$(TAG).tar
 PYTHON ?= python3
 TEST_ENV := DJANGO_SECRET_KEY=test-key PLAYER_HASH_SECRET=test-player-key \
 	PUBLIC_SITE_URL=https://testserver SITE_ADMIN_USERS=admin@example.com \
-	ZABBIX_SOURCE_HOST=palworld \
+	PRIVATE_API_TOKEN=test-private-token \
 	DATABASE_PATH=/tmp/palworld-server-site-test.sqlite3
 
 .PHONY: all build save run shell test clean
@@ -24,11 +24,12 @@ save: build
 run: build
 	docker run --rm \
 		-p $(SITE_PORT):8000 \
-		-p $(ZABBIX_INGEST_PORT):8001 \
+		-p $(PRIVATE_PORT):8001 \
 		-e DJANGO_SECRET_KEY=local-development-secret \
 		-e PLAYER_HASH_SECRET=local-player-hash-secret \
-		-e ZABBIX_CONNECTOR_TOKEN=local-connector-token \
-		-e ZABBIX_SOURCE_HOST=palworld \
+		-e PRIVATE_API_TOKEN=local-private-token \
+		-e PALWORLD_API_URL=http://host.docker.internal:8212 \
+		-e PALWORLD_API_PASSWORD=local-admin-password \
 		-e PUBLIC_SITE_URL=https://localhost \
 		-e SITE_ADMIN_USERS=admin@example.com \
 		-v palworld-site-data:/data \
@@ -37,8 +38,7 @@ run: build
 shell: build
 	docker run --rm -it \
 		-e DJANGO_SECRET_KEY=local-development-secret \
-		-e ZABBIX_CONNECTOR_TOKEN=local-connector-token \
-		-e ZABBIX_SOURCE_HOST=palworld \
+		-e PRIVATE_API_TOKEN=local-private-token \
 		-e PUBLIC_SITE_URL=https://localhost \
 		-e SITE_ADMIN_USERS=admin@example.com \
 		-v palworld-site-data:/data \

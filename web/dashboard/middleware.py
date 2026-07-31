@@ -68,8 +68,6 @@ class SiteAccessMiddleware:
     access_exempt_prefixes = ("/static/", "/accounts/verify/", "/accounts/reset/")
     access_exempt_paths = (
         "/healthz/",
-        "/api/v1/zabbix/ingest",
-        "/api/v1/guild/ingest",
         "/termini/",
         "/accounts/login/",
         "/accounts/logout/",

@@ -16,7 +16,9 @@ base camp, historical player, and world-status data to the site's ingest service
    and this directory's requirements into that virtual environment.
 3. Copy this directory to `/opt/PalworldGuildSync` without replacing `.env`.
 4. Copy `.env.example` to `.env`, set the real token, and run
-   `chmod 600 /opt/PalworldGuildSync/.env`.
+    `chmod 600 /opt/PalworldGuildSync/.env`.
+   Prefer an HTTPS endpoint with `VERIFY_SSL=true`. HTTP requires
+   `ALLOW_INSECURE_HTTP=true` and must remain confined to a trusted LAN or VPN.
 5. Make `guild_sync.py` and `guild_sync_cron.sh` executable.
 6. Add this crontab entry:
 
