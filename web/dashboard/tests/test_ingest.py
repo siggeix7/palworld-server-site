@@ -75,6 +75,15 @@ class IngestTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    def test_non_ascii_bearer_token_is_rejected_without_server_error(self):
+        response = self.client.post(
+            "/api/v1/zabbix/ingest",
+            data=ndjson(record("status", 1)),
+            content_type="application/x-ndjson",
+            HTTP_AUTHORIZATION="Bearer tåken",
+        )
+        self.assertEqual(response.status_code, 401)
+
     def test_guild_ingest_stores_guilds_and_bases(self):
         payload = {
             "schema_version": 2,
@@ -238,6 +247,24 @@ class IngestTests(TestCase):
         self.assertEqual(response.status_code, 415)
         response = self.post("{invalid")
         self.assertEqual(response.status_code, 422)
+
+    def test_accepts_game_data_larger_than_previous_two_megabyte_limit(self):
+        body = ndjson(record("game_data", {
+            "ActorData": [],
+            "ignored_padding": "x" * (2 * 1024 * 1024),
+        }))
+        self.assertGreater(len(body), 2 * 1024 * 1024)
+        response = self.post(body)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["accepted"], 1)
+
+    @override_settings(INGEST_MAX_BYTES=1024)
+    def test_rejects_connector_body_above_configured_limit(self):
+        response = self.post(ndjson(record("game_data", {
+            "ActorData": [],
+            "ignored_padding": "x" * 2048,
+        })))
+        self.assertEqual(response.status_code, 413)
 
     def test_accepts_valid_records_from_a_mixed_batch(self):
         response = self.post(ndjson(record("status", 1)) + "\n{invalid-json")

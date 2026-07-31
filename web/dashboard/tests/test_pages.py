@@ -102,6 +102,7 @@ class SectionPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["bases"][0]["base_id"], "base-1")
         self.assertEqual(response.json()["world"]["oil_rig_count"], 3)
+        self.assertFalse(response.json()["stale"])
         self.assertNotIn("alerts", response.json())
 
     def test_guild_data_exposes_compact_alerts_only_to_admins(self):
@@ -127,7 +128,9 @@ class SectionPageTests(TestCase):
         GuildSnapshot.objects.filter(pk=snapshot.pk).update(
             updated_at=timezone.now() - timedelta(minutes=20)
         )
-        self.assertNotIn("alerts", self.client.get(reverse("guild-data")).json())
+        member_payload = self.client.get(reverse("guild-data")).json()
+        self.assertNotIn("alerts", member_payload)
+        self.assertTrue(member_payload["stale"])
 
         admin = self.create_user("administrator", "admin@example.com", admin=True)
         self.client.force_login(admin)

@@ -19,6 +19,8 @@ amministrativa del server di gioco.
   dungeon, effigi Lifmunk, diari, santuari antichi e NPC.
 - Filtri persistenti, dettagli e ricompense, culling del viewport e cluster dei
   punti di interesse; esploratore laterale su desktop e drawer su telefono.
+- Attori live da `game-data`: Pal selvatici, NPC, companion e lavoratori,
+  con conteggi sorgente, freschezza e truncation visibili nella mappa.
 - Nome, account, livello, ping e numero di costruzioni per giocatore.
 - Storico FPS e giocatori per 6 ore, 24 ore, 7, 30 o 90 giorni.
 - Grafico gap-aware e giudizio FPS sull'ultima ora calibrato sulla cadenza Zabbix.
@@ -37,16 +39,18 @@ amministrativa del server di gioco.
 - Pagina VM con CPU, memoria, load, disco, rete, uptime e stato Docker.
 - Diagnostica amministrativa dei batch connector, dataset mancanti, record
   ignorati/rifiutati e freschezza delle metriche.
-- Sanitizzazione prima della persistenza: IP, `userId`, `playerId`, password e
-  porte amministrative non vengono conservati.
+- Sanitizzazione prima della persistenza applicativa: SQLite non conserva IP,
+  `userId`, `playerId`, password o porte amministrative.
 - Identificativi pubblici derivati con HMAC e non reversibili.
 - Container con filesystem read-only, utente non privilegiato e health check.
 
-L'endpoint Palworld `game-data` non e' necessario. L'API supportata `/players`
-fornisce gia' le coordinate dei giocatori online e il sync di `Level.sav`
-aggiunge le basi. Pal, NPC e oggetti del catalogo sono riferimenti statici della
-cartografia 1.0.1; senza ulteriori sorgenti sanitizzate non e' possibile mostrare
-in tempo reale istanze individuali, oggetti raccolti o costruzioni.
+L'endpoint Palworld `/v1/api/game-data` e' necessario per gli attori live e deve
+essere abilitato sul server di gioco con `-enable-gamedata-api` oppure con
+`ENABLE_GAMEDATA_API=true` nell'immagine Docker Palworld. Palworld include nello
+snapshot soltanto gli attori che considera caricati e attivi: un conteggio zero
+per Pal selvatici, NPC o companion significa che il server non li ha forniti in
+quel ciclo, non che il browser li abbia nascosti. Le 90 posizioni NPC del
+catalogo 1.0.1 restano invece riferimenti statici sempre disponibili.
 
 ## Architettura e porte separate
 
@@ -73,10 +77,14 @@ Palworld REST API <- Zabbix HTTP Agent
                   porta web protetta
 ```
 
-Il refresh Palworld resta quello del template Zabbix: `metrics` e `players`
-ogni 20 secondi. Il numero di visitatori del sito non aggiunge richieste al
-server di gioco. Il polling browser si sospende quando la scheda non e' visibile
-e applica un backoff progressivo in caso di errore.
+Il refresh Palworld resta quello del template Zabbix: `game-data` ogni 15
+secondi e `metrics`/`players` ogni 20 secondi. Il numero di visitatori del sito
+non aggiunge richieste al server di gioco. Il polling browser si sospende quando
+la scheda non e' visibile e applica un backoff progressivo in caso di errore.
+La history di Zabbix conserva invece per un'ora i payload grezzi necessari al
+connector, che possono contenere identificativi, IP e password: proteggi
+database, backup e accesso alla history come descritto in
+[zabbix/connector.md](zabbix/connector.md).
 
 ## Build
 
@@ -166,7 +174,9 @@ services:
       DJANGO_USE_X_FORWARDED_HOST: "false"
       DJANGO_SECURE_SSL_REDIRECT: "true"
       DJANGO_SECURE_HSTS_SECONDS: "86400"
+      INGEST_MAX_BYTES: "67108864"
       DATA_STALE_SECONDS: "90"
+      WORLD_DATA_STALE_SECONDS: "90"
       POSITION_RETENTION_DAYS: "7"
       METRIC_RETENTION_DAYS: "90"
       CONNECTOR_AUDIT_RETENTION_DAYS: "7"
@@ -216,7 +226,9 @@ DEFAULT_FROM_EMAIL=mailer@example.com
 
 DJANGO_SECURE_SSL_REDIRECT=true
 DJANGO_SECURE_HSTS_SECONDS=86400
+INGEST_MAX_BYTES=67108864
 DATA_STALE_SECONDS=90
+WORLD_DATA_STALE_SECONDS=90
 POSITION_RETENTION_DAYS=7
 METRIC_RETENTION_DAYS=90
 TIME_ZONE=Europe/Rome
@@ -318,6 +330,15 @@ X-Forwarded-Proto: https
 X-Forwarded-For
 ```
 
+Sul listener ingest configura un limite body di almeno 64 MiB e timeout
+superiori ai 45 secondi del connector. Per nginx, ad esempio:
+
+```nginx
+client_max_body_size 64m;
+proxy_read_timeout 70s;
+proxy_send_timeout 70s;
+```
+
 Imposta `AUTH_TRUSTED_PROXY_ADDRESSES` con gli indirizzi sorgente del reverse
 proxy così come sono visti dal container. Solo da questi indirizzi il limiter
 accetta `X-Forwarded-For`; con un singolo proxy, sostituisci il valore ricevuto
@@ -344,13 +365,16 @@ Procedura sintetica:
 3. Configura `{$PALAPISCHEME}`, `{$PALAPIIP}`, `{$PALAPIPORT}` e il secret `{$PALAPIKEY}`.
 4. Abilita `StartConnectors=1` in `zabbix_server.conf`.
 5. Crea un connector di tipo `Item values`.
-6. Usa `https://palworld.example.com:9443/api/v1/zabbix/ingest` come URL.
-7. Seleziona autenticazione Bearer con `ZABBIX_CONNECTOR_TOKEN`.
-8. Filtra `integration Equals palworld-site`.
-9. Abilita entrambe le verifiche TLS.
+6. Seleziona esplicitamente `Numeric (unsigned)`, `Numeric (float)`, `Text` e
+   `Binary`, con un massimo di 3 record per messaggio.
+7. Usa `https://palworld.example.com:9443/api/v1/zabbix/ingest` come URL.
+8. Seleziona autenticazione Bearer con `ZABBIX_CONNECTOR_TOKEN`.
+9. Filtra `integration Equals palworld-site`.
+10. Abilita entrambe le verifiche TLS.
 
-Il connector manda batch NDJSON contenenti i cinque master item Palworld e gli
-item calcolati numerici VM definiti nello stesso template:
+Il connector manda batch NDJSON contenenti gli item Palworld sanitizzabili, gli
+dodici chunk binari di `game-data` e gli item calcolati numerici VM definiti nello
+stesso template:
 
 ```text
 dataset=status
@@ -358,6 +382,7 @@ dataset=info
 dataset=metrics
 dataset=players
 dataset=settings
+dataset=game_data_chunk
 dataset=vm, metric=<metrica canonica>
 ```
 
@@ -406,6 +431,7 @@ GET /api/v1/snapshot              stato corrente protetto
 GET /api/v1/history?range=24h      storico telemetria protetto
 GET /api/v1/players                archivio giocatori protetto
 GET /api/v1/player/<id>/trail      traccia sanitizzata protetta
+GET /api/v1/world/objects          attori game-data sanitizzati protetti
 GET /api/v1/vm/snapshot            stato VM corrente protetto
 GET /api/v1/vm/history?range=24h   storico VM protetto
 GET /api/v1/connector/status       diagnostica connector, solo admin

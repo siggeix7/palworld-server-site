@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block title %}Admin Panel · Palworld Server Observatory{% endblock %}
-{% block meta_description %}Pannello di amministrazione per moderazione e chat del server Palworld{% endblock %}
+{% block meta_description %}Pannello diagnostico dei dati Palworld ricevuti tramite Zabbix{% endblock %}
 {% block page_key %}admin{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
   <div>
     <p class="eyebrow">Pannello di amministrazione</p>
     <h1 id="pageAdminTitle">Admin</h1>
-    <p>Moderazione giocatori, chat del server e operazioni di gestione.</p>
+    <p>Diagnostica degli snapshot ricevuti da Zabbix. Il sito non possiede credenziali amministrative e non contatta direttamente le REST API Palworld.</p>
   </div>
 </section>
 
@@ -26,7 +26,7 @@
 
 <section class="section-shell">
   <div class="section-heading">
-    <div><p class="eyebrow">Giocatori online</p><h2>Moderazione</h2></div>
+    <div><p class="eyebrow">Ultimo elenco ricevuto</p><h2>Snapshot Zabbix</h2></div>
     <div class="archive-controls">
       <button type="button" id="refreshPlayers" class="action-btn">Aggiorna</button>
       <p id="playerListStatus" role="status">Caricamento...</p>
@@ -35,7 +35,7 @@
   <div class="data-notice" id="adminNotice" role="status" aria-live="polite" hidden></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Giocatore</th><th>Livello</th><th>UID</th><th>Azioni</th></tr></thead>
+      <thead><tr><th>Giocatore</th><th>Livello</th><th>Ping</th><th>Coordinate</th></tr></thead>
       <tbody id="adminPlayersTable"><tr><td colspan="4" class="empty-cell">Caricamento...</td></tr></tbody>
     </table>
   </div>
@@ -43,23 +43,8 @@
 
 <section class="section-shell">
   <div class="section-heading">
-    <div><p class="eyebrow">Chat del server</p><h2>Invia messaggio</h2></div>
-    <p>Il messaggio appare nella chat del gioco per tutti i giocatori online.</p>
-  </div>
-  <form id="announceForm" class="announce-form">
-    <label>
-      <span class="sr-only">Messaggio</span>
-      <input type="text" id="announceMessage" placeholder="Scrivi un messaggio per la chat del server..." maxlength="500" required>
-    </label>
-    <button type="submit">Invia</button>
-  </form>
-  <div id="announceResult" role="status" aria-live="polite"></div>
-</section>
-
-<section class="section-shell">
-  <div class="section-heading">
     <div><p class="eyebrow">Informazioni server</p><h2>Stato Palworld</h2></div>
-    <button type="button" id="refreshInfo" class="action-btn">Aggiorna</button>
+    <button type="button" id="refreshInfo" class="action-btn">Rileggi snapshot</button>
   </div>
   <dl class="server-profile-grid" id="adminServerInfo"><div><dt>Stato</dt><dd>In attesa</dd></div></dl>
 </section>

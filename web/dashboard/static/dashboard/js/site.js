@@ -72,9 +72,11 @@
     mapKinds: new Set(DEFAULT_MAP_POINT_KINDS),
     mapQuery: '',
     mapCatalogueLoaded: false,
-    worldObjects: { objects: [], stale: true, updated_at: null },
+    worldObjects: { available: false, fetch_error: false, objects: [], source_count: 0, kind_counts: {}, stale: true, truncated: false, updated_at: null },
     worldObjectTimer: null,
+    worldObjectFailures: 0,
     bases: [],
+    basesStale: true,
     guildNames: {},
     guildColors: {},
     heatmap: { cells: [], maxCount: 0, grid: 48, range: '24h', loaded: false, enabled: false },
@@ -151,6 +153,7 @@
     mapSearch: $('#mapSearch'),
     clearMapSearch: $('#clearMapSearch'),
     mapFilterGroups: $('#mapFilterGroups'),
+    worldObjectStatus: $('#worldObjectStatus'),
     mapResultStatus: $('#mapResultStatus'),
     mapResults: $('#mapResults'),
     mapPlaceDetail: $('#mapPlaceDetail'),
@@ -759,7 +762,9 @@
   function mapPointTooltip(point) {
     const kind = mapPointKind(point.kind)
     const rows = [{ text: kind.label }]
-    if (kind.live) rows.push({ text: 'Posizione live · game-data', className: 'ok' })
+    if (kind.live) rows.push(point._stale
+      ? { text: 'Ultima posizione game-data · snapshot in ritardo', className: 'warning' }
+      : { text: 'Posizione live · game-data', className: 'ok' })
     if (point.detail) {
       rows.push({ text: point.detail.length > 180 ? `${point.detail.slice(0, 177)}...` : point.detail })
     }
@@ -904,6 +909,7 @@
     const node = marker('map-poi', point)
     node.dataset.pointId = point.id
     node.dataset.kind = point.kind
+    if (point._stale) node.dataset.stale = 'true'
     node.style.setProperty('--marker-color', kind.color)
     node.querySelector('span').textContent = kind.symbol
     node.classList.toggle('selected', point.id === state.selectedMapPoint)
@@ -935,6 +941,7 @@
 
   function renderStaticPoints() {
     if (!elements.mapPointLayer) return
+    const focusedPointId = document.activeElement?.dataset?.pointId
     if (mapTooltipTarget?.closest('#mapPointLayer')) dismissMapTooltip()
     elements.mapPointLayer.replaceChildren()
     if (elements.showMapPoints && !elements.showMapPoints.checked) return
@@ -942,6 +949,7 @@
       if (group.length === 1) renderStaticPoint(group[0])
       else renderStaticCluster(group)
     }
+    if (focusedPointId) elements.mapPointLayer.querySelector(`[data-point-id="${focusedPointId}"]`)?.focus({ preventScroll: true })
   }
 
   function persistMapKinds() {
@@ -972,6 +980,55 @@
     const counts = Object.fromEntries(Object.keys(MAP_POINT_KINDS).map((kind) => [kind, 0]))
     for (const point of state.points[state.map.active] || []) counts[point.kind] = (counts[point.kind] || 0) + 1
     return counts
+  }
+
+  function renderWorldObjectStatus() {
+    if (!elements.worldObjectStatus) return
+    const data = state.worldObjects
+    const counts = data.kind_counts || {}
+    const entries = [
+      ['Pal selvatici', 'wild-pals'],
+      ['NPC', 'npcs'],
+      ['Companion', 'companions'],
+      ['Workers', 'workers'],
+      ['Basi', 'bases'],
+    ]
+    elements.worldObjectStatus.replaceChildren()
+    elements.worldObjectStatus.classList.toggle('stale', Boolean(data.stale))
+    elements.worldObjectStatus.classList.toggle('error', !data.available || data.fetch_error)
+    const header = document.createElement('header')
+    const label = document.createElement('span')
+    const freshness = document.createElement('strong')
+    label.textContent = 'Game-data via Zabbix'
+    freshness.textContent = !data.available
+      ? 'Non ricevuto'
+      : (data.fetch_error
+          ? `Errore refresh · ultimo ${formatDate(data.updated_at)}`
+          : (data.stale ? `In ritardo · ${formatDate(data.updated_at)}` : `Aggiornato · ${formatDate(data.updated_at)}`))
+    header.append(label, freshness)
+    const countList = document.createElement('div')
+    countList.className = 'map-live-counts'
+    for (const [entryLabel, kind] of entries) {
+      const item = document.createElement('span')
+      item.textContent = `${entryLabel} ${formatNumber(counts[kind] || 0)}`
+      countList.appendChild(item)
+    }
+    const note = document.createElement('p')
+    if (!data.available) {
+      note.textContent = 'Il connector non ha ancora consegnato uno snapshot game-data valido.'
+    } else if (data.fetch_error) {
+      note.textContent = 'Aggiornamento temporaneamente fallito: la mappa mantiene l’ultimo snapshot valido.'
+    } else if (data.truncated) {
+      note.textContent = `Snapshot parziale: ${formatNumber(data.count)} di ${formatNumber(data.supported_count)} oggetti validi.`
+    } else {
+      const absent = entries.slice(0, 3)
+        .filter(([, kind]) => !Number(counts[kind] || 0))
+        .map(([entryLabel]) => entryLabel)
+      note.textContent = absent.length
+        ? `Palworld non ha incluso ${absent.join(', ')} in questo snapshot di ${formatNumber(data.source_count)} attori. Compaiono solo quando game-data li segnala come caricati.`
+        : `${formatNumber(data.count)} oggetti validi ricevuti da ${formatNumber(data.source_count)} attori sorgente.`
+    }
+    elements.worldObjectStatus.append(header, countList, note)
   }
 
   function renderMapFilterGroups() {
@@ -1026,6 +1083,7 @@
 
   function renderMapResults() {
     if (!elements.mapResults || !elements.mapResultStatus) return
+    const focusedPointId = document.activeElement?.dataset?.pointId
     elements.mapResults.replaceChildren()
     if (!state.mapCatalogueLoaded) {
       setText(elements.mapResultStatus, 'Caricamento catalogo...')
@@ -1085,6 +1143,7 @@
       fragment.appendChild(button)
     }
     elements.mapResults.appendChild(fragment)
+    if (focusedPointId) elements.mapResults.querySelector(`[data-point-id="${focusedPointId}"]`)?.focus({ preventScroll: true })
   }
 
   function renderMapExplorer() {
@@ -2872,6 +2931,7 @@
     if (!elements.mapViewport || !elements.playerLayer) return
     try {
       const data = await requestJson('/api/v1/guild/data', 'bases', 10000)
+      state.basesStale = Boolean(data.stale)
       state.guildNames = {}
       for (const g of data.guilds || []) {
         state.guildNames[g.group_id] = g.guild_name || g.group_name || ''
@@ -2887,6 +2947,7 @@
       state.bases = (data.bases || []).map((b) => ({
         ...b,
         guild_name: state.guildNames[b.group_id] || 'Senza gilda',
+        _save_stale: state.basesStale,
       }))
       renderBases()
     } catch (_error) {
@@ -2914,10 +2975,20 @@
 
   function baseTooltipContent(base) {
     const problems = Number(base.problem_worker_count) || 0
-    const rows = [
-      { text: base.guild_name },
-      { text: `${formatNumber(base.worker_count || 0)} Pal assegnati · ${formatNumber(base.working_count || 0)} al lavoro` },
-    ]
+    const rows = [{ text: base.guild_name }]
+    if (base._live) {
+      rows.push({ text: `${formatNumber(base.worker_count)} Pal collegati da game-data` })
+      rows.push(base._stale
+        ? { text: 'Ultima posizione game-data · snapshot in ritardo', className: 'warning' }
+        : { text: 'Posizione live · game-data', className: 'ok' })
+      if (!base._save) {
+        rows.push({ text: 'Stato salute non disponibile' })
+        return { title: base.name || 'Palbox', rows }
+      }
+    } else {
+      rows.push({ text: `${formatNumber(base.worker_count || 0)} Pal assegnati · ${formatNumber(base.working_count || 0)} al lavoro` })
+    }
+    if (base._save_stale) rows.push({ text: 'Stato salute save in ritardo', className: 'warning' })
     if (base.raid_active) rows.push({ text: 'Invasione attiva', className: 'danger' })
     if (problems) {
       const details = [
@@ -2939,10 +3010,11 @@
   function renderBases() {
     const layer = $('#baseLayer')
     if (!layer) return
+    const focusedBase = document.activeElement?.closest('#baseLayer [data-name]')?.dataset.name
     layer.replaceChildren()
     const toggle = $('#showBases')
     if (toggle && !toggle.checked) return
-    for (const base of state.bases) {
+    for (const base of combinedBases()) {
       if (!mapContains(state.map.active, base.location_x, base.location_y)) continue
       const position = worldToPercent(base.location_x, base.location_y)
       const node = document.createElement('button')
@@ -2960,10 +3032,56 @@
       bindMapTooltip(node, tooltip)
       layer.appendChild(node)
     }
+    if (focusedBase) layer.querySelector(`[data-name="${focusedBase}"]`)?.focus({ preventScroll: true })
   }
 
   function baseGuildColor(guildId) {
-    return state.guildColors[guildId] || '#e5b85c'
+    if (state.guildColors[guildId]) return state.guildColors[guildId]
+    let hash = 2166136261
+    for (const character of String(guildId || 'base')) {
+      hash ^= character.charCodeAt(0)
+      hash = Math.imul(hash, 16777619)
+    }
+    return `hsl(${(hash >>> 0) % 360} 72% 55%)`
+  }
+
+  function combinedBases() {
+    const bases = [...state.bases]
+    const liveWorkerCounts = {}
+    for (const obj of state.worldObjects.objects || []) {
+      if (obj.kind === 'workers' && obj.base_id) {
+        liveWorkerCounts[obj.base_id] = (liveWorkerCounts[obj.base_id] || 0) + 1
+      }
+    }
+    for (const obj of state.worldObjects.objects || []) {
+      if (obj.kind !== 'bases') continue
+      const liveBase = {
+        base_id: obj.base_id || obj.id,
+        group_id: obj.guild_key || obj.id,
+        guild_name: obj.guild_name || obj.name || 'Gilda non indicata',
+        name: obj.name || 'Palbox',
+        location_x: Number(obj.x),
+        location_y: Number(obj.y),
+        worker_count: liveWorkerCounts[obj.base_id || obj.id] || 0,
+        _live: true,
+        _stale: state.worldObjects.stale,
+      }
+      const duplicateIndex = bases.findIndex((base) => Math.hypot(
+        Number(base.location_x) - liveBase.location_x,
+        Number(base.location_y) - liveBase.location_y,
+      ) <= 100)
+      if (duplicateIndex === -1) {
+        bases.push(liveBase)
+      } else {
+        bases[duplicateIndex] = {
+          ...bases[duplicateIndex],
+          ...liveBase,
+          _save: true,
+          _save_stale: state.basesStale,
+        }
+      }
+    }
+    return bases
   }
 
   function scheduleBasePoll() {
@@ -2993,14 +3111,22 @@
         y: Number(obj.y),
         name: obj.name || MAP_POINT_KINDS[liveKind].label,
         _live: true,
+        _stale: state.worldObjects.stale,
       }
       if (obj.detail) point.detail = obj.detail
       if (Number.isFinite(obj.level) && obj.level > 0) point.level = obj.level
-      if (obj.owner_id) {
-        point.detail = `Pal di ${formatOwnerName(obj.owner_id)}`
-        point.owner_id = obj.owner_id
+      const ownerIds = Array.isArray(obj.owner_ids) ? obj.owner_ids : [obj.owner_id].filter(Boolean)
+      const ownerId = ownerIds.find((candidate) => (
+        state.snapshot?.players || []
+      ).some((player) => player.id === candidate)) || ownerIds[0]
+      if (ownerId) {
+        const ownership = `Pal di ${formatOwnerName(ownerId)}`
+        point.detail = point.detail ? `${point.detail} · ${ownership}` : ownership
+        point.owner_id = ownerId
       }
       if (obj.guild_name) point.guild_name = obj.guild_name
+      if (obj.guild_key) point.guild_key = obj.guild_key
+      if (obj.base_id) point.base_id = obj.base_id
       state.points[mapId].push(point)
       state.pointById.set(point.id, point)
     }
@@ -3015,25 +3141,59 @@
     if (!elements.mapViewport) return
     try {
       const data = await requestJson('/api/v1/world/objects', 'worldObjects', 15000)
+      const changed = data.updated_at !== state.worldObjects.updated_at
+        || Boolean(data.stale) !== state.worldObjects.stale
+      state.worldObjects.available = Boolean(data.available)
+      state.worldObjects.fetch_error = false
       state.worldObjects.objects = Array.isArray(data.objects) ? data.objects : []
+      state.worldObjects.source_count = Number(data.source_count) || state.worldObjects.objects.length
+      state.worldObjects.supported_count = Number(data.supported_count) || 0
+      state.worldObjects.kind_counts = data.kind_counts
+        && typeof data.kind_counts === 'object'
+        && Object.keys(data.kind_counts).length
+        ? data.kind_counts
+        : state.worldObjects.objects.reduce((counts, obj) => {
+          counts[obj.kind] = (counts[obj.kind] || 0) + 1
+          return counts
+        }, {})
+      state.worldObjects.count = Number(data.count) || state.worldObjects.objects.length
+      state.worldObjects.truncated = Boolean(data.truncated)
       state.worldObjects.stale = Boolean(data.stale)
       state.worldObjects.updated_at = data.updated_at || null
-      mergeLiveWorldObjects(state.worldObjects.objects)
-      if (state.mapCatalogueLoaded) {
+      if (changed) mergeLiveWorldObjects(state.worldObjects.objects)
+      renderWorldObjectStatus()
+      renderBases()
+      state.worldObjectFailures = state.worldObjects.stale
+        ? Math.min(state.worldObjectFailures + 1, 4)
+        : 0
+      if (changed && state.mapCatalogueLoaded) {
         renderMapExplorer()
         renderStaticPoints()
       }
+      return true
     } catch (_error) {
-      // Live world objects are optional; the static catalogue remains available.
+      state.worldObjects.fetch_error = true
+      state.worldObjects.stale = true
+      state.worldObjectFailures += 1
+      for (const points of Object.values(state.points)) {
+        for (const point of points) {
+          if (point._live) point._stale = true
+        }
+      }
+      renderWorldObjectStatus()
+      renderBases()
+      renderStaticPoints()
+      return false
     }
   }
 
   function scheduleWorldObjectPoll() {
     window.clearTimeout(state.worldObjectTimer)
+    const delay = Math.min(300000, 20000 * (2 ** Math.min(state.worldObjectFailures, 4)))
     state.worldObjectTimer = window.setTimeout(async () => {
       if (!document.hidden) await loadWorldObjects()
       scheduleWorldObjectPoll()
-    }, 300000)
+    }, delay)
   }
 
   function renderWorldSaveStatus(data) {
@@ -3123,23 +3283,29 @@
     const navToggle = $('#navToggle')
     const navMenu = $('#navMenu')
     if (navToggle && navMenu) {
+      const navDrawer = window.matchMedia('(max-width: 1700px)')
+      const setNavOpen = (open) => {
+        const drawerOpen = navDrawer.matches && open
+        navMenu.classList.toggle('open', drawerOpen)
+        if (!drawerOpen && navMenu.contains(document.activeElement)) navToggle.focus({ preventScroll: true })
+        navMenu.inert = navDrawer.matches && !drawerOpen
+        navMenu.toggleAttribute('aria-hidden', navDrawer.matches && !drawerOpen)
+        navToggle.setAttribute('aria-expanded', String(drawerOpen))
+        navToggle.setAttribute('aria-label', drawerOpen ? 'Chiudi menu' : 'Apri menu')
+      }
+      setNavOpen(false)
       navToggle.addEventListener('click', () => {
-        const open = navMenu.classList.toggle('open')
-        navToggle.setAttribute('aria-expanded', String(open))
-        navToggle.setAttribute('aria-label', open ? 'Chiudi menu' : 'Apri menu')
+        setNavOpen(!navMenu.classList.contains('open'))
       })
       navMenu.addEventListener('click', (event) => {
         if (event.target.tagName === 'A' || event.target.tagName === 'BUTTON') {
-          navMenu.classList.remove('open')
-          navToggle.setAttribute('aria-expanded', 'false')
-          navToggle.setAttribute('aria-label', 'Apri menu')
+          setNavOpen(false)
         }
       })
+      navDrawer.addEventListener('change', () => setNavOpen(false))
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && navMenu.classList.contains('open')) {
-          navMenu.classList.remove('open')
-          navToggle.setAttribute('aria-expanded', 'false')
-          navToggle.setAttribute('aria-label', 'Apri menu')
+          setNavOpen(false)
           navToggle.focus()
         }
       })

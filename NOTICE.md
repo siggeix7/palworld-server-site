@@ -83,8 +83,14 @@ Pinned game-data version: `1.0.1.100619`.
   implemented locally for the existing privacy-sanitized Django map after
   reviewing the upstream React interface. No React or Go application code is
   included.
+- The `/v1/api/game-data` actor contract, active-state semantics, identity
+  deduplication, object priority and worker/base association were independently
+  reimplemented in Django. A local Zabbix dependent-item projection transports
+  the 32 MiB upstream envelope as bounded binary chunks. Palworld REST remains
+  reachable only by Zabbix; Django receives connector records and persists only
+  sanitized fields, opaque HMAC identifiers and aggregate diagnostics.
 
-No application or exporter code from this project is included.
+No Go, React or exporter source code from this project is included.
 
 ### Luke Holland MIT License
 

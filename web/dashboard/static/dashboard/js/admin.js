@@ -2,7 +2,7 @@
   'use strict'
 
   const THEMES = new Set(['observatory', 'tron', 'ares', 'clu', 'athena', 'aphrodite', 'poseidon'])
-  const state = { requests: {}, pollTimer: null, pollGeneration: 0, alertTimer: null }
+  const state = { requests: {}, pollTimer: null, pollGeneration: 0, pollFailures: 0, alertTimer: null, infoTimer: null }
 
   const $ = (selector) => document.querySelector(selector)
   const elements = {
@@ -10,9 +10,6 @@
     status: $('#playerListStatus'),
     refresh: $('#refreshPlayers'),
     notice: $('#adminNotice'),
-    form: $('#announceForm'),
-    message: $('#announceMessage'),
-    result: $('#announceResult'),
     refreshInfo: $('#refreshInfo'),
     info: $('#adminServerInfo'),
     alerts: $('#saveAlerts'),
@@ -132,24 +129,11 @@
       name.appendChild(strong)
       const level = document.createElement('td')
       level.textContent = formatNumber(p.level)
-      const uid = document.createElement('td')
-      const code = document.createElement('code')
-      code.textContent = p.userId || p.playerId || '?'
-      uid.appendChild(code)
-      const actions = document.createElement('td')
-      actions.className = 'admin-actions'
-      const kickBtn = document.createElement('button')
-      kickBtn.type = 'button'
-      kickBtn.textContent = 'Kick'
-      kickBtn.className = 'action-btn warn'
-      kickBtn.addEventListener('click', () => doAction('kick', p.userId || p.playerId, kickBtn))
-      const banBtn = document.createElement('button')
-      banBtn.type = 'button'
-      banBtn.textContent = 'Ban'
-      banBtn.className = 'action-btn danger'
-      banBtn.addEventListener('click', () => doAction('ban', p.userId || p.playerId, banBtn))
-      actions.append(kickBtn, banBtn)
-      row.append(name, level, uid, actions)
+      const ping = document.createElement('td')
+      ping.textContent = `${formatNumber(p.ping, 1)} ms`
+      const position = document.createElement('td')
+      position.textContent = `X ${formatNumber(p.location_x)} / Y ${formatNumber(p.location_y)}`
+      row.append(name, level, ping, position)
       elements.table.appendChild(row)
     }
   }
@@ -159,34 +143,19 @@
     try {
       const data = await requestJson('/api/v1/palworld/players', 'players')
       renderPlayers(data.players || [])
-      setText(elements.status, `${formatNumber((data.players || []).length)} giocatori online`)
-      setNotice()
+      const prefix = data.stale ? 'ultimo snapshot' : 'online'
+      setText(elements.status, `${formatNumber((data.players || []).length)} ${prefix} · ${formatDate(data.generated_at)}`)
+      setNotice(!data.available
+        ? 'Nessuno snapshot giocatori ricevuto da Zabbix.'
+        : (data.stale ? 'Elenco in ritardo: le righe non rappresentano necessariamente lo stato online corrente.' : ''))
+      state.pollFailures = data.stale ? Math.min(state.pollFailures + 1, 4) : 0
+      return true
     } catch (error) {
-      if (error.name === 'AbortError') return
+      if (error.name === 'AbortError') return false
       setText(elements.status, 'Non disponibile')
-      setNotice('Impossibile contattare il server Palworld.', true)
-    }
-  }
-
-  async function doAction(action, uid, btn) {
-    if (!uid) return
-    if (!confirm(`Confermi di fare ${action} a ${uid}?`)) return
-    const original = btn.textContent
-    btn.disabled = true
-    btn.textContent = '...'
-    try {
-      await requestJson(`/api/v1/palworld/${action}`, action, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userid: uid }),
-      })
-      btn.textContent = 'Fatto'
-      setTimeout(() => { btn.textContent = original; btn.disabled = false }, 1500)
-      if (action === 'kick') setTimeout(loadPlayers, 1000)
-    } catch (error) {
-      btn.textContent = 'Errore'
-      setTimeout(() => { btn.textContent = original; btn.disabled = false }, 2000)
-      setNotice(`Operazione ${action} fallita: ${error.message}`, true)
+      setNotice('Snapshot Zabbix temporaneamente non disponibile.', true)
+      state.pollFailures = Math.min(state.pollFailures + 1, 4)
+      return false
     }
   }
 
@@ -198,7 +167,8 @@
         ['Server', info.servername],
         ['Versione', info.version],
         ['Descrizione', info.description],
-        ['World GUID', info.worldguid],
+        ['Snapshot Zabbix', formatDate(info.generated_at)],
+        ['Freschezza', info.stale ? 'In ritardo' : 'Regolare'],
       ]
       for (const [label, value] of entries) {
         if (!value) continue
@@ -222,9 +192,18 @@
       if (document.hidden || gen !== state.pollGeneration) return
       await loadPlayers()
       if (gen !== state.pollGeneration) return
-      state.pollTimer = window.setTimeout(tick, 15000)
+      const delay = Math.min(300000, 20000 * (2 ** state.pollFailures))
+      state.pollTimer = window.setTimeout(tick, delay)
     }
     tick()
+  }
+
+  function scheduleInfoPoll() {
+    window.clearTimeout(state.infoTimer)
+    state.infoTimer = window.setTimeout(async () => {
+      if (!document.hidden) await loadInfo()
+      scheduleInfoPoll()
+    }, 60000)
   }
 
   function initializeTheme() {
@@ -238,31 +217,15 @@
     initializeTheme()
     elements.refresh?.addEventListener('click', loadPlayers)
     elements.refreshInfo?.addEventListener('click', loadInfo)
-    elements.form?.addEventListener('submit', async (e) => {
-      e.preventDefault()
-      const msg = elements.message.value.trim()
-      if (!msg) return
-      elements.result.textContent = 'Invio...'
-      try {
-        await requestJson('/api/v1/palworld/announce', 'announce', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: msg }),
-        })
-        elements.result.textContent = 'Messaggio inviato!'
-        elements.message.value = ''
-        setTimeout(() => { elements.result.textContent = '' }, 3000)
-      } catch (error) {
-        elements.result.textContent = `Errore: ${error.message}`
-      }
-    })
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) return
       startPolling()
+      loadInfo()
       loadAlerts().then(scheduleAlertPoll)
     })
     startPolling()
     loadInfo()
+    scheduleInfoPoll()
     loadAlerts().then(scheduleAlertPoll)
   }
 

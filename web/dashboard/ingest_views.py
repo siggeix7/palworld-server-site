@@ -47,7 +47,9 @@ def ingest(request):
 
     authorization = request.headers.get("Authorization", "")
     provided = authorization[7:] if authorization.startswith("Bearer ") else ""
-    if not provided or not secrets.compare_digest(provided, expected):
+    if not provided or not secrets.compare_digest(
+        provided.encode("utf-8"), expected.encode("utf-8")
+    ):
         return _error("unauthorized", 401)
 
     content_type = request.content_type.lower()

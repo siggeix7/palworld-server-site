@@ -108,9 +108,5 @@ urlpatterns = [
     path("api/v1/player/<str:public_id>/trail", views.player_trail, name="player-trail"),
     path("api/v1/palworld/players", admin_views.palworld_players, name="palworld-players"),
     path("api/v1/palworld/info", admin_views.palworld_info, name="palworld-info"),
-    path("api/v1/palworld/announce", admin_views.palworld_announce, name="palworld-announce"),
-    path("api/v1/palworld/kick", admin_views.palworld_kick, name="palworld-kick"),
-    path("api/v1/palworld/ban", admin_views.palworld_ban, name="palworld-ban"),
-    path("api/v1/palworld/unban", admin_views.palworld_unban, name="palworld-unban"),
     path("api/v1/guild/data", admin_views.guild_data, name="guild-data"),
 ]

@@ -905,11 +905,12 @@ def connector_status(request):
         rejected=Sum("rejected"),
     )
     last_batch = ConnectorBatch.objects.first()
+    stored_datasets = DATASETS - {"game_data_chunk"}
     datasets = {
         key: {"received": False, "timestamp": None, "age_seconds": None}
-        for key in sorted(DATASETS)
+        for key in sorted(stored_datasets)
     }
-    for dataset in LatestDataset.objects.filter(key__in=DATASETS):
+    for dataset in LatestDataset.objects.filter(key__in=stored_datasets):
         datasets[dataset.key] = {
             "received": True,
             "timestamp": _iso(dataset.source_clock),
@@ -1204,8 +1205,16 @@ def world_objects(request):
     dataset = LatestDataset.objects.filter(key="game_data").first()
     if not dataset:
         return JsonResponse({
+            "available": False,
             "objects": [],
             "count": 0,
+            "source_count": 0,
+            "supported_count": 0,
+            "source_counts": {},
+            "active_counts": {},
+            "kind_counts": {},
+            "omitted_counts": {},
+            "truncated": False,
             "stale": True,
             "updated_at": None,
         })
@@ -1213,10 +1222,17 @@ def world_objects(request):
     source_clock = dataset.source_clock
     payload = dataset.payload or {}
     return JsonResponse({
+        "available": True,
         "objects": payload.get("objects", []),
         "count": payload.get("count", 0),
+        "source_count": payload.get("source_count", 0),
+        "supported_count": payload.get("supported_count", payload.get("count", 0)),
+        "source_counts": payload.get("source_counts", {}),
+        "active_counts": payload.get("active_counts", {}),
+        "kind_counts": payload.get("kind_counts", {}),
+        "omitted_counts": payload.get("omitted_counts", {}),
         "truncated": bool(payload.get("truncated", False)),
-        "stale": source_clock < now - timedelta(minutes=10),
+        "stale": source_clock < now - timedelta(seconds=settings.WORLD_DATA_STALE_SECONDS),
         "updated_at": _iso(source_clock),
     })
 

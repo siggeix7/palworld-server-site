@@ -15,8 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .accounts import is_site_admin
-from .models import GuildSnapshot
-from .palworld_api import PalworldAPIClient, PalworldAPIError
+from .models import GuildSnapshot, LatestDataset
 
 logger = logging.getLogger(__name__)
 GUILD_SNAPSHOT_STALE_AFTER = timedelta(minutes=15)
@@ -52,10 +51,6 @@ PLAYER_STATUS_FIELDS = {
     "max_hp", "stamina", "attack", "carry_weight", "capture_rate",
     "work_speed",
 }
-
-
-def _api_client():
-    return PalworldAPIClient()
 
 
 def _admin_required(request):
@@ -347,12 +342,21 @@ def guild_data_page(request):
 @login_required
 def palworld_players(request):
     _admin_required(request)
-    try:
-        client = _api_client()
-        players = client.get_players()
-        return JsonResponse({"players": players, "generated_at": timezone.now().isoformat()})
-    except PalworldAPIError as exc:
-        return JsonResponse({"error": str(exc)}, status=502)
+    dataset = LatestDataset.objects.filter(key="players").first()
+    if not dataset:
+        return JsonResponse({
+            "available": False,
+            "players": [],
+            "generated_at": None,
+            "stale": True,
+        })
+    age = (timezone.now() - dataset.source_clock).total_seconds()
+    return JsonResponse({
+        "available": True,
+        "players": (dataset.payload or {}).get("players", []),
+        "generated_at": dataset.source_clock.isoformat(),
+        "stale": age > settings.DATA_STALE_SECONDS,
+    })
 
 
 @require_GET
@@ -360,86 +364,16 @@ def palworld_players(request):
 @login_required
 def palworld_info(request):
     _admin_required(request)
-    try:
-        return JsonResponse(_api_client().get_info())
-    except PalworldAPIError as exc:
-        return JsonResponse({"error": str(exc)}, status=502)
-
-
-@require_POST
-@never_cache
-@login_required
-def palworld_announce(request):
-    _admin_required(request)
-    try:
-        body = json.loads(request.body or b"{}")
-        message = (body.get("message") or "").strip()
-        if not message or len(message) > 500:
-            return JsonResponse({"error": "message required (max 500 chars)"}, status=400)
-        _api_client().announce(message)
-        logger.info("Admin %s announced: %s", request.user.username, message[:80])
-        return JsonResponse({"ok": True})
-    except PalworldAPIError as exc:
-        return JsonResponse({"error": str(exc)}, status=502)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "invalid JSON"}, status=400)
-
-
-@require_POST
-@never_cache
-@login_required
-def palworld_kick(request):
-    _admin_required(request)
-    try:
-        body = json.loads(request.body or b"{}")
-        uid = (body.get("userid") or "").strip()
-        if not uid:
-            return JsonResponse({"error": "userid required"}, status=400)
-        _api_client().kick(uid)
-        logger.info("Admin %s kicked uid=%s", request.user.username, uid)
-        return JsonResponse({"ok": True})
-    except PalworldAPIError as exc:
-        return JsonResponse({"error": str(exc)}, status=502)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "invalid JSON"}, status=400)
-
-
-@require_POST
-@never_cache
-@login_required
-def palworld_ban(request):
-    _admin_required(request)
-    try:
-        body = json.loads(request.body or b"{}")
-        uid = (body.get("userid") or "").strip()
-        if not uid:
-            return JsonResponse({"error": "userid required"}, status=400)
-        _api_client().ban(uid)
-        logger.info("Admin %s banned uid=%s", request.user.username, uid)
-        return JsonResponse({"ok": True})
-    except PalworldAPIError as exc:
-        return JsonResponse({"error": str(exc)}, status=502)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "invalid JSON"}, status=400)
-
-
-@require_POST
-@never_cache
-@login_required
-def palworld_unban(request):
-    _admin_required(request)
-    try:
-        body = json.loads(request.body or b"{}")
-        uid = (body.get("userid") or "").strip()
-        if not uid:
-            return JsonResponse({"error": "userid required"}, status=400)
-        _api_client().unban(uid)
-        logger.info("Admin %s unbanned uid=%s", request.user.username, uid)
-        return JsonResponse({"ok": True})
-    except PalworldAPIError as exc:
-        return JsonResponse({"error": str(exc)}, status=502)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "invalid JSON"}, status=400)
+    dataset = LatestDataset.objects.filter(key="info").first()
+    if not dataset:
+        return JsonResponse({"available": False, "generated_at": None, "stale": True})
+    age = (timezone.now() - dataset.source_clock).total_seconds()
+    return JsonResponse({
+        "available": True,
+        **(dataset.payload or {}),
+        "generated_at": dataset.source_clock.isoformat(),
+        "stale": age > 35 * 60,
+    })
 
 
 @require_POST
@@ -494,6 +428,7 @@ def guild_data(request):
             "bases": [],
             "world": {},
             "updated_at": None,
+            "stale": True,
         }
         if is_site_admin(request.user):
             response["alerts"] = _guild_alerts(None)
@@ -505,6 +440,7 @@ def guild_data(request):
         "bases": payload.get("bases", []),
         "world": payload.get("world", {}),
         "updated_at": snapshot.updated_at.isoformat(),
+        "stale": timezone.now() - snapshot.updated_at > GUILD_SNAPSHOT_STALE_AFTER,
     }
     if is_site_admin(request.user):
         response["alerts"] = _guild_alerts(snapshot)

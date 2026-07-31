@@ -9,14 +9,14 @@ zabbix_export:
       name: 'PALWORLD SERVER SITE RESTAPI'
       description: |
         Palworld REST API monitoring and data streaming for palworld-server-site.
-        Only master items tagged integration=palworld-site are exported by the connector.
+        Items tagged integration=palworld-site are exported by the connector.
       groups:
         - name: Templates/Applications
       items:
         - uuid: b0c24ced304044558f82f07e17623874
           name: 'Palworld: Rest Api port TCP check'
           type: SIMPLE
-          key: 'net.tcp.service[http,{$PALAPIIP},{$PALAPIPORT}]'
+          key: 'net.tcp.service[{$PALAPISCHEME},{$PALAPIIP},{$PALAPIPORT}]'
           delay: 30s
           history: 90d
           tags:
@@ -26,7 +26,7 @@ zabbix_export:
               value: palworld-site
           triggers:
             - uuid: c152959725e9478bb70f25c4472721c1
-              expression: 'max(/PALWORLD SERVER SITE RESTAPI/net.tcp.service[http,{$PALAPIIP},{$PALAPIPORT}],#3)=0'
+              expression: 'max(/PALWORLD SERVER SITE RESTAPI/net.tcp.service[{$PALAPISCHEME},{$PALAPIIP},{$PALAPIPORT}],#3)=0'
               name: 'Palworld: REST API non raggiungibile'
               priority: AVERAGE
         - uuid: 110e8acd01ac40e9b0d4c189ee48ae4a
@@ -38,6 +38,8 @@ zabbix_export:
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/info'
+          verify_peer: 'YES'
+          verify_host: 'YES'
           headers:
             - name: Accept
               value: application/json
@@ -93,6 +95,8 @@ zabbix_export:
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/metrics'
+          verify_peer: 'YES'
+          verify_host: 'YES'
           headers:
             - name: Accept
               value: application/json
@@ -207,6 +211,8 @@ zabbix_export:
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/players'
+          verify_peer: 'YES'
+          verify_host: 'YES'
           headers:
             - name: Accept
               value: application/json
@@ -237,6 +243,8 @@ zabbix_export:
           value_type: TEXT
           timeout: 5s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/settings'
+          verify_peer: 'YES'
+          verify_host: 'YES'
           headers:
             - name: Accept
               value: application/json
@@ -248,22 +256,247 @@ zabbix_export:
             - tag: integration
               value: palworld-site
         - uuid: 7c2a9f3e6b1d4a8e9c5d2f1b8a7e6d5c
-          name: 'Palworld: Game Data'
+          name: 'Palworld: Game Data Raw'
           type: HTTP_AGENT
           key: palworld.game_data
-          delay: 5m
-          history: 1h
+          delay: '{$PALGAMEDATAINTERVAL}'
+          history: '0'
           value_type: TEXT
           timeout: 10s
           url: '{$PALAPISCHEME}://{$PALAPIIP}:{$PALAPIPORT}/v1/api/game-data'
+          verify_peer: 'YES'
+          verify_host: 'YES'
           headers:
             - name: Accept
               value: application/json
             - name: Authorization
               value: 'Basic {$PALAPIKEY}'
+        - uuid: 8d109b64ae4d4b839b276a1df95cb501
+          name: 'Palworld: Game Data Chunk 0'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[0]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(0),b(1)));'
+          master_item:
+            key: palworld.game_data
           tags:
+            - tag: chunk
+              value: '0'
             - tag: dataset
-              value: game_data
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb502
+          name: 'Palworld: Game Data Chunk 1'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[1]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(1),b(2)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '1'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb503
+          name: 'Palworld: Game Data Chunk 2'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[2]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(2),b(3)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '2'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb504
+          name: 'Palworld: Game Data Chunk 3'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[3]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(3),b(4)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '3'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb505
+          name: 'Palworld: Game Data Chunk 4'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[4]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(4),b(5)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '4'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb506
+          name: 'Palworld: Game Data Chunk 5'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[5]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(5),b(6)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '5'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb507
+          name: 'Palworld: Game Data Chunk 6'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[6]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(6),b(7)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '6'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb508
+          name: 'Palworld: Game Data Chunk 7'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[7]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(7),b(8)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '7'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb509
+          name: 'Palworld: Game Data Chunk 8'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[8]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(8),b(9)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '8'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb50a
+          name: 'Palworld: Game Data Chunk 9'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[9]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(9),b(10)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '9'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb50b
+          name: 'Palworld: Game Data Chunk 10'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[10]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(10),b(11)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '10'
+            - tag: dataset
+              value: game_data_chunk
+            - tag: integration
+              value: palworld-site
+        - uuid: 8d109b64ae4d4b839b276a1df95cb50c
+          name: 'Palworld: Game Data Chunk 11'
+          type: DEPENDENT
+          key: 'palworld.game_data.chunk[11]'
+          history: 1h
+          value_type: BINARY
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - 'var n=12; function b(k){var p=Math.floor(value.length*k/n); if(p>0&&p<value.length&&value.charCodeAt(p)>=0xdc00&&value.charCodeAt(p)<=0xdfff&&value.charCodeAt(p-1)>=0xd800&&value.charCodeAt(p-1)<=0xdbff)p++; return p;} return btoa(value.slice(b(11),b(12)));'
+          master_item:
+            key: palworld.game_data
+          tags:
+            - tag: chunk
+              value: '11'
+            - tag: dataset
+              value: game_data_chunk
             - tag: integration
               value: palworld-site
         - uuid: aeaf4c2c417448a9ac470ad481b4dc93
@@ -609,6 +842,9 @@ zabbix_export:
         - macro: '{$PALAPISCHEME}'
           value: http
           description: 'Use https only when a trusted TLS proxy fronts the Palworld REST API.'
+        - macro: '{$PALGAMEDATAINTERVAL}'
+          value: 15s
+          description: 'Game-data polling interval; increase it if Zabbix history capacity is insufficient.'
         - macro: '{$PALAPIIP}'
           description: 'Palworld REST API address reachable from Zabbix.'
         - macro: '{$PALAPIKEY}'
