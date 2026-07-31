@@ -6,7 +6,7 @@ from django.conf import settings
 from django.db import connection
 from django.db.models import Avg, Count, Max, Min, Prefetch
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
@@ -29,12 +29,6 @@ RANGES = {
     "7d": timedelta(days=7),
     "30d": timedelta(days=30),
     "90d": timedelta(days=90),
-}
-TRAIL_RANGES = {
-    "1h": timedelta(hours=1),
-    "6h": timedelta(hours=6),
-    "24h": timedelta(hours=24),
-    "7d": timedelta(days=7),
 }
 # Cadence-aware adaptation of RNZ01's FPS health model; see NOTICE.md.
 FPS_HEALTH_WINDOW = timedelta(hours=1)
@@ -286,12 +280,6 @@ def terms_page(request):
             privacy_contact_email=settings.PRIVACY_CONTACT_EMAIL,
         ),
     )
-
-
-@require_GET
-@never_cache
-def map_page(request):
-    return render(request, "dashboard/map.html", _shared_context(request, active_nav="map"))
 
 
 @require_GET
@@ -746,63 +734,6 @@ def players(request):
     )
 
 
-@require_GET
-@never_cache
-def player_trail(request, public_id):
-    range_name = request.GET.get("range", "6h")
-    duration = TRAIL_RANGES.get(range_name)
-    if not duration:
-        return JsonResponse({"error": "unsupported range"}, status=400)
-
-    player = get_object_or_404(Player, public_id=public_id)
-    since = timezone.now() - duration
-    queryset = PositionSample.objects.filter(
-        player=player, source_clock__gte=since
-    ).order_by("source_clock")
-    rows = _sample_queryset(
-        queryset,
-        ("source_clock", "x", "y", "ping", "level", "building_count"),
-        max_points=1000,
-    )
-    return JsonResponse(
-        {
-            "player": {"id": player.public_id, "name": player.name},
-            "range": range_name,
-            "positions": [
-                {
-                    "timestamp": _iso(row[0]),
-                    "x": row[1],
-                    "y": row[2],
-                    "ping": row[3],
-                    "level": row[4],
-                    "building_count": row[5],
-                }
-                for row in rows
-            ],
-        }
-    )
-
-
-MAP_BOUNDS = {
-    "palpagos": {
-        "min_x": -1099400,
-        "max_x": 349400,
-        "min_y": -724400,
-        "max_y": 724400,
-    },
-    "world-tree": {
-        "min_x": 347351.5,
-        "max_x": 689148.5,
-        "min_y": -818197,
-        "max_y": -476400,
-    },
-}
-MAP_HEATMAP_GRID = 48
-MAP_HEATMAP_RANGES = {
-    "6h": timedelta(hours=6),
-    "24h": timedelta(hours=24),
-    "7d": timedelta(days=7),
-}
 ACTIVITY_RANGES = {
     "7d": timedelta(days=7),
     "30d": timedelta(days=30),
@@ -972,57 +903,6 @@ def activity_heatmap(request):
         "peak_day": WEEKDAY_LABELS[peak_day] if peak_day is not None else None,
         "session_count": session_count,
         "total_minutes": round(sum(hour_totals), 1),
-    })
-
-
-@require_GET
-@never_cache
-def map_heatmap(request):
-    range_name = request.GET.get("range", "24h")
-    duration = MAP_HEATMAP_RANGES.get(range_name)
-    if not duration:
-        return JsonResponse({"error": "unsupported range"}, status=400)
-    map_id = request.GET.get("map", "palpagos")
-    bounds = MAP_BOUNDS.get(map_id)
-    if not bounds:
-        return JsonResponse({"error": "unsupported map"}, status=400)
-    now = timezone.now()
-    since = now - duration
-    min_x = bounds["min_x"]
-    max_x = bounds["max_x"]
-    min_y = bounds["min_y"]
-    max_y = bounds["max_y"]
-    span_x = max_x - min_x
-    span_y = max_y - min_y
-    grid = MAP_HEATMAP_GRID
-    cells = {}
-    queryset = PositionSample.objects.filter(
-        source_clock__gte=since,
-        source_clock__lte=now,
-        x__gte=min_x,
-        x__lte=max_x,
-        y__gte=min_y,
-        y__lte=max_y,
-    ).values_list("x", "y").iterator(chunk_size=2000)
-    for x, y in queryset:
-        if x == 0 and y == 0:
-            continue
-        gx = min(grid - 1, int((y - min_y) / span_y * grid))
-        gy = min(grid - 1, int((max_x - x) / span_x * grid))
-        if 0 <= gx < grid and 0 <= gy < grid:
-            cells[(gx, gy)] = cells.get((gx, gy), 0) + 1
-    return JsonResponse({
-        "generated_at": _iso(now),
-        "range": range_name,
-        "map": map_id,
-        "bounds": bounds,
-        "grid_size": grid,
-        "cells": [
-            {"x": key[0], "y": key[1], "count": value}
-            for key, value in sorted(cells.items())
-        ],
-        "max_count": max(cells.values()) if cells else 0,
-        "total_samples": sum(cells.values()),
     })
 
 

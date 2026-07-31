@@ -170,11 +170,13 @@ GET /api/v1/history?range=24h
 GET /api/v1/players
 GET /api/v1/leaderboard
 GET /api/v1/activity/heatmap?range=30d
-GET /api/v1/map/heatmap?range=24h&map=palpagos
 GET /api/v1/world/objects
+GET /api/v1/live-map/config
+GET /api/v1/live-map/catalogue?v=<sha256>
+GET /api/v1/live-map/players
+GET /api/v1/live-map/objects
 GET /api/v1/telemetry/stats
 GET /api/v1/world/diff
-GET /api/v1/player/<public_id>/trail?range=6h
 GET /api/v1/guild/data
 ```
 

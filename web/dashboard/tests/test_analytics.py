@@ -1,5 +1,4 @@
 from datetime import timedelta
-import json
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -96,41 +95,6 @@ class AnalyticsApiTests(TestCase):
             400,
         )
 
-    def test_map_heatmap_returns_cells(self):
-        response = self.client.get(reverse("map-heatmap") + "?range=24h")
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["grid_size"], 48)
-        self.assertGreater(len(payload["cells"]), 0)
-        self.assertGreater(payload["max_count"], 0)
-        self.assertEqual(payload["map"], "palpagos")
-        self.assertEqual(payload["cells"], [{"x": 24, "y": 11, "count": 1}])
-        self.assertEqual(payload["bounds"]["min_x"], -1099400)
-        self.assertEqual(
-            self.client.get(reverse("map-heatmap") + "?range=1y").status_code,
-            400,
-        )
-        self.assertEqual(
-            self.client.get(reverse("map-heatmap") + "?map=unknown").status_code,
-            400,
-        )
-
-    def test_map_heatmap_supports_the_world_tree_projection(self):
-        PositionSample.objects.create(
-            player=self.player,
-            source_clock=self.now - timedelta(seconds=1),
-            x=500000,
-            y=-700000,
-        )
-
-        payload = self.client.get(
-            reverse("map-heatmap") + "?range=24h&map=world-tree"
-        ).json()
-
-        self.assertEqual(payload["map"], "world-tree")
-        self.assertEqual(payload["bounds"]["max_x"], 689148.5)
-        self.assertEqual(payload["cells"], [{"x": 16, "y": 26, "count": 1}])
-
     def test_telemetry_stats_reports_uptime_and_stability(self):
         response = self.client.get(reverse("telemetry-stats"))
         self.assertEqual(response.status_code, 200)
@@ -195,44 +159,3 @@ class NewPageTests(TestCase):
         response = self.client.get(reverse("home"))
         self.assertContains(response, reverse("leaderboard"))
         self.assertContains(response, reverse("peak-hours"))
-
-    def test_map_page_has_external_links_and_heatmap_controls(self):
-        response = self.client.get(reverse("map"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "mapgenie.io")
-        self.assertContains(response, "palworld.gg")
-        self.assertContains(response, "showHeatmap")
-        self.assertContains(response, "fullscreenMap")
-        self.assertContains(response, 'data-map-region="world-tree"')
-        self.assertContains(response, "mapTouchActivate")
-        self.assertContains(response, "palworld-map-world-tree-2048")
-        self.assertContains(response, "mapExplorerToggle")
-        self.assertContains(response, "mapSearch")
-        self.assertContains(response, "mapFilterGroups")
-        self.assertContains(response, "showMapPoints")
-
-    def test_map_catalogue_contains_all_v1_categories_for_both_regions(self):
-        path = (
-            settings.BASE_DIR
-            / "dashboard"
-            / "static"
-            / "dashboard"
-            / "data"
-            / "map-points.json"
-        )
-        data = json.loads(path.read_text())
-
-        self.assertEqual(data["source"]["game_version"], "1.0.1.100619")
-        self.assertEqual(data["schema_version"], 3)
-        self.assertEqual(data["total_count"], 1146)
-        self.assertEqual(len(data["category_counts"]), 11)
-        self.assertEqual(len(data["maps"]["palpagos"]["points"]), 1064)
-        self.assertEqual(len(data["maps"]["world-tree"]["points"]), 82)
-        names = [
-            point["name"]
-            for map_data in data["maps"].values()
-            for point in map_data["points"]
-        ]
-        self.assertNotIn("Statua dell'Aquila 1", names)
-        self.assertIn("Chillet", names)
-        self.assertIn("Arena Merchant", names)

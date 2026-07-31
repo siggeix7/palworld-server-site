@@ -1,0 +1,149 @@
+import { ALL_KINDS, type ItemKind, type PlayerStatus } from '../types'
+
+const FILTER_PREFERENCES_KEY = 'palworld-live-map.filters.v1'
+const ZOOM_PREFERENCES_KEY = 'palworld-live-map.zoom.v1'
+const LANDMARK_KINDS_VERSION = 2
+const DEFAULT_FILTER_KINDS_VERSION = 3
+const FILTER_KINDS_VERSION = 6
+const KINDS_ADDED_IN_VERSION_2: ItemKind[] = ['alpha-pals', 'bosses']
+const KINDS_ADDED_IN_VERSION_4: ItemKind[] = [
+  'bounties',
+  'oil-rigs',
+  'watchtowers',
+  'waypoints',
+  'dungeon-entrances',
+  'effigies',
+  'journals',
+  'ancient-shrine-pickups',
+  'npc-locations'
+]
+const KINDS_AVAILABLE_IN_VERSION_2: ItemKind[] = [
+  'players',
+  'bases',
+  'workers',
+  'companions',
+  'wild-pals',
+  ...KINDS_ADDED_IN_VERSION_2,
+  'npcs'
+]
+
+const RETIRED_FILTER_KINDS = new Set<ItemKind>(['companions'])
+
+export const FILTERABLE_KINDS = ALL_KINDS.filter((kind) => !RETIRED_FILTER_KINDS.has(kind))
+export const DEFAULT_ENABLED_KINDS = ['players', 'bases', 'workers'] as const satisfies readonly ItemKind[]
+export const DEFAULT_ENABLED_PLAYER_STATUSES = ['online', 'offline'] as const satisfies readonly PlayerStatus[]
+
+export interface FilterPreferences {
+  activeLayerId?: string
+  enabledKinds?: Set<ItemKind>
+  enabledPlayerStatuses?: Set<PlayerStatus>
+  hiddenIds?: Set<string>
+  // Kinds that have already been auto-revealed once. Persisted so a category the
+  // user later hides is not re-enabled the next time it has content.
+  seenKinds?: Set<ItemKind>
+}
+
+function isItemKind(value: unknown): value is ItemKind {
+  return typeof value === 'string' && ALL_KINDS.includes(value as ItemKind)
+}
+
+function isPlayerStatus(value: unknown): value is PlayerStatus {
+  return value === 'online' || value === 'offline'
+}
+
+export function loadFilterPreferences(): FilterPreferences {
+  try {
+    const raw = window.localStorage.getItem(FILTER_PREFERENCES_KEY)
+    if (!raw)
+      return {
+        enabledKinds: new Set(DEFAULT_ENABLED_KINDS),
+        enabledPlayerStatuses: new Set(DEFAULT_ENABLED_PLAYER_STATUSES)
+      }
+    const value = JSON.parse(raw) as Record<string, unknown>
+    let enabledKinds = Array.isArray(value.enabledKinds) ? new Set(value.enabledKinds.filter(isItemKind)) : undefined
+    const kindsVersion = typeof value.kindsVersion === 'number' ? value.kindsVersion : 1
+    if (enabledKinds && kindsVersion < LANDMARK_KINDS_VERSION) {
+      for (const kind of KINDS_ADDED_IN_VERSION_2) enabledKinds.add(kind)
+    }
+    if (enabledKinds && kindsVersion < FILTER_KINDS_VERSION) {
+      for (const kind of KINDS_ADDED_IN_VERSION_4) enabledKinds.add(kind)
+    }
+    if (
+      enabledKinds &&
+      kindsVersion < DEFAULT_FILTER_KINDS_VERSION &&
+      KINDS_AVAILABLE_IN_VERSION_2.every((kind) => enabledKinds?.has(kind))
+    ) {
+      enabledKinds = new Set(DEFAULT_ENABLED_KINDS)
+    }
+    if (enabledKinds) {
+      enabledKinds = new Set([...enabledKinds].filter((kind) => !RETIRED_FILTER_KINDS.has(kind)))
+    }
+    return {
+      activeLayerId: typeof value.activeLayerId === 'string' ? value.activeLayerId : undefined,
+      enabledKinds,
+      enabledPlayerStatuses: Array.isArray(value.enabledPlayerStatuses)
+        ? new Set(value.enabledPlayerStatuses.filter(isPlayerStatus))
+        : new Set(DEFAULT_ENABLED_PLAYER_STATUSES),
+      seenKinds: Array.isArray(value.seenKinds) ? new Set(value.seenKinds.filter(isItemKind)) : undefined,
+      hiddenIds: Array.isArray(value.hiddenIds)
+        ? new Set(value.hiddenIds.filter((id): id is string => typeof id === 'string').slice(0, 20_000))
+        : undefined
+    }
+  } catch {
+    return {
+      enabledKinds: new Set(DEFAULT_ENABLED_KINDS),
+      enabledPlayerStatuses: new Set(DEFAULT_ENABLED_PLAYER_STATUSES)
+    }
+  }
+}
+
+export function saveFilterPreferences(
+  preferences: Required<Omit<FilterPreferences, 'seenKinds'>> & Pick<FilterPreferences, 'seenKinds'>
+) {
+  try {
+    window.localStorage.setItem(
+      FILTER_PREFERENCES_KEY,
+      JSON.stringify({
+        activeLayerId: preferences.activeLayerId,
+        kindsVersion: FILTER_KINDS_VERSION,
+        enabledKinds: [...preferences.enabledKinds].filter((kind) => !RETIRED_FILTER_KINDS.has(kind)),
+        enabledPlayerStatuses: [...preferences.enabledPlayerStatuses],
+        seenKinds: [...(preferences.seenKinds ?? [])],
+        hiddenIds: [...preferences.hiddenIds].slice(0, 20_000)
+      })
+    )
+  } catch {
+    // Browsers may deny storage in private or restricted contexts.
+  }
+}
+
+function loadZoomPreferences(): Record<string, number> {
+  try {
+    const raw = window.localStorage.getItem(ZOOM_PREFERENCES_KEY)
+    if (!raw) return {}
+    const value = JSON.parse(raw) as Record<string, unknown>
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        (entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= 1
+      )
+    )
+  } catch {
+    return {}
+  }
+}
+
+export function loadZoomRatio(layerId: string): number {
+  return loadZoomPreferences()[layerId] ?? 1
+}
+
+export function saveZoomRatio(layerId: string, ratio: number) {
+  if (!Number.isFinite(ratio) || ratio < 1) return
+  try {
+    window.localStorage.setItem(
+      ZOOM_PREFERENCES_KEY,
+      JSON.stringify({ ...loadZoomPreferences(), [layerId]: Number(ratio.toFixed(6)) })
+    )
+  } catch {
+    // Browsers may deny storage in private or restricted contexts.
+  }
+}

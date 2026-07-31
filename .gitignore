@@ -9,3 +9,5 @@ venv/
 *.tar
 .coverage
 htmlcov/
+web/live-map/node_modules/
+web/live-map/dist/

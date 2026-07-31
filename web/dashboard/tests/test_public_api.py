@@ -113,18 +113,13 @@ class PublicApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["players"][0]["location_available"])
 
-    def test_history_and_trail(self):
+    def test_history(self):
         response = self.client.get("/api/v1/history?range=24h")
         self.assertEqual(response.status_code, 200)
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
         self.assertEqual(len(response.json()["samples"]), 1)
         self.assertEqual(response.json()["fps_health"]["state"], "calibrating")
-        response = self.client.get("/api/v1/player/public-player-id/trail?range=6h")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("no-store", response.headers["Cache-Control"])
-        self.assertIn("private", response.headers["Cache-Control"])
-        self.assertEqual(response.json()["positions"][0]["x"], -100)
 
     def test_fps_health_uses_cadence_and_breaks_at_data_gaps(self):
         now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
@@ -367,10 +362,6 @@ class PublicApiTests(TestCase):
 
     def test_invalid_ranges_are_rejected(self):
         self.assertEqual(self.client.get("/api/v1/history?range=forever").status_code, 400)
-        self.assertEqual(
-            self.client.get("/api/v1/player/public-player-id/trail?range=forever").status_code,
-            400,
-        )
 
     def test_stale_player_snapshot_hides_locations(self):
         stale = datetime.now(tz=dt_timezone.utc) - timedelta(minutes=10)

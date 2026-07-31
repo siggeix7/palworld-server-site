@@ -12,11 +12,6 @@ Pinned upstream revision used for the 2026-07-20 integration:
 
 Adapted material and modifications:
 
-- `components/live-map.tsx`: coordinate projection, layer preference, cursor-
-  anchored zoom, edge-clamped pan, marker grouping and gap-free interaction
-  concepts were rewritten in vanilla JavaScript in
-  `web/dashboard/static/dashboard/js/site.js`. Pointer and keyboard support,
-  player trails and accessible cluster controls are local modifications.
 - `lib/player-avatar-colors.ts`: the 12-color palette was retained; random,
   browser-local assignment was replaced by a deterministic hash of the local
   HMAC-derived public player ID.
@@ -29,12 +24,6 @@ Adapted material and modifications:
   ingest sanitizer. Raw player/user IDs and IP addresses are still discarded.
 - `lib/theme-context.tsx`: theme names and accent palette were adapted to the
   existing Observatory CSS variables without React, Tailwind or Radix.
-- `public/palworld-map/full-map-native-8192.webp`: the Palpagos overview was
-  subsequently updated to the 8192x8192 Palworld 1.0 map distributed locally as
-  `web/dashboard/static/dashboard/images/palworld-map.webp`, SHA-256
-  `34f67e2e02a9c573d7c2c229207844407a852b7e016f9796b9603e0db3115a86`.
-  Its matching bounds are `[349400, 724400, -1099400, -724400]`. Local 2048
-  and 4096 WebP derivatives reduce transfer and decode cost on smaller screens.
 
 The public site exposes a condensed notice through
 `web/dashboard/static/dashboard/THIRD_PARTY_NOTICES.txt`.
@@ -46,8 +35,8 @@ integration.
 
 ## LukeHollandDev/palworld-live-map
 
-The Palworld 1.0.1 map manifest and static navigation catalogues were generated
-by the reproducible exporter documented at:
+The authenticated map embeds and adapts the MIT-licensed React interface and
+the Palworld 1.0.1 map/catalogue assets from:
 
 https://github.com/LukeHollandDev/palworld-live-map
 
@@ -57,45 +46,85 @@ Pinned upstream revision:
 
 Pinned game-data version: `1.0.1.100619`.
 
-- `assets/palworld/maps/world-tree.jpg`: native 8192x8192 World Tree overview,
-  source SHA-256
-  `77fee7b2bb90fa62f26eeb862396d54dbc8c7d2f0f5b12339c12585474f7c521`,
-  converted locally to WebP at
-  `web/dashboard/static/dashboard/images/palworld-map-world-tree.webp`,
-  SHA-256
-  `8a08427dc41f25189dbab4c8e15ad529c35b0e36b2901e426203a4ff5dd03ec2`.
-  Its matching bounds are `[689148.5, -476400, 347351.5, -818197]`. Local 2048
-  and 4096 WebP derivatives are served adaptively.
-- `assets/palworld/landmarks/manifest.json` and the `encounter-additions`,
-  `navigation`, `collectibles` and `npc-locations` catalogues: factual names,
-  coordinates, levels, descriptions and public rewards were minimized into
-  `web/dashboard/static/dashboard/data/map-points.json`. It contains 1,146
-  locations across 11 categories: 1,064 in Palpagos and 82 in the World Tree
-  region. Internal game IDs, object paths, instance IDs, state keys, class names,
-  icon paths and source objects are not included. Source IDs are replaced with
-  deterministic one-way hashes. Output SHA-256:
-  `c3b747e3f1686952e1a871c6785779275ef087af07caab44db260afdf5cb02e6`.
-- `web/dashboard/management/commands/build_map_catalogue.py` is the local,
-  independently written minimizer. It validates the pinned source manifests,
-  hashes, counts, categories and map bounds before producing deterministic JSON.
-- Search, category filtering, marker details, viewport culling, grid clustering
-  and responsive explorer behavior in `site.js`, `site.css` and `map.html` were
-  implemented locally for the existing privacy-sanitized Django map after
-  reviewing the upstream React interface. No React or Go application code is
-  included.
+- `web/live-map/` contains the upstream React 19, TypeScript, Vite and Tailwind
+  client. Local changes point it at authenticated Django endpoints, add a return
+  link to the Observatory and produce deterministic bundle names. The complete
+  upstream MIT license is retained in `web/live-map/LICENSE`.
+- `web/dashboard/static/dashboard/live-map/maps/palpagos.jpg` and
+  `world-tree.jpg` are the original 8192x8192 upstream assets. Their SHA-256
+  hashes are respectively
+  `9961632d5c38a0a67fd18713fa63af0ac6f192e71fadeb5ba53ae696b8914dd1`
+  and `77fee7b2bb90fa62f26eeb862396d54dbc8c7d2f0f5b12339c12585474f7c521`.
+- `web/dashboard/data/live-map-catalogue.json` is the Django API projection of
+  the pinned upstream landmark datasets. It contains 1,146 locations across 11
+  categories, with internal game IDs, object paths, instance IDs, state keys,
+  class names, icon paths and source objects removed. Source IDs use the prior
+  deterministic one-way projection. Output SHA-256:
+  `74117867dc9444e48b568a3ab20d735bcab12ca962b6b678e9f986ba13ccfb6b`.
+- `web/dashboard/live_map.py` adapts only already-sanitized Django snapshots to
+  the upstream `PublicConfig`, `PlayerState`, `ObjectState` and
+  `WorldCatalogue` contracts. The browser never receives raw Palworld player,
+  trainer, guild or instance identifiers.
 - The `/v1/api/game-data` actor contract, active-state semantics, identity
-  deduplication, object priority and worker/base association were independently
-  reimplemented in Django. A dedicated collector retrieves the bounded upstream
-  envelope directly from Palworld; Django persists only sanitized fields,
-  opaque HMAC identifiers and aggregate diagnostics.
+  deduplication, object priority and worker/base association remain independently
+  implemented in Django. The collector persists only sanitized fields, opaque
+  HMAC identifiers and aggregate diagnostics.
 
-No Go, React or exporter source code from this project is included.
+No upstream Go server or exporter source code is included.
 
 ### Luke Holland MIT License
 
 MIT License
 
 Copyright (c) 2026 Luke Holland
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+### React and ReactDOM MIT License
+
+MIT License
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+### Tabler Icons MIT License
+
+MIT License
+
+Copyright (c) 2020-2026 Paweł Kuna
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

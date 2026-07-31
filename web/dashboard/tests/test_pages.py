@@ -164,6 +164,16 @@ class SectionPageTests(TestCase):
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse("login"), response["Location"])
 
+        for name in (
+            "live-map-config",
+            "live-map-catalogue",
+            "live-map-players",
+            "live-map-objects",
+        ):
+            with self.subTest(api=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 401)
+
     def test_admin_link_only_for_site_admins(self):
         response = self.client.get(reverse("home"))
         self.assertNotContains(response, reverse("members"))

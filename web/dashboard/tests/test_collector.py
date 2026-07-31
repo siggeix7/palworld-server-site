@@ -88,6 +88,18 @@ class PalworldClientTests(SimpleTestCase):
             with self.assertRaisesRegex(CollectorError, "deadline"):
                 client.fetch("info")
 
+    def test_normalizes_tls_and_connection_failures(self):
+        for error, code in (
+            (requests.exceptions.SSLError("certificate failed"), "tls"),
+            (requests.ConnectionError("connection refused"), "connection"),
+        ):
+            with self.subTest(code=code):
+                session = Session(Response({}))
+                session.get = mock.Mock(side_effect=error)
+                client = PalworldClient(session=session)
+                with self.assertRaisesRegex(CollectorError, code):
+                    client.fetch("info")
+
     def test_status_checks_the_rest_api_socket(self):
         connection = mock.Mock()
         create_connection = mock.Mock(return_value=connection)

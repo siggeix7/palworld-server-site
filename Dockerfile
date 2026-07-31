@@ -1,3 +1,13 @@
+FROM node:24-alpine AS live-map-build
+
+WORKDIR /build
+COPY web/live-map/package.json web/live-map/package-lock.json ./
+RUN npm ci
+COPY web/live-map/ ./
+RUN npm run check
+RUN npm test
+RUN npm run build
+
 FROM rockylinux/rockylinux:10
 
 ARG APP_VERSION=dev
@@ -27,6 +37,7 @@ RUN useradd --create-home --uid 1000 palworld-site \
     && chown -R palworld-site:palworld-site /data /app/staticfiles
 
 COPY . .
+COPY --from=live-map-build /build/dist/ ./web/dashboard/static/dashboard/live-map/
 RUN chmod +x /app/docker/entrypoint.sh \
     && DJANGO_SECRET_KEY=build-collectstatic-key \
        PUBLIC_SITE_URL=https://build.invalid \

@@ -119,7 +119,7 @@ class PalworldClient:
             status = exc.response.status_code if exc.response is not None else 0
             code = "auth" if status in {401, 403} else f"http_{status or 'error'}"
             raise CollectorError(code) from exc
-        except requests.SSLError as exc:
+        except requests.exceptions.SSLError as exc:
             raise CollectorError("tls") from exc
         except requests.ConnectionError as exc:
             raise CollectorError("connection") from exc

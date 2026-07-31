@@ -260,9 +260,9 @@ def _sanitize_status(value):
     return {"reachable": value in (1, 1.0, True, "1", "true", "up")}
 
 
-# Mirrors MAP_BOUNDS in management/commands/build_map_catalogue.py so live world
-# objects are projected onto the same Palpagos / World Tree regions. World Tree
-# is checked first because its bounds overlap a narrow edge of Palpagos.
+# Shared by the live-map adapters so live objects use the same Palpagos and
+# World Tree projections as the pinned upstream map assets. World Tree is
+# checked first because its bounds overlap a narrow edge of Palpagos.
 WORLD_MAP_BOUNDS = {
     "world-tree": {
         "min_x": 347351.5,

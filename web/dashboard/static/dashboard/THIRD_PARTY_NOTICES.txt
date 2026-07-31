@@ -4,24 +4,21 @@ RNZ01/palworld-server-dashboard
 https://github.com/RNZ01/palworld-server-dashboard
 Upstream revision: 588fa6390e0c5b6fe909e2c1fd3baddb86ef92c8
 
-This site adapts portions of the upstream map interaction, player palette and
-roster behavior, FPS health model, payload normalization, themes, static map
-projection and Palpagos overview. The implementations were modified for a read-only,
-privacy-sanitized Django architecture. Detailed source paths, changes,
-asset hashes and exclusions are recorded in the distributed NOTICE.md.
+This site adapts the player palette, roster behavior, FPS health model, payload
+normalization and themes for a read-only, privacy-sanitized Django architecture.
+Detailed source paths and changes are recorded in the distributed NOTICE.md.
 
 LukeHollandDev/palworld-live-map
 https://github.com/LukeHollandDev/palworld-live-map
 Upstream revision: 19f3e3f8e684481bde58fef6c76845f811d57614
 
-The World Tree overview bounds and a minimized catalogue of 1,146 static
-locations in 11 categories were generated from its reproducible Palworld 1.0.1
-asset export. Search, filtering, details, culling, clustering and responsive
-explorer behavior were implemented locally for the existing Django map after
-reviewing the upstream interface. No React, Go application or exporter code is
-included. Exact source/output hashes, bounds and data counts are in NOTICE.md.
-The minimized JSON output SHA-256 is
-c3b747e3f1686952e1a871c6785779275ef087af07caab44db260afdf5cb02e6.
+The site embeds the upstream React map interface, original 8192x8192 Palpagos
+and World Tree images, and a minimized projection of 1,146 static locations in
+11 categories. The client was adapted to authenticated Django APIs backed only
+by sanitized snapshots. No upstream Go server or exporter source is included.
+Exact source/output hashes, modifications and data counts are in NOTICE.md.
+The projected catalogue SHA-256 is
+74117867dc9444e48b568a3ab20d735bcab12ca962b6b678e9f986ba13ccfb6b.
 
 MIT License
 
@@ -44,6 +41,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+React and ReactDOM
+Copyright (c) Meta Platforms, Inc. and affiliates.
+MIT License. Full license text: NOTICE.md.
+
+Tabler Icons
+Copyright (c) 2020-2026 Paweł Kuna
+MIT License. Full license text: NOTICE.md.
 
 MIT License
 

@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from dashboard import account_views, admin_views, views
+from dashboard import account_views, admin_views, live_map, views
 from dashboard.forms import CanonicalPasswordResetForm, SiteAuthenticationForm
 
 
@@ -81,7 +81,7 @@ urlpatterns = [
     ),
     path("", views.home, name="home"),
     path("termini/", views.terms_page, name="terms"),
-    path("mappa/", views.map_page, name="map"),
+    path("mappa/", live_map.page, name="map"),
     path("telemetria/", views.telemetry_page, name="telemetry"),
     path("giocatori/", views.players_page, name="players"),
     path("accesso/", views.access_page, name="access"),
@@ -97,11 +97,17 @@ urlpatterns = [
     path("api/v1/players", views.players, name="player-archive"),
     path("api/v1/leaderboard", views.leaderboard, name="leaderboard-api"),
     path("api/v1/activity/heatmap", views.activity_heatmap, name="activity-heatmap"),
-    path("api/v1/map/heatmap", views.map_heatmap, name="map-heatmap"),
     path("api/v1/world/objects", views.world_objects, name="world-objects"),
+    path("api/v1/live-map/config", live_map.config, name="live-map-config"),
+    path(
+        "api/v1/live-map/catalogue",
+        live_map.catalogue,
+        name="live-map-catalogue",
+    ),
+    path("api/v1/live-map/players", live_map.players, name="live-map-players"),
+    path("api/v1/live-map/objects", live_map.objects, name="live-map-objects"),
     path("api/v1/telemetry/stats", views.telemetry_stats, name="telemetry-stats"),
     path("api/v1/world/diff", views.world_diff, name="world-diff"),
-    path("api/v1/player/<str:public_id>/trail", views.player_trail, name="player-trail"),
     path("api/v1/palworld/players", admin_views.palworld_players, name="palworld-players"),
     path("api/v1/palworld/info", admin_views.palworld_info, name="palworld-info"),
     path("api/v1/guild/data", admin_views.guild_data, name="guild-data"),
