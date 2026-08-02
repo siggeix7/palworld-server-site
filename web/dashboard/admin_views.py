@@ -1,9 +1,13 @@
 from datetime import timedelta
+import hashlib
+import hmac
 import json
 import logging
 import re
 import secrets
+from urllib.parse import urljoin, urlsplit
 
+import requests
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -20,6 +24,11 @@ from .models import GuildSnapshot, LatestDataset
 logger = logging.getLogger(__name__)
 GUILD_SNAPSHOT_STALE_AFTER = timedelta(minutes=15)
 OPAQUE_ID_PATTERN = re.compile(r"[0-9a-f]{20}\Z")
+
+ADMIN_USERID_MAX_LENGTH = 64
+ADMIN_USERID_PATTERN = re.compile(r"^[A-Za-z0-9_:.\-]{1,64}\Z")
+ADMIN_ANNOUNCE_MAX_LENGTH = 500
+ADMIN_COMMAND_TIMEOUT = 10
 GUILD_FIELDS = {
     "group_id", "guild_name", "players", "base_count", "pal_count",
     "worker_count", "working_count", "problem_worker_count",
@@ -374,6 +383,250 @@ def palworld_info(request):
         "generated_at": dataset.source_clock.isoformat(),
         "stale": age > 35 * 60,
     })
+
+
+class PalworldCommandError(Exception):
+    """Raised when the Palworld REST API rejects a server command."""
+
+
+class PalworldCommandClient:
+    """Minimal synchronous client for admin server commands (announce/kick/ban/unban).
+
+    Unlike the collector's PalworldClient, this one is built per request and
+    does not stream or bound wall-clock time: admin actions are rare, return
+    small payloads, and rely on the per-phase connect/read timeouts below.
+    """
+
+    def __init__(self):
+        if not settings.PALWORLD_API_URL:
+            raise PalworldCommandError("PALWORLD_API_URL is not configured")
+        if not settings.PALWORLD_API_PASSWORD:
+            raise PalworldCommandError("PALWORLD_API_PASSWORD is not configured")
+        self.base_url = settings.PALWORLD_API_URL.rstrip("/") + "/"
+        parsed = urlsplit(self.base_url)
+        if parsed.scheme == "http" and not settings.PALWORLD_API_ALLOW_INSECURE_HTTP:
+            raise PalworldCommandError("insecure Palworld HTTP API is disabled")
+        self.session = requests.Session()
+        self.session.auth = (
+            settings.PALWORLD_API_USER,
+            settings.PALWORLD_API_PASSWORD,
+        )
+        self.session.trust_env = False
+        self.session.headers.update({"Accept": "application/json"})
+
+    def _request(self, method, path, json_body=None):
+        url = urljoin(self.base_url, path.lstrip("/"))
+        try:
+            response = self.session.request(
+                method,
+                url,
+                json=json_body,
+                timeout=(settings.PALWORLD_API_CONNECT_TIMEOUT, ADMIN_COMMAND_TIMEOUT),
+                verify=settings.PALWORLD_API_VERIFY_TLS,
+                allow_redirects=False,
+            )
+        except requests.RequestException as exc:
+            raise PalworldCommandError(f"Palworld unreachable: {exc}") from exc
+        if response.status_code in {401, 403}:
+            raise PalworldCommandError("Palworld authentication failed")
+        if response.status_code == 404:
+            raise PalworldCommandError("Palworld endpoint not found")
+        if response.status_code == 400:
+            detail = (response.text or "")[:200]
+            raise PalworldCommandError(f"Palworld rejected the request: {detail}")
+        if not response.ok:
+            raise PalworldCommandError(f"Palworld HTTP {response.status_code}")
+        try:
+            return response.json() if response.content else {}
+        except ValueError as exc:
+            raise PalworldCommandError("Palworld returned an invalid response") from exc
+
+    def players(self):
+        data = self._request("GET", "v1/api/players")
+        return data.get("players", []) if isinstance(data, dict) else []
+
+    def announce(self, message):
+        return self._request("POST", "v1/api/announce", {"message": message})
+
+    def kick(self, userid):
+        return self._request("POST", "v1/api/kick", {"userid": userid})
+
+    def ban(self, userid):
+        return self._request("POST", "v1/api/ban", {"userid": userid})
+
+    def unban(self, userid):
+        return self._request("POST", "v1/api/unban", {"userid": userid})
+
+    def close(self):
+        self.session.close()
+
+
+def _palworld_command(method, *args):
+    client = PalworldCommandClient()
+    try:
+        return getattr(client, method)(*args)
+    finally:
+        client.close()
+
+
+def _clean_command_user(value):
+    return "" if value is None else str(value).strip()
+
+
+def _valid_command_user(userid):
+    return bool(userid) and bool(ADMIN_USERID_PATTERN.fullmatch(userid))
+
+
+def _command_number(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _command_audit_id(userid):
+    return hmac.new(
+        settings.PLAYER_HASH_SECRET.encode("utf-8"),
+        f"admin-command:{userid}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:16]
+
+
+@require_GET
+@never_cache
+@login_required
+def palworld_admin_players(request):
+    _admin_required(request)
+    try:
+        players = _palworld_command("players")
+    except PalworldCommandError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+    minimal = []
+    for raw in players:
+        if not isinstance(raw, dict):
+            continue
+        userid = _clean_command_user(
+            raw.get("userId")
+            or raw.get("user_id")
+            or raw.get("playerId")
+            or raw.get("player_id")
+        )
+        if not _valid_command_user(userid):
+            continue
+        minimal.append({
+            "userId": userid,
+            "name": str(raw.get("name") or raw.get("nickname") or "").strip()[:128],
+            "level": _nonnegative_int(raw.get("level")),
+            "ping": round(_command_number(raw.get("ping")), 1),
+            "location_x": _command_number(raw.get("location_x") or raw.get("locationX")),
+            "location_y": _command_number(raw.get("location_y") or raw.get("locationY")),
+        })
+    return JsonResponse({"players": minimal})
+
+
+@require_POST
+@never_cache
+@login_required
+def palworld_announce(request):
+    _admin_required(request)
+    if request.content_type != "application/json":
+        return JsonResponse({"error": "Content-Type must be application/json"}, status=415)
+    try:
+        body = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({"error": "JSON body must be an object"}, status=400)
+    message = body.get("message")
+    if not isinstance(message, str):
+        return JsonResponse({"error": "message must be a string"}, status=400)
+    message = message.strip()
+    if not message:
+        return JsonResponse({"error": "message required"}, status=400)
+    if len(message) > ADMIN_ANNOUNCE_MAX_LENGTH:
+        return JsonResponse(
+            {"error": f"message exceeds {ADMIN_ANNOUNCE_MAX_LENGTH} characters"},
+            status=400,
+        )
+    if any(not char.isprintable() for char in message):
+        return JsonResponse({"error": "message contains control characters"}, status=400)
+    try:
+        _palworld_command("announce", message)
+    except PalworldCommandError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+    logger.info("Admin %s sent a %d-character announcement", request.user.username, len(message))
+    return JsonResponse({"ok": True})
+
+
+def _command_target_from_body(request):
+    if request.content_type != "application/json":
+        return None, JsonResponse(
+            {"error": "Content-Type must be application/json"}, status=415
+        )
+    try:
+        body = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None, JsonResponse({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return None, JsonResponse({"error": "JSON body must be an object"}, status=400)
+    raw_userid = body.get("userid")
+    if not isinstance(raw_userid, str):
+        return None, JsonResponse({"error": "userid must be a string"}, status=400)
+    userid = _clean_command_user(raw_userid)
+    if not _valid_command_user(userid):
+        return None, JsonResponse(
+            {"error": "userid required (alphanumeric, max 64 chars)"},
+            status=400,
+        )
+    return userid, None
+
+
+@require_POST
+@never_cache
+@login_required
+def palworld_kick(request):
+    _admin_required(request)
+    userid, error = _command_target_from_body(request)
+    if error is not None:
+        return error
+    try:
+        _palworld_command("kick", userid)
+    except PalworldCommandError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+    logger.info("Admin %s kicked target=%s", request.user.username, _command_audit_id(userid))
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+@never_cache
+@login_required
+def palworld_ban(request):
+    _admin_required(request)
+    userid, error = _command_target_from_body(request)
+    if error is not None:
+        return error
+    try:
+        _palworld_command("ban", userid)
+    except PalworldCommandError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+    logger.info("Admin %s banned target=%s", request.user.username, _command_audit_id(userid))
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+@never_cache
+@login_required
+def palworld_unban(request):
+    _admin_required(request)
+    userid, error = _command_target_from_body(request)
+    if error is not None:
+        return error
+    try:
+        _palworld_command("unban", userid)
+    except PalworldCommandError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+    logger.info("Admin %s unbanned target=%s", request.user.username, _command_audit_id(userid))
+    return JsonResponse({"ok": True})
 
 
 @require_POST

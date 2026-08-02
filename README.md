@@ -64,6 +64,9 @@ ogni scrittura nel database:
 
 - `userId`, `playerId`, `InstanceID`, `TrainerInstanceID`, `GuildID` e IP non
   vengono persistiti;
+- per kick/ban, il pannello admin legge i `userId` raw direttamente dalla REST
+  API Palworld solo on-demand; sono visibili esclusivamente agli admin e non
+  vengono salvati nel database;
 - gli identificativi necessari ai join diventano HMAC opachi con
   `PLAYER_HASH_SECRET`;
 - password, indirizzi e impostazioni non in allowlist vengono scartati;
@@ -186,6 +189,17 @@ GET /api/v1/live-map/objects
 GET /api/v1/telemetry/stats
 GET /api/v1/world/diff
 GET /api/v1/guild/data
+```
+
+Endpoint riservati agli utenti in `SITE_ADMIN_USERS` (sessione autenticata e
+CSRF obbligatorio per i POST):
+
+```text
+GET  /api/v1/palworld/admin/players
+POST /api/v1/palworld/announce
+POST /api/v1/palworld/kick
+POST /api/v1/palworld/ban
+POST /api/v1/palworld/unban
 ```
 
 Porta privata:

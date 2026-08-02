@@ -191,6 +191,8 @@ main { overflow-x: hidden; }
 
 .action-btn { min-height: 44px; padding: .4rem .8rem; border: 1px solid var(--line); color: var(--teal); background: transparent; cursor: pointer; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
 .action-btn:hover { border-color: var(--teal); }
+.action-btn:disabled { cursor: wait; opacity: .5; }
+.action-btn.small { min-height: 34px; padding: .3rem .55rem; font-size: .62rem; }
 .action-btn.warn { color: var(--gold); border-color: var(--gold); }
 .action-btn.warn:hover { background: rgba(229,184,92,.1); }
 .action-btn.danger { color: var(--coral); border-color: var(--coral); }
@@ -376,6 +378,19 @@ footer a { color: var(--teal); }
 .admin-alert.danger { border-left-color: var(--coral); }
 .admin-alert strong { font-family: Georgia, serif; font-size: 1.05rem; font-weight: 400; }
 .admin-alert span { color: var(--paper-dim); font-size: .72rem; }
+.command-card { margin-top: 1rem; padding: 1.25rem; border: 1px solid var(--line); background: var(--panel); }
+.command-card + .command-card { margin-top: .75rem; }
+.command-card h3 { margin: 0 0 1rem; font-family: Georgia, serif; font-size: 1.45rem; font-weight: 400; }
+.command-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.command-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: stretch; }
+.command-form input, .command-form textarea { width: 100%; min-height: 44px; padding: .65rem .75rem; resize: vertical; border: 1px solid var(--line); color: var(--paper); background: var(--ink-soft); font: inherit; }
+.command-form input:focus-visible, .command-form textarea:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.command-status { min-height: 1.4em; margin: .65rem 0 0; color: var(--teal); font-size: .72rem; }
+.command-status.error { color: var(--coral); }
+.actions-col { white-space: nowrap; }
+.actions-col .action-btn + .action-btn { margin-left: .4rem; }
+#commandPlayersTable td:first-child strong, #commandPlayersTable td:first-child code { display: block; }
+#commandPlayersTable td:first-child code { margin-top: .25rem; color: var(--paper-dim); font-size: .66rem; }
 
 .diagnostic-counts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); }
 .diagnostic-counts span { color: var(--paper-dim); text-transform: uppercase; letter-spacing: .12em; font-size: .63rem; }
@@ -481,6 +496,8 @@ footer a { color: var(--teal); }
   .readout-grid article { min-height: 116px; padding: 1rem; }
   .section-shell { padding: 4rem 0; }
   .section-heading, .section-heading.compact { grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+  .command-card-head { flex-direction: column; }
+  .command-form { grid-template-columns: 1fr; }
   .archive-heading { align-items: start; flex-direction: column; gap: .5rem; }
   .archive-controls { width: 100%; justify-content: flex-start; }
   .archive-controls > p { text-align: left; }

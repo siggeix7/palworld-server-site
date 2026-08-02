@@ -212,9 +212,24 @@ class DirectArchitectureTests(SimpleTestCase):
             private_settings,
         )
 
-    def test_admin_routes_do_not_proxy_server_commands(self):
+    def test_admin_routes_proxy_server_commands_for_admins_only(self):
         urls = self.read("web/palworld_site/urls.py")
         admin_views = self.read("web/dashboard/admin_views.py")
-        for path in ("palworld/announce", "palworld/kick", "palworld/ban", "palworld/unban"):
-            self.assertNotIn(path, urls)
-        self.assertNotIn("requests.", admin_views)
+        for path in (
+            "palworld/announce",
+            "palworld/kick",
+            "palworld/ban",
+            "palworld/unban",
+            "palworld/admin/players",
+        ):
+            self.assertIn(path, urls)
+        self.assertIn("PalworldCommandClient", admin_views)
+        for view_name in (
+            "palworld_announce",
+            "palworld_kick",
+            "palworld_ban",
+            "palworld_unban",
+            "palworld_admin_players",
+        ):
+            self.assertIn(f"def {view_name}(", admin_views)
+            self.assertIn(f"_admin_required(request)", admin_views)

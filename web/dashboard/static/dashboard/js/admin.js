@@ -14,6 +14,16 @@
     info: $('#adminServerInfo'),
     alerts: $('#saveAlerts'),
     alertsUpdated: $('#saveAlertsUpdated'),
+    commandTable: $('#commandPlayersTable'),
+    commandStatus: $('#commandPlayersStatus'),
+    commandRefresh: $('#refreshCommandPlayers'),
+    commandNotice: $('#commandNotice'),
+    announceForm: $('#announceForm'),
+    announceMessage: $('#announceMessage'),
+    announceStatus: $('#announceStatus'),
+    unbanForm: $('#unbanForm'),
+    unbanUserid: $('#unbanUserid'),
+    unbanStatus: $('#unbanStatus'),
   }
 
   function setText(el, v) { if (el && el.textContent !== String(v)) el.textContent = String(v) }
@@ -206,6 +216,151 @@
     }, 60000)
   }
 
+  function setCommandNotice(msg = '', error = false) {
+    if (!elements.commandNotice) return
+    setText(elements.commandNotice, msg)
+    elements.commandNotice.hidden = !msg
+    elements.commandNotice.classList.toggle('error', error)
+  }
+
+  function setStatus(el, msg = '', error = false) {
+    if (!el) return
+    setText(el, msg)
+    el.classList.toggle('error', error)
+  }
+
+  function renderCommandPlayers(players) {
+    if (!elements.commandTable) return
+    elements.commandTable.replaceChildren()
+    if (!players.length) {
+      const row = document.createElement('tr')
+      const cell = document.createElement('td')
+      cell.colSpan = 5
+      cell.className = 'empty-cell'
+      cell.textContent = 'Nessun giocatore online.'
+      row.appendChild(cell)
+      elements.commandTable.appendChild(row)
+      return
+    }
+    for (const p of players) {
+      const row = document.createElement('tr')
+      const name = document.createElement('td')
+      const strong = document.createElement('strong')
+      strong.textContent = p.name || '?'
+      const userid = document.createElement('code')
+      userid.textContent = p.userId
+      name.append(strong, userid)
+      const level = document.createElement('td')
+      level.textContent = formatNumber(p.level)
+      const ping = document.createElement('td')
+      ping.textContent = `${formatNumber(p.ping, 1)} ms`
+      const position = document.createElement('td')
+      position.textContent = `X ${formatNumber(p.location_x)} / Y ${formatNumber(p.location_y)}`
+      const actions = document.createElement('td')
+      actions.className = 'actions-col'
+      const kickBtn = document.createElement('button')
+      kickBtn.type = 'button'
+      kickBtn.className = 'action-btn small'
+      kickBtn.textContent = 'Kick'
+      kickBtn.dataset.userid = p.userId
+      kickBtn.dataset.action = 'kick'
+      const banBtn = document.createElement('button')
+      banBtn.type = 'button'
+      banBtn.className = 'action-btn small danger'
+      banBtn.textContent = 'Ban'
+      banBtn.dataset.userid = p.userId
+      banBtn.dataset.action = 'ban'
+      actions.append(kickBtn, banBtn)
+      row.append(name, level, ping, position, actions)
+      elements.commandTable.appendChild(row)
+    }
+  }
+
+  async function loadCommandPlayers() {
+    setStatus(elements.commandStatus, 'Caricamento...')
+    setCommandNotice()
+    try {
+      const data = await requestJson('/api/v1/palworld/admin/players', 'command-players')
+      renderCommandPlayers(data.players || [])
+      setStatus(elements.commandStatus, `${formatNumber((data.players || []).length)} online`)
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      setStatus(elements.commandStatus, 'Non disponibile', true)
+      setCommandNotice(error.message || 'Snapshot Palworld non disponibile.', true)
+    }
+  }
+
+  async function runPlayerAction(action, userid, row) {
+    const url = action === 'kick' ? '/api/v1/palworld/kick' : '/api/v1/palworld/ban'
+    const playerName = row?.querySelector('strong')?.textContent || userid
+    if (!window.confirm(`Confermi ${action === 'kick' ? 'il kick' : 'il ban'} di ${playerName} (${userid})?`)) return
+    const rowButtons = row ? [...row.querySelectorAll('button')] : []
+    rowButtons.forEach((button) => { button.disabled = true })
+    const label = action === 'kick' ? 'Kick in corso...' : 'Ban in corso...'
+    setStatus(elements.commandStatus, label)
+    try {
+      await requestJson(url, `cmd-${action}-${userid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userid }),
+      })
+      setStatus(elements.commandStatus, action === 'kick' ? 'Giocatore espulso.' : 'Giocatore bannato.')
+      if (row) row.remove()
+      const remaining = elements.commandTable?.querySelectorAll('tr').length || 0
+      if (!remaining) renderCommandPlayers([])
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      rowButtons.forEach((button) => { button.disabled = false })
+      setStatus(elements.commandStatus, error.message || 'Azione non riuscita', true)
+    }
+  }
+
+  async function handleAnnounceSubmit(event) {
+    event.preventDefault()
+    const message = (elements.announceMessage?.value || '').trim()
+    if (!message) return
+    const button = elements.announceForm?.querySelector('button[type="submit"]')
+    if (button) button.disabled = true
+    setStatus(elements.announceStatus, 'Invio in corso...')
+    try {
+      await requestJson('/api/v1/palworld/announce', 'announce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      })
+      setStatus(elements.announceStatus, 'Annuncio inviato.')
+      elements.announceForm.reset()
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      setStatus(elements.announceStatus, error.message || 'Annuncio non riuscito', true)
+    } finally {
+      if (button) button.disabled = false
+    }
+  }
+
+  async function handleUnbanSubmit(event) {
+    event.preventDefault()
+    const userid = (elements.unbanUserid?.value || '').trim()
+    if (!userid) return
+    const button = elements.unbanForm?.querySelector('button[type="submit"]')
+    if (button) button.disabled = true
+    setStatus(elements.unbanStatus, 'Revoca in corso...')
+    try {
+      await requestJson('/api/v1/palworld/unban', 'unban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userid }),
+      })
+      setStatus(elements.unbanStatus, `Ban revocato per ${userid}.`)
+      elements.unbanForm.reset()
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      setStatus(elements.unbanStatus, error.message || 'Revoca non riuscita', true)
+    } finally {
+      if (button) button.disabled = false
+    }
+  }
+
   function initializeTheme() {
     try {
       const stored = window.localStorage.getItem('observatory.theme') || 'observatory'
@@ -217,6 +372,14 @@
     initializeTheme()
     elements.refresh?.addEventListener('click', loadPlayers)
     elements.refreshInfo?.addEventListener('click', loadInfo)
+    elements.commandRefresh?.addEventListener('click', loadCommandPlayers)
+    elements.announceForm?.addEventListener('submit', handleAnnounceSubmit)
+    elements.unbanForm?.addEventListener('submit', handleUnbanSubmit)
+    elements.commandTable?.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-action][data-userid]')
+      if (!button || !elements.commandTable.contains(button)) return
+      runPlayerAction(button.dataset.action, button.dataset.userid, button.closest('tr'))
+    })
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) return
       startPolling()
@@ -225,6 +388,7 @@
     })
     startPolling()
     loadInfo()
+    loadCommandPlayers()
     scheduleInfoPoll()
     loadAlerts().then(scheduleAlertPoll)
   }

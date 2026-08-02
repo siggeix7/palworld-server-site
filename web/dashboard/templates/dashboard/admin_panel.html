@@ -48,6 +48,50 @@
   </div>
   <dl class="server-profile-grid" id="adminServerInfo"><div><dt>Stato</dt><dd>In attesa</dd></div></dl>
 </section>
+
+<section class="section-shell" aria-labelledby="serverCommandsTitle">
+  <div class="section-heading">
+    <div><p class="eyebrow">Solo amministratori</p><h2 id="serverCommandsTitle">Comandi server</h2></div>
+    <p class="section-hint">Le azioni vengono inoltrate direttamente alle REST API Palworld e registrate nel log. I UserID raw sono visibili solo qui e non vengono persistiti.</p>
+  </div>
+
+  <div class="command-card">
+    <h3>Annuncio in chat</h3>
+    <form id="announceForm" class="command-form" autocomplete="off">
+      <label class="sr-only" for="announceMessage">Messaggio</label>
+      <textarea id="announceMessage" rows="2" maxlength="500" placeholder="Messaggio broadcast a tutti i giocatori online (max 500 caratteri)" required></textarea>
+      <button type="submit" class="action-btn">Invia annuncio</button>
+    </form>
+    <p class="command-status" id="announceStatus" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="command-card">
+    <div class="command-card-head">
+      <h3>Giocatori online</h3>
+      <div class="archive-controls">
+        <button type="button" id="refreshCommandPlayers" class="action-btn">Aggiorna</button>
+        <p id="commandPlayersStatus" role="status">In attesa del server Palworld.</p>
+      </div>
+    </div>
+    <div class="data-notice" id="commandNotice" role="status" aria-live="polite" hidden></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Giocatore</th><th>Livello</th><th>Ping</th><th>Coordinate</th><th class="actions-col">Azioni</th></tr></thead>
+        <tbody id="commandPlayersTable"><tr><td colspan="5" class="empty-cell">Premi Aggiorna per elencare i giocatori online.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="command-card">
+    <h3>Revoca ban</h3>
+    <form id="unbanForm" class="command-form" autocomplete="off">
+      <label class="sr-only" for="unbanUserid">UserID</label>
+      <input id="unbanUserid" type="text" maxlength="64" placeholder="UserID del giocatore bannato" required>
+      <button type="submit" class="action-btn">Revoca ban</button>
+    </form>
+    <p class="command-status" id="unbanStatus" role="status" aria-live="polite"></p>
+  </div>
+</section>
 {% endblock %}
 
 {% block page_scripts %}
