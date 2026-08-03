@@ -22,6 +22,8 @@ class PlayerDetailTests(TestCase):
             last_seen=now - timedelta(minutes=5),
             level=50,
             building_count=10,
+            ip_address="192.0.2.44",
+            ip_observed_at=now - timedelta(minutes=5),
             minutes_lifetime=240,
             session_count_lifetime=2,
             longest_session_minutes=90,
@@ -69,6 +71,8 @@ class PlayerDetailTests(TestCase):
         self.assertTrue(player["online"])
         self.assertGreater(player["current_session"], 0)
         self.assertEqual(player["minutes_lifetime"], 240)
+        self.assertNotIn("ip", player)
+        self.assertNotIn("192.0.2.44", response.content.decode())
 
     def test_api_returns_sessions_events_and_ping(self):
         payload = self.client.get(f"/api/v1/player/{self.PUBLIC_ID}").json()

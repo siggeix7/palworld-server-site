@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import ipaddress
 import json
 import math
 from datetime import timedelta
@@ -94,6 +95,18 @@ def _clean_text(value, limit=128):
     text = "" if value is None else str(value)
     text = "".join(char for char in text if char.isprintable()).strip()
     return text[:limit]
+
+
+def _clean_ip(value):
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    if not value:
+        return ""
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return ""
 
 
 def _number(value, default=0.0):
@@ -224,6 +237,7 @@ def _sanitize_players(value):
     # Field aliases follow RNZ01's payload normalizer; raw IDs remain HMAC inputs only.
     # Adapted from lib/palworld.ts at upstream commit 588fa639; see NOTICE.md.
     players = []
+    player_ip_candidates = {}
     for raw in raw_players:
         name = _clean_text(raw.get("name") or raw.get("nickname"), 128)
         if not name:
@@ -254,8 +268,18 @@ def _sanitize_players(value):
                 "building_count": _integer(_first_present(raw, "building_count", "buildingCount")),
             }
         )
+        ip_address = _clean_ip(raw.get("ip"))
+        if ip_address:
+            player_ip_candidates.setdefault(public_id, set()).add(ip_address)
     players.sort(key=lambda player: player["name"].casefold())
-    return {"players": players}
+    return {
+        "players": players,
+        "_player_ips": {
+            public_id: next(iter(addresses))
+            for public_id, addresses in player_ip_candidates.items()
+            if len(addresses) == 1
+        },
+    }
 
 
 def _sanitize_status(value):
@@ -499,6 +523,36 @@ def _sanitize_game_data(value):
             continue
         player_id_map[instance_id] = list(dict.fromkeys(public_ids))
 
+    player_ip_candidates = {}
+    for actor in actor_data:
+        if not isinstance(actor, dict):
+            continue
+        if (
+            _classify_world_actor(actor) != "players"
+            or not _is_active_value(actor.get("IsActive"))
+        ):
+            continue
+        ip_address = _clean_ip(actor.get("ip"))
+        if not ip_address:
+            continue
+        public_ids = []
+        user_id = actor.get("userid")
+        canonical_user_id = _canonical_external_id(user_id)
+        if canonical_user_id and player_user_counts.get(canonical_user_id) == 1:
+            public_ids.extend((
+                _player_id({"userId": user_id}),
+                _player_id({"userId": canonical_user_id}),
+            ))
+        player_id = _player_id_from_instance(actor.get("InstanceID"))
+        if player_id and player_id_counts.get(player_id) == 1:
+            raw_player_id = str(actor.get("InstanceID")).strip().split(":", 1)[0].strip()
+            public_ids.extend((
+                _player_id({"playerId": raw_player_id}),
+                _player_id({"playerId": player_id}),
+            ))
+        for public_id in set(public_ids):
+            player_ip_candidates.setdefault(public_id, set()).add(ip_address)
+
     candidates = []
     identity_counts = {}
     for actor in actor_data:
@@ -643,6 +697,11 @@ def _sanitize_game_data(value):
         "kind_counts": kind_counts,
         "omitted_counts": omitted_counts,
         "truncated": supported_count > MAX_WORLD_OBJECTS,
+        "_player_ips": {
+            public_id: next(iter(addresses))
+            for public_id, addresses in player_ip_candidates.items()
+            if len(addresses) == 1
+        },
     }
 
 
@@ -670,6 +729,29 @@ def _save_metrics(payload, source_clock):
             "uptime": payload["uptime"],
         },
     )
+
+
+def _save_player_ips(player_ips, source_clock):
+    if not isinstance(player_ips, dict):
+        return
+    public_ids = [
+        public_id for public_id in player_ips
+        if isinstance(public_id, str) and public_id
+    ]
+    players = {
+        player.public_id: player
+        for player in Player.objects.filter(public_id__in=public_ids)
+    }
+    for public_id, value in player_ips.items():
+        player = players.get(public_id)
+        ip_address = _clean_ip(value)
+        if not player or not ip_address:
+            continue
+        if player.ip_observed_at and source_clock < player.ip_observed_at:
+            continue
+        player.ip_address = ip_address
+        player.ip_observed_at = source_clock
+        player.save(update_fields=["ip_address", "ip_observed_at"])
 
 
 def _save_players(payload, source_clock):
@@ -813,6 +895,7 @@ def store_dataset(dataset, value, source_clock=None):
     if source_clock > timezone.now() + timedelta(minutes=5):
         raise IngestError("dataset clock is too far in the future")
     payload = SANITIZERS[dataset](value)
+    player_ips = payload.pop("_player_ips", {}) if dataset in {"game_data", "players"} else {}
     current = (
         LatestDataset.objects.select_for_update()
         .filter(key=dataset)
@@ -829,6 +912,9 @@ def store_dataset(dataset, value, source_clock=None):
         _save_metrics(payload, source_clock)
     elif dataset == "players":
         _save_players(payload, source_clock)
+        _save_player_ips(player_ips, source_clock)
+    elif dataset == "game_data":
+        _save_player_ips(player_ips, source_clock)
     return True
 
 

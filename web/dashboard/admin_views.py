@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .accounts import is_site_admin
-from .models import GuildSnapshot, LatestDataset
+from .models import GuildSnapshot, LatestDataset, Player, PlayerSession
 
 logger = logging.getLogger(__name__)
 GUILD_SNAPSHOT_STALE_AFTER = timedelta(minutes=15)
@@ -365,6 +365,37 @@ def palworld_players(request):
         "players": (dataset.payload or {}).get("players", []),
         "generated_at": dataset.source_clock.isoformat(),
         "stale": age > settings.DATA_STALE_SECONDS,
+    })
+
+
+@require_GET
+@never_cache
+@login_required
+def player_ip_addresses(request):
+    _admin_required(request)
+    active_player_ids = set(
+        PlayerSession.objects.filter(ended_at__isnull=True).values_list(
+            "player_id", flat=True
+        )
+    )
+    players = Player.objects.filter(ip_address__isnull=False).order_by(
+        "-ip_observed_at", "name", "public_id"
+    )
+    return JsonResponse({
+        "players": [
+            {
+                "name": player.name,
+                "account_name": player.account_name,
+                "ip": player.ip_address,
+                "observed_at": (
+                    player.ip_observed_at.isoformat()
+                    if player.ip_observed_at else None
+                ),
+                "last_seen": player.last_seen.isoformat(),
+                "online": player.id in active_player_ids,
+            }
+            for player in players
+        ],
     })
 
 

@@ -111,6 +111,7 @@ urlpatterns = [
     path("api/v1/telemetry/stats", views.telemetry_stats, name="telemetry-stats"),
     path("api/v1/world/diff", views.world_diff, name="world-diff"),
     path("api/v1/palworld/players", admin_views.palworld_players, name="palworld-players"),
+    path("api/v1/admin/player-ips", admin_views.player_ip_addresses, name="admin-player-ips"),
     path("api/v1/palworld/info", admin_views.palworld_info, name="palworld-info"),
     path("api/v1/palworld/admin/players", admin_views.palworld_admin_players, name="palworld-admin-players"),
     path("api/v1/palworld/announce", admin_views.palworld_announce, name="palworld-announce"),

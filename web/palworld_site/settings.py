@@ -193,9 +193,9 @@ SITE_ADMIN_USERS = {
 }
 if not SITE_ADMIN_USERS:
     raise ImproperlyConfigured("SITE_ADMIN_USERS must contain at least one identifier")
-CURRENT_TERMS_VERSION = os.getenv("CURRENT_TERMS_VERSION", "2026-07-31")
+CURRENT_TERMS_VERSION = os.getenv("CURRENT_TERMS_VERSION", "2026-08-03")
 CURRENT_TERMS_EFFECTIVE_DATE = os.getenv(
-    "CURRENT_TERMS_EFFECTIVE_DATE", "31 luglio 2026"
+    "CURRENT_TERMS_EFFECTIVE_DATE", "3 agosto 2026"
 )
 PRIVACY_CONTROLLER_NAME = os.getenv(
     "PRIVACY_CONTROLLER_NAME", "Gestore di Palworld Server Observatory"

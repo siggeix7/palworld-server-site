@@ -6,7 +6,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from dashboard.models import LatestDataset
+from dashboard.models import LatestDataset, Player
 from dashboard.services import (
     _player_id,
     _player_id_from_instance,
@@ -41,6 +41,7 @@ class WorldObjectsTests(TestCase):
                 "GuildName": "Explorers",
                 "Class": "",
                 "level": 42,
+                "ip": "192.0.2.44",
                 "LocationX": -100000,
                 "LocationY": 50000,
                 "IsActive": "",
@@ -141,9 +142,20 @@ class WorldObjectsTests(TestCase):
         return {"ActorData": actors}
 
     def test_game_data_is_ingested_and_exposed_via_world_objects_endpoint(self):
+        now = timezone.now()
+        player = Player.objects.create(
+            public_id=_player_id({"userId": "test-user"}),
+            name="TestExplorer",
+            first_seen=now,
+            last_seen=now,
+        )
         self.assertTrue(store_dataset("game_data", self._game_data_payload()))
 
         dataset = LatestDataset.objects.get(key="game_data")
+        player.refresh_from_db()
+        self.assertEqual(player.ip_address, "192.0.2.44")
+        self.assertIsNotNone(player.ip_observed_at)
+        self.assertNotIn("_player_ips", dataset.payload)
         self.assertEqual(dataset.payload["count"], 5)
         self.assertEqual(dataset.payload["source_count"], 8)
         self.assertEqual(dataset.payload["kind_counts"], {
@@ -177,6 +189,7 @@ class WorldObjectsTests(TestCase):
         self.assertNotIn("TrainerInstanceID", serialized)
         self.assertNotIn("InstanceID", serialized)
         self.assertNotIn("userid", serialized)
+        self.assertNotIn("192.0.2.44", serialized)
         self.assertNotIn("GuildID", serialized)
         self.assertNotIn("Inactive Lamball", serialized)
 

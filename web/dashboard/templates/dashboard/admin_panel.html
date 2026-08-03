@@ -41,6 +41,24 @@
   </div>
 </section>
 
+<section class="section-shell" aria-labelledby="playerIpsTitle">
+  <div class="section-heading">
+    <div><p class="eyebrow">Solo amministratori</p><h2 id="playerIpsTitle">IP giocatori memorizzati</h2></div>
+    <div class="archive-controls">
+      <button type="button" id="refreshPlayerIps" class="action-btn">Aggiorna</button>
+      <p id="playerIpsStatus" role="status">Caricamento...</p>
+    </div>
+  </div>
+  <p class="section-hint">Mostra l'ultimo IP osservato dall'endpoint <code>game-data</code>. Questi dati non vengono inclusi nelle API pubbliche.</p>
+  <div class="data-notice" id="playerIpsNotice" role="status" aria-live="polite" hidden></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Giocatore</th><th>IP</th><th>Osservato</th><th>Ultimo accesso</th><th>Stato</th></tr></thead>
+      <tbody id="playerIpsTable"><tr><td colspan="5" class="empty-cell">Caricamento...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
 <section class="section-shell">
   <div class="section-heading">
     <div><p class="eyebrow">Informazioni server</p><h2>Stato Palworld</h2></div>

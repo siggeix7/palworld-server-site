@@ -10,6 +10,10 @@
     status: $('#playerListStatus'),
     refresh: $('#refreshPlayers'),
     notice: $('#adminNotice'),
+    playerIpsTable: $('#playerIpsTable'),
+    playerIpsStatus: $('#playerIpsStatus'),
+    playerIpsRefresh: $('#refreshPlayerIps'),
+    playerIpsNotice: $('#playerIpsNotice'),
     refreshInfo: $('#refreshInfo'),
     info: $('#adminServerInfo'),
     alerts: $('#saveAlerts'),
@@ -166,6 +170,68 @@
       setNotice('Snapshot Palworld temporaneamente non disponibile.', true)
       state.pollFailures = Math.min(state.pollFailures + 1, 4)
       return false
+    }
+  }
+
+  function setPlayerIpsNotice(msg = '', error = false) {
+    if (!elements.playerIpsNotice) return
+    setText(elements.playerIpsNotice, msg)
+    elements.playerIpsNotice.hidden = !msg
+    elements.playerIpsNotice.classList.toggle('error', error)
+  }
+
+  function renderPlayerIps(players) {
+    if (!elements.playerIpsTable) return
+    elements.playerIpsTable.replaceChildren()
+    if (!players.length) {
+      const row = document.createElement('tr')
+      const cell = document.createElement('td')
+      cell.colSpan = 5
+      cell.className = 'empty-cell'
+      cell.textContent = 'Nessun IP memorizzato.'
+      row.appendChild(cell)
+      elements.playerIpsTable.appendChild(row)
+      return
+    }
+    for (const player of players) {
+      const row = document.createElement('tr')
+      const name = document.createElement('td')
+      const strong = document.createElement('strong')
+      strong.textContent = player.name || '?'
+      name.appendChild(strong)
+      if (player.account_name) {
+        const account = document.createElement('small')
+        account.textContent = player.account_name
+        name.appendChild(account)
+      }
+      const ip = document.createElement('td')
+      const code = document.createElement('code')
+      code.textContent = player.ip || '--'
+      ip.appendChild(code)
+      const observed = document.createElement('td')
+      observed.textContent = formatDate(player.observed_at)
+      const lastSeen = document.createElement('td')
+      lastSeen.textContent = formatDate(player.last_seen)
+      const status = document.createElement('td')
+      status.textContent = player.online ? 'Online' : 'Offline'
+      row.append(name, ip, observed, lastSeen, status)
+      elements.playerIpsTable.appendChild(row)
+    }
+  }
+
+  async function loadPlayerIps() {
+    if (!elements.playerIpsTable) return
+    setText(elements.playerIpsStatus, 'Caricamento...')
+    setPlayerIpsNotice()
+    try {
+      const data = await requestJson('/api/v1/admin/player-ips', 'player-ips')
+      const players = Array.isArray(data.players) ? data.players : []
+      renderPlayerIps(players)
+      setText(elements.playerIpsStatus, `${formatNumber(players.length)} giocatori`)
+    } catch (error) {
+      if (error.name === 'AbortError') return
+      setText(elements.playerIpsStatus, 'Non disponibile')
+      setPlayerIpsNotice(error.message || 'IP giocatori temporaneamente non disponibili.', true)
     }
   }
 
@@ -371,6 +437,7 @@
   function initialize() {
     initializeTheme()
     elements.refresh?.addEventListener('click', loadPlayers)
+    elements.playerIpsRefresh?.addEventListener('click', loadPlayerIps)
     elements.refreshInfo?.addEventListener('click', loadInfo)
     elements.commandRefresh?.addEventListener('click', loadCommandPlayers)
     elements.announceForm?.addEventListener('submit', handleAnnounceSubmit)
@@ -384,10 +451,12 @@
       if (document.hidden) return
       startPolling()
       loadInfo()
+      loadPlayerIps()
       loadAlerts().then(scheduleAlertPoll)
     })
     startPolling()
     loadInfo()
+    loadPlayerIps()
     loadCommandPlayers()
     scheduleInfoPoll()
     loadAlerts().then(scheduleAlertPoll)

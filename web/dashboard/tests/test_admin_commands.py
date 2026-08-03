@@ -1,12 +1,14 @@
+from datetime import timedelta
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from dashboard.admin_views import PalworldCommandClient, PalworldCommandError
-from dashboard.models import UserProfile
+from dashboard.models import Player, UserProfile
 
 
 @override_settings(
@@ -31,7 +33,7 @@ class AdminCommandTests(TestCase):
             user=self.admin,
             email_verified=True,
             approved=True,
-            terms_version="2026-07-31",
+            terms_version=settings.CURRENT_TERMS_VERSION,
             terms_accepted_at=timezone.now(),
         )
         self.member = User.objects.create_user(
@@ -41,7 +43,7 @@ class AdminCommandTests(TestCase):
             user=self.member,
             email_verified=True,
             approved=True,
-            terms_version="2026-07-31",
+            terms_version=settings.CURRENT_TERMS_VERSION,
             terms_accepted_at=timezone.now(),
         )
 
@@ -74,9 +76,33 @@ class AdminCommandTests(TestCase):
             "commandPlayersTable",
             "refreshCommandPlayers",
             "unbanForm",
+            "playerIpsTable",
         ):
             self.assertContains(response, f'id="{element_id}"')
         self.assertIn("csrftoken", response.cookies)
+
+    def test_stored_player_ips_are_admin_only(self):
+        now = timezone.now()
+        Player.objects.create(
+            public_id="a" * 24,
+            name="Explorer",
+            account_name="Account",
+            first_seen=now - timedelta(days=2),
+            last_seen=now - timedelta(minutes=2),
+            ip_address="2001:db8::44",
+            ip_observed_at=now - timedelta(minutes=2),
+        )
+
+        self.client.force_login(self.member)
+        response = self.client.get(reverse("admin-player-ips"))
+        self.assertEqual(response.status_code, 403)
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("admin-player-ips"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["players"][0]["name"], "Explorer")
+        self.assertEqual(payload["players"][0]["ip"], "2001:db8::44")
 
     def test_admin_commands_require_csrf_token(self):
         csrf_client = Client(enforce_csrf_checks=True)

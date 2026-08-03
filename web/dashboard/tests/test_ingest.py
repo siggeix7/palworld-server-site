@@ -169,6 +169,8 @@ class DirectDatasetTests(TestCase):
         player = Player.objects.get()
         self.assertNotEqual(player.public_id, raw_user_id)
         self.assertEqual(len(player.public_id), 24)
+        self.assertEqual(player.ip_address, "192.0.2.20")
+        self.assertIsNotNone(player.ip_observed_at)
         self.assertTrue(PlayerSession.objects.filter(player=player, ended_at__isnull=True).exists())
         self.assertTrue(PositionSample.objects.filter(player=player).exists())
         self.assertTrue(ServerEvent.objects.filter(player=player, event_type="join").exists())

@@ -31,6 +31,8 @@ class Player(models.Model):
     public_id = models.CharField(max_length=32, unique=True)
     name = models.CharField(max_length=128)
     account_name = models.CharField(max_length=128, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    ip_observed_at = models.DateTimeField(null=True, blank=True, db_index=True)
     first_seen = models.DateTimeField()
     last_seen = models.DateTimeField(db_index=True)
     level = models.PositiveIntegerField(default=0)
