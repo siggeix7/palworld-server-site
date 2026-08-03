@@ -256,12 +256,14 @@ main { overflow-x: hidden; }
 .chart-legend i { width: 18px; height: 2px; }
 .fps-line { background: var(--teal); }
 .players-line { background: var(--coral); }
+.bases-line { background: var(--gold); }
 .chart-empty { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); color: var(--paper-dim); text-align: center; }
 .chart-tooltip { position: absolute; z-index: 3; min-width: 145px; padding: .6rem .7rem; border: 1px solid rgba(76,224,193,.45); color: var(--paper); background: rgba(6,23,25,.96); box-shadow: 0 10px 30px rgba(0,0,0,.45); pointer-events: none; font-size: .7rem; }
 .chart-tooltip[hidden] { display: none; }
 .chart-tooltip strong, .chart-tooltip span { display: block; }
 .chart-tooltip strong { color: var(--teal); margin-bottom: .2rem; }
 .chart-tooltip span:last-child { color: var(--coral); }
+.chart-tooltip span.bases { color: var(--gold); }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; min-width: 800px; }
@@ -271,9 +273,13 @@ td { font-size: .85rem; }
 td strong, td small { display: block; }
 td small { color: var(--paper-dim); }
 td code { color: var(--teal); font-family: ui-monospace, monospace; }
-.player-link { padding: 0 0 0 .65rem; border: 0; border-left: 2px solid var(--player-color, var(--coral)); color: var(--paper); background: transparent; text-align: left; cursor: pointer; }
+.player-link { padding: 0 0 0 .65rem; display: block; border: 0; border-left: 2px solid var(--player-color, var(--coral)); color: var(--paper); background: transparent; text-align: left; text-decoration: none; cursor: pointer; }
 .player-link:hover strong { color: var(--teal); }
 .player-link:disabled { cursor: default; opacity: .72; }
+.player-profile-link { color: var(--teal); text-transform: uppercase; letter-spacing: .08em; font-size: .65rem; text-decoration: none; }
+.player-profile-link:hover { text-decoration: underline; }
+.mobile-player-card a { grid-column: 2 / -1; width: fit-content; margin-top: .4rem; padding: .45rem .65rem; border: 1px solid var(--line); color: var(--teal); background: transparent; text-decoration: none; font-size: .68rem; }
+.archive-identity-controls { min-width: 0; display: flex; align-items: center; gap: .9rem; }
 .empty-cell { color: var(--paper-dim); text-align: center; }
 .mobile-player-list { display: none; }
 .mobile-player-card { padding: 1rem; display: grid; grid-template-columns: auto 1fr auto; gap: .35rem .8rem; align-items: center; border: 1px solid var(--line); background: var(--panel); }
@@ -572,3 +578,23 @@ footer a { color: var(--teal); }
 .terms-check input { width: 20px; height: 20px; min-height: 20px; margin-top: 1px; padding: 0; accent-color: var(--teal); flex-shrink: 0; }
 .terms-check a { color: var(--teal); text-decoration: underline; }
 .terms-form { margin-top: .5rem; }
+
+.player-not-found { margin: 2.5rem 1rem; text-align: center; }
+.player-not-found a { color: var(--teal); }
+
+.presence-wrap { overflow-x: auto; }
+.presence-grid { width: max-content; min-width: 100%; border-collapse: collapse; }
+.presence-grid th, .presence-grid td { padding: .3rem .25rem; border: 1px solid var(--line); text-align: center; font-size: .6rem; }
+.presence-grid th { min-width: 1.8em; color: var(--paper-dim); letter-spacing: .05em; }
+.presence-grid td { min-width: 1.8em; color: var(--ink); background: color-mix(in srgb, var(--teal) var(--heat, 0%), transparent); font-variant-numeric: tabular-nums; }
+.presence-grid td.zero { background: var(--ink-soft); color: transparent; }
+
+.ping-card { padding: 1rem; }
+.ping-card svg { width: 100%; height: auto; display: block; }
+.ping-line { stroke: var(--gold); fill: none; stroke-width: 2; }
+.ping-card .axis-label { fill: var(--paper-dim); font: 11px ui-monospace, monospace; }
+
+.session-list { max-height: 420px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border: 1px solid var(--line); background: var(--panel); }
+.session-list li { padding: .75rem 1rem; display: grid; grid-template-columns: 1fr auto; gap: 1rem; border-bottom: 1px solid var(--line); color: var(--paper-dim); font-size: .74rem; }
+.session-list li:last-child { border-bottom: 0; }
+.session-list li strong { color: var(--sky); font-family: ui-monospace, monospace; font-size: .72rem; }

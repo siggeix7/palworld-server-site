@@ -9,7 +9,7 @@
   <div>
     <p class="eyebrow">Archivio prestazioni</p>
     <h1 id="pageTelemetryTitle">Telemetria</h1>
-    <p>Andamento di FPS, frame time, continuità del flusso e presenze raccolte direttamente dal server Palworld.</p>
+    <p>Andamento di FPS, frame time, campi base, continuità del flusso e presenze raccolte direttamente dal server Palworld.</p>
   </div>
 </section>
 
@@ -45,8 +45,8 @@
   </div>
 
   <div class="chart-card">
-    <div class="chart-legend"><span><i class="fps-line"></i> FPS</span><span><i class="players-line"></i> Giocatori</span></div>
-    <canvas id="historyChart" height="300" tabindex="0" aria-label="Grafico storico FPS e giocatori" aria-describedby="chartSummary"></canvas>
+    <div class="chart-legend"><span><i class="fps-line"></i> FPS</span><span><i class="players-line"></i> Giocatori</span><span><i class="bases-line"></i> Campi base</span></div>
+    <canvas id="historyChart" height="300" tabindex="0" aria-label="Grafico storico FPS, giocatori e campi base" aria-describedby="chartSummary"></canvas>
     <div class="chart-tooltip" id="chartTooltip" role="status" hidden></div>
     <p class="sr-only" id="chartSummary">Nessun campione storico disponibile.</p>
     <p class="chart-empty" id="chartEmpty" role="status">Lo storico inizierà a popolarsi con gli aggiornamenti del collector.</p>

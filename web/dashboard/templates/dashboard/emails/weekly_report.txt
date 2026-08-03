@@ -1,0 +1,22 @@
+Report settimanale del server Palworld
+Periodo: {{ since_label }} → {{ until_label }}
+{{ public_site_url }}
+
+Salute del flusso
+- Uptime 24h: {{ uptime_24h|floatformat:1 }}%
+- Uptime 7 giorni: {{ uptime_7d|floatformat:1 }}%
+- Giocatori medi: {{ average_players|floatformat:1 }} · picco: {{ peak_players }}
+- FPS medio: {{ average_fps|floatformat:1 }} · minimo: {{ minimum_fps|default_if_none:"--" }}
+
+Mondo
+- Giorno in-game: {{ world_days|default:"--" }}
+- Campi base: {{ base_camps|default:"--" }}
+
+Attività
+- Sessioni avviate: {{ session_count }}
+- Nuovi giocatori: {{ new_player_count }}{% if new_players %} ({{ new_players|join:", " }}){% endif %}
+{% if top_players %}Top 5 per tempo di gioco
+{% for player in top_players %}{{ forloop.counter }}. {{ player.name }} — {{ player.minutes }} minuti
+{% endfor %}{% else %}Nessuna sessione registrata nel periodo.
+{% endif %}
+Il sito continua a raccogliere la telemetria: gli admin non ricevono questo report se non è configurato alcun destinatario.

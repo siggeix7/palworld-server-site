@@ -1,3 +1,4 @@
+import re
 from collections import Counter, defaultdict
 from datetime import timedelta
 from statistics import median
@@ -766,6 +767,145 @@ def players(request):
     response = JsonResponse(_cached_payload("players:v1", _compute_players_archive))
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+PLAYER_SESSION_LIST_LIMIT = 30
+PLAYER_PING_POINTS = 240
+PLAYER_PRESENCE_WEEKS = 8
+PLAYER_PUBLIC_ID_PATTERN = re.compile(r"^[0-9a-f]{24}\Z")
+
+
+def _player_ping_series(player, now):
+    since = now - timedelta(days=settings.POSITION_RETENTION_DAYS)
+    queryset = PositionSample.objects.filter(
+        player=player,
+        source_clock__gte=since,
+        source_clock__lte=now,
+        ping__gt=0,
+    ).order_by("source_clock")
+    rows = _sample_queryset(
+        queryset,
+        ("source_clock", "ping"),
+        max_points=PLAYER_PING_POINTS,
+    )
+    return [{"timestamp": _iso(row[0]), "ping": round(row[1], 1)} for row in rows]
+
+
+def _player_presence_grid(player, now):
+    start = now - timedelta(weeks=PLAYER_PRESENCE_WEEKS)
+    grid = [[0.0] * 24 for _ in range(7)]
+    ended = list(
+        PlayerSession.objects.filter(
+            player=player, started_at__lt=now, ended_at__gt=start
+        )
+    )
+    open_sessions = list(
+        PlayerSession.objects.filter(player=player, started_at__lt=now, ended_at__isnull=True)
+    )
+    for session in ended + open_sessions:
+        stale_end = session.last_seen + timedelta(seconds=settings.DATA_STALE_SECONDS)
+        end = session.ended_at or min(now, stale_end)
+        span_start = max(session.started_at, start)
+        if end <= span_start:
+            continue
+        cursor = span_start
+        while cursor < end:
+            next_hour = min(
+                end,
+                cursor.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
+            )
+            minutes = (next_hour - cursor).total_seconds() / 60
+            grid[timezone.localdate(cursor).weekday()][cursor.hour] += minutes
+            cursor = next_hour
+    return [[round(cell / PLAYER_PRESENCE_WEEKS) for cell in row] for row in grid]
+
+
+def _compute_player_detail(public_id):
+    now = timezone.now()
+    try:
+        player = Player.objects.get(public_id=public_id)
+    except Player.DoesNotExist:
+        return None
+    sessions = list(
+        PlayerSession.objects.filter(player=player).order_by("-started_at")[:PLAYER_SESSION_LIST_LIMIT]
+    )
+    active_session = PlayerSession.objects.filter(player=player, ended_at__isnull=True).first()
+    current_session = None
+    if active_session:
+        ended_at, _ = _session_end(active_session, now)
+        current_session = _duration_seconds(active_session.started_at, ended_at)
+    return {
+        "player": {
+            "public_id": player.public_id,
+            "name": player.name,
+            "account_name": player.account_name,
+            "level": player.level,
+            "building_count": player.building_count,
+            "first_seen": _iso(player.first_seen),
+            "last_seen": _iso(player.last_seen),
+            "online": active_session is not None,
+            "current_session": current_session,
+            "minutes_lifetime": player.minutes_lifetime,
+            "session_count_lifetime": player.session_count_lifetime,
+            "longest_session_minutes": player.longest_session_minutes,
+        },
+        "sessions": [
+            {
+                "started_at": _iso(session.started_at),
+                "ended_at": None if session.ended_at is None else _iso(session.ended_at),
+                "active": session.ended_at is None,
+                "duration_minutes": _duration_seconds(
+                    session.started_at, _session_end(session, now)[0]
+                )
+                // 60,
+            }
+            for session in sessions
+        ],
+        "ping": _player_ping_series(player, now),
+        "presence": {
+            "weeks": PLAYER_PRESENCE_WEEKS,
+            "rows": 7,
+            "cols": 24,
+            "grid": _player_presence_grid(player, now),
+        },
+        "events": [
+            {"type": event.event_type, "timestamp": _iso(event.source_clock)}
+            for event in ServerEvent.objects.filter(player=player)[:20]
+        ],
+        "generated_at": _iso(now),
+    }
+
+
+@require_GET
+@never_cache
+def player_detail(request, public_id):
+    if not PLAYER_PUBLIC_ID_PATTERN.fullmatch(public_id):
+        return JsonResponse({"error": "player not found"}, status=404)
+    payload = _cached_payload(f"player:{public_id}:v1", lambda: _compute_player_detail(public_id))
+    if payload is None:
+        return JsonResponse({"error": "player not found"}, status=404)
+    response = JsonResponse(payload)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@require_GET
+@never_cache
+def player_page(request, public_id):
+    if not PLAYER_PUBLIC_ID_PATTERN.fullmatch(public_id) or not Player.objects.filter(
+        public_id=public_id
+    ).exists():
+        return render(
+            request,
+            "dashboard/player.html",
+            _shared_context(request, active_nav="players", player_public_id=None),
+            status=404,
+        )
+    return render(
+        request,
+        "dashboard/player.html",
+        _shared_context(request, active_nav="players", player_public_id=public_id),
+    )
 
 
 ACTIVITY_RANGES = {

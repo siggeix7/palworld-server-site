@@ -78,7 +78,7 @@ def send_approval_email(request, user):
     )
 
 
-def notify_admins_of_pending_user(request, user):
+def admin_email_recipients():
     recipients = {value for value in settings.SITE_ADMIN_USERS if "@" in value}
     usernames = [value for value in settings.SITE_ADMIN_USERS if "@" not in value]
     if usernames:
@@ -92,6 +92,24 @@ def notify_admins_of_pending_user(request, user):
             .values_list("email", flat=True)
             if email
         )
+    return sorted(recipients)
+
+
+def send_weekly_report_email(subject, message):
+    recipients = admin_email_recipients()
+    if not recipients:
+        return 0
+    return send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        recipients,
+        fail_silently=False,
+    )
+
+
+def notify_admins_of_pending_user(request, user):
+    recipients = admin_email_recipients()
     if not recipients:
         return 0
     try:

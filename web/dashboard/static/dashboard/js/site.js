@@ -279,9 +279,10 @@
       const mapped = hasMapLocation(player)
       const row = document.createElement('tr')
       const identity = document.createElement('td')
-      const playerButton = document.createElement('div')
+      const playerButton = document.createElement('a')
       playerButton.className = 'player-link'
       playerButton.dataset.playerId = player.id
+      playerButton.href = `/giocatori/${encodeURIComponent(player.id)}/`
       playerButton.style.setProperty('--player-color', playerColor(player.id))
       const name = document.createElement('strong')
       name.textContent = player.name
@@ -346,7 +347,11 @@
       ping.textContent = `${formatNumber(player.ping)} ms`
       const stats = document.createElement('p')
       stats.textContent = `Lv.${formatNumber(player.level)} · ${formatNumber(player.building_count)} costruzioni · sessione ${formatDuration(player.session?.current_session)}`
-      card.append(avatar, identity, ping, stats)
+      const profile = document.createElement('a')
+      profile.className = 'player-profile-link'
+      profile.href = `/giocatori/${encodeURIComponent(player.id)}/`
+      profile.textContent = 'Profilo'
+      card.append(avatar, identity, ping, stats, profile)
       elements.mobilePlayers.appendChild(card)
     }
   }
@@ -430,7 +435,17 @@
         writeStorage('observatory.favoritePlayers', JSON.stringify([...state.favoritePlayers]))
         renderPlayerArchive(state.archivePlayers)
       })
-      header.append(avatar, identity, status, favorite)
+      const identityControls = document.createElement('div')
+      identityControls.className = 'archive-identity-controls'
+      identityControls.append(identity)
+      if (!player.save_only) {
+        const profile = document.createElement('a')
+        profile.className = 'player-profile-link'
+        profile.href = `/giocatori/${encodeURIComponent(player.id)}/`
+        profile.textContent = 'Profilo'
+        identityControls.appendChild(profile)
+      }
+      header.append(avatar, identityControls, status, favorite)
 
       const progression = document.createElement('dl')
       progression.className = 'player-progression-grid'
@@ -778,11 +793,13 @@
     const minFps = Math.max(0, Math.floor((minimum - 2) / 5) * 5)
     const maxFps = Math.max(minFps + 5, Math.ceil((maximum + 2) / 5) * 5)
     const observedMaxPlayers = Math.max(0, ...samples.map((sample) => Number(sample.players) || 0))
+    const observedMaxBases = Math.max(0, ...samples.map((sample) => Number(sample.bases) || 0))
     return {
       minFps,
       maxFps,
-      maxPlayers: Math.max(1, observedMaxPlayers),
+      maxPlayers: Math.max(1, observedMaxPlayers, observedMaxBases),
       observedMaxPlayers,
+      observedMaxBases,
     }
   }
 
@@ -819,7 +836,10 @@
     fps.textContent = `${formatNumber(point.sample.fps, 1)} FPS`
     const players = document.createElement('span')
     players.textContent = `${formatNumber(point.sample.players)} giocatori`
-    elements.chartTooltip.append(time, fps, players)
+    const bases = document.createElement('span')
+    bases.className = 'bases'
+    bases.textContent = `${formatNumber(point.sample.bases)} campi base`
+    elements.chartTooltip.append(time, fps, players, bases)
     elements.chartTooltip.hidden = false
     const canvasLeft = elements.historyChart.offsetLeft
     const canvasTop = elements.historyChart.offsetTop
@@ -863,10 +883,10 @@
       ? new Date(state.historyWindow.to).getTime()
       : new Date(validSamples[validSamples.length - 1].timestamp).getTime()
     const timeSpan = Math.max(1, lastTime - firstTime)
-    const { minFps, maxFps, maxPlayers, observedMaxPlayers } = chartScale(validSamples)
+    const { minFps, maxFps, maxPlayers, observedMaxPlayers, observedMaxBases } = chartScale(validSamples)
     const observedMinFps = Math.min(...validSamples.map((sample) => Number(sample.fps) || 0))
     const observedMaxFps = Math.max(...validSamples.map((sample) => Number(sample.fps) || 0))
-    setText(elements.chartSummary, `Storico di ${validSamples.length} campioni. FPS da ${formatNumber(observedMinFps, 1)} a ${formatNumber(observedMaxFps, 1)}; massimo ${formatNumber(observedMaxPlayers)} giocatori online.`)
+    setText(elements.chartSummary, `Storico di ${validSamples.length} campioni. FPS da ${formatNumber(observedMinFps, 1)} a ${formatNumber(observedMaxFps, 1)}; massimo ${formatNumber(observedMaxPlayers)} giocatori e ${formatNumber(observedMaxBases)} campi base online.`)
 
     context.strokeStyle = 'rgba(196,220,199,.13)'
     context.fillStyle = '#8ea29a'
@@ -889,11 +909,13 @@
       const x = pad.left + ((new Date(sample.timestamp).getTime() - firstTime) / timeSpan) * plotWidth
       const fpsRatio = ((Number(sample.fps) || 0) - minFps) / (maxFps - minFps)
       const playerRatio = (Number(sample.players) || 0) / maxPlayers
+      const basesRatio = (Number(sample.bases) || 0) / maxPlayers
       return {
         sample,
         x,
         yFps: pad.top + plotHeight - fpsRatio * plotHeight,
         yPlayers: pad.top + plotHeight - playerRatio * plotHeight,
+        yBases: pad.top + plotHeight - basesRatio * plotHeight,
       }
     })
 
@@ -917,8 +939,10 @@
     const styles = getComputedStyle(document.documentElement)
     const fpsColor = styles.getPropertyValue('--teal').trim() || '#4ce0c1'
     const playersColor = styles.getPropertyValue('--coral').trim() || '#ff735c'
+    const basesColor = styles.getPropertyValue('--gold').trim() || '#e5b85c'
     drawLine('yFps', fpsColor)
     drawLine('yPlayers', playersColor)
+    drawLine('yBases', basesColor)
 
     const compactLabels = width < 520
     const labels = [
@@ -942,7 +966,7 @@
       context.moveTo(hovered.x, pad.top)
       context.lineTo(hovered.x, pad.top + plotHeight)
       context.stroke()
-      for (const [y, color] of [[hovered.yFps, fpsColor], [hovered.yPlayers, playersColor]]) {
+      for (const [y, color] of [[hovered.yFps, fpsColor], [hovered.yPlayers, playersColor], [hovered.yBases, basesColor]]) {
         context.fillStyle = color
         context.beginPath()
         context.arc(hovered.x, y, 4, 0, Math.PI * 2)
