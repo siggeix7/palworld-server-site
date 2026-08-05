@@ -43,40 +43,82 @@ class SectionPageTests(TestCase):
         self.member = self.create_user()
         self.client.force_login(self.member)
 
-    def test_each_section_page_renders_with_nav_and_title(self):
+    def assert_spa_shell(self, response, status_code=200):
+        self.assertEqual(response.status_code, status_code)
+        self.assertTemplateUsed(response, "dashboard/app.html")
+        self.assertContains(response, 'id="root"', status_code=status_code)
+        self.assertContains(
+            response,
+            "dashboard/live-map/live-map.css",
+            status_code=status_code,
+        )
+        self.assertContains(
+            response,
+            "dashboard/live-map/live-map.js",
+            status_code=status_code,
+        )
+        self.assertNotContains(
+            response,
+            "dashboard/js/site.js",
+            status_code=status_code,
+        )
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertIn("private", response.headers["Cache-Control"])
+
+    def test_each_dashboard_section_uses_the_same_spa_shell(self):
         pages = [
-            ("map", "Mappa"),
-            ("telemetry", "Telemetria"),
-            ("players", "Giocatori"),
-            ("access", "Accesso"),
-            ("world", "Mondo"),
-            ("activity", "Attività"),
-            ("terms", "Condizioni d'uso e informativa privacy"),
+            "home",
+            "map",
+            "telemetry",
+            "players",
+            "access",
+            "world",
+            "activity",
+            "leaderboard",
+            "peak-hours",
+            "guilds",
         ]
-        for name, title in pages:
+        for name in pages:
             with self.subTest(page=name):
-                response = self.client.get(reverse(name))
-                self.assertEqual(response.status_code, 200)
-                self.assertContains(response, title)
-                self.assertContains(response, reverse("map"))
-                self.assertIn("no-store", response.headers["Cache-Control"])
+                self.assert_spa_shell(self.client.get(reverse(name)))
 
-    def test_players_page_explains_save_history_source(self):
+    def test_terms_page_remains_server_rendered(self):
+        response = self.client.get(reverse("terms"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "dashboard/terms.html")
+        self.assertContains(response, "Condizioni d'uso e informativa privacy")
+        self.assertNotContains(response, "dashboard/live-map/live-map.js")
+
+    def test_players_page_no_longer_renders_legacy_content(self):
         response = self.client.get(reverse("players"))
-        self.assertContains(response, "Level.sav")
-        self.assertContains(response, "non è necessario essere registrati al sito")
+        self.assert_spa_shell(response)
+        self.assertNotContains(response, "Level.sav")
+        self.assertNotContains(response, "dashboard/js/player.js")
 
-    def test_home_landing_links_to_each_section(self):
+    def test_home_shell_contains_only_minimal_bootstrap_metadata(self):
         response = self.client.get(reverse("home"))
-        self.assertEqual(response.status_code, 200)
-        for name in ("map", "telemetry", "players", "access", "world", "activity"):
-            self.assertContains(response, reverse(name))
+        self.assert_spa_shell(response)
+        self.assertContains(response, 'name="application-version"')
+        self.assertNotContains(response, "member@example.com")
+        self.assertNotContains(response, "game-server-secret")
 
-    def test_access_page_exposes_credentials_to_approved_members(self):
-        response = self.client.get(reverse("access"))
+    def test_access_credentials_are_exposed_only_by_the_private_response_api(self):
+        page_response = self.client.get(reverse("access"))
+        self.assert_spa_shell(page_response)
+        self.assertNotContains(page_response, "play.example.com")
+        self.assertNotContains(page_response, "game-server-secret")
+
+        response = self.client.get(reverse("server-access-api"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "play.example.com")
-        self.assertContains(response, "game-server-secret")
+        self.assertEqual(response.json(), {
+            "host": "play.example.com",
+            "port": "8211",
+            "password": "game-server-secret",
+            "address": "play.example.com:8211",
+            "configured": True,
+        })
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertIn("private", response.headers["Cache-Control"])
 
     def test_guild_data_exposes_bases_to_approved_members(self):
         GuildSnapshot.objects.create(
@@ -142,8 +184,8 @@ class SectionPageTests(TestCase):
         self.assertIn("Allarme piattaforma petrolifera", titles)
         self.assertIn("Invasione non associata", titles)
 
-    def test_page_specific_scripts_keep_shared_site_script(self):
-        for name, script in (
+    def test_legacy_page_scripts_are_replaced_by_the_single_spa_bundle(self):
+        for name, legacy_script in (
             ("guilds", "dashboard/js/guilds.js"),
             ("admin-panel", "dashboard/js/admin.js"),
         ):
@@ -153,12 +195,25 @@ class SectionPageTests(TestCase):
                 )
                 self.client.force_login(admin)
             response = self.client.get(reverse(name))
-            self.assertContains(response, "dashboard/js/site.js", count=1)
-            self.assertContains(response, script, count=1)
+            self.assert_spa_shell(response)
+            self.assertContains(response, "dashboard/live-map/live-map.js", count=1)
+            self.assertNotContains(response, legacy_script)
 
     def test_anonymous_visitors_are_redirected_to_login(self):
         self.client.logout()
-        for name in ("home", "map", "telemetry", "players", "access", "world", "activity"):
+        for name in (
+            "home",
+            "map",
+            "telemetry",
+            "players",
+            "access",
+            "world",
+            "activity",
+            "leaderboard",
+            "peak-hours",
+            "guilds",
+            "admin-panel",
+        ):
             with self.subTest(page=name):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 302)
@@ -169,16 +224,21 @@ class SectionPageTests(TestCase):
             "live-map-catalogue",
             "live-map-players",
             "live-map-objects",
+            "session-api",
+            "server-access-api",
+            "openapi-schema",
         ):
             with self.subTest(api=name):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 401)
 
-    def test_admin_link_only_for_site_admins(self):
-        response = self.client.get(reverse("home"))
-        self.assertNotContains(response, reverse("members"))
+    def test_admin_routes_are_only_bootstrapped_for_site_admins(self):
+        payload = self.client.get(reverse("session-api")).json()
+        self.assertIsNone(payload["routes"]["members"])
+        self.assertIsNone(payload["routes"]["admin"])
 
         admin = self.create_user("administrator", "admin@example.com", admin=True)
         self.client.force_login(admin)
-        response = self.client.get(reverse("home"))
-        self.assertContains(response, reverse("members"))
+        payload = self.client.get(reverse("session-api")).json()
+        self.assertEqual(payload["routes"]["members"], reverse("members"))
+        self.assertEqual(payload["routes"]["admin"], reverse("admin-panel"))

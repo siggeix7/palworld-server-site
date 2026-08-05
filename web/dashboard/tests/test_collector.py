@@ -200,6 +200,9 @@ class DirectArchitectureTests(SimpleTestCase):
         self.assertIn("${PRIVATE_PORT:-8081}:8001", compose)
         self.assertIn("python3 web/manage.py runcollector", entrypoint)
         self.assertIn("palworld_site.ingest_wsgi:application", entrypoint)
+        self.assertIn('SESSION_RETENTION_DAYS: "${SESSION_RETENTION_DAYS:-365}"', compose)
+        self.assertIn("--access-logformat", entrypoint)
+        self.assertNotIn("%(U)s", entrypoint)
 
     def test_direct_polling_cadence_and_private_upload_limit(self):
         self.assertEqual(settings.PALWORLD_API_INTERVALS["game_data"], 15)
@@ -213,8 +216,10 @@ class DirectArchitectureTests(SimpleTestCase):
         )
 
     def test_admin_routes_proxy_server_commands_for_admins_only(self):
-        urls = self.read("web/palworld_site/urls.py")
+        root_urls = self.read("web/palworld_site/urls.py")
+        api_urls = self.read("web/dashboard/api_urls.py")
         admin_views = self.read("web/dashboard/admin_views.py")
+        self.assertIn('include("dashboard.api_urls")', root_urls)
         for path in (
             "palworld/announce",
             "palworld/kick",
@@ -222,7 +227,7 @@ class DirectArchitectureTests(SimpleTestCase):
             "palworld/unban",
             "palworld/admin/players",
         ):
-            self.assertIn(path, urls)
+            self.assertIn(path, api_urls)
         self.assertIn("PalworldCommandClient", admin_views)
         for view_name in (
             "palworld_announce",

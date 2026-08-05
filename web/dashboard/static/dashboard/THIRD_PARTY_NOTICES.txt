@@ -12,11 +12,12 @@ LukeHollandDev/palworld-live-map
 https://github.com/LukeHollandDev/palworld-live-map
 Upstream revision: 19f3e3f8e684481bde58fef6c76845f811d57614
 
-The site embeds the upstream React map interface, original 8192x8192 Palpagos
-and World Tree images, and a minimized projection of 1,146 static locations in
-11 categories, verified against Palworld 1.0.2.101103. The client was adapted
-to authenticated Django APIs backed only by sanitized snapshots. No upstream
-Go server or exporter source is included.
+The site adapts the upstream React map interface into the unified dashboard SPA,
+uses the original 8192x8192 Palpagos and World Tree images, and includes a
+minimized projection of 1,146 static locations in 11 categories, verified
+against Palworld 1.0.2.101103. The client uses authenticated Django APIs backed
+only by sanitized snapshots. No upstream Go server or exporter source is
+included.
 Exact source/output hashes, modifications and data counts are in NOTICE.md.
 The projected catalogue SHA-256 is
 04a51a485cdad67d6b207fe5e2778fa0346bafbc62645ba7142dbc939e4acbff.
@@ -50,6 +51,9 @@ MIT License. Full license text: NOTICE.md.
 Tabler Icons
 Copyright (c) 2020-2026 Paweł Kuna
 MIT License. Full license text: NOTICE.md.
+
+React Router, Zod and Tailwind CSS
+MIT License. Dependency versions are pinned in web/live-map/package-lock.json.
 
 MIT License
 

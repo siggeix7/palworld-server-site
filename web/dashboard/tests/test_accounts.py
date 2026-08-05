@@ -97,15 +97,19 @@ class AccountAccessTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json(), {"error": "account approval required"})
 
-    def test_approved_account_sees_credentials_in_non_cacheable_page(self):
+    def test_approved_account_fetches_credentials_from_non_cacheable_api(self):
         user = self.create_user(verified=True, approved=True)
         self.client.force_login(user)
 
-        response = self.client.get(reverse("access"))
+        page_response = self.client.get(reverse("access"))
+        self.assertEqual(page_response.status_code, 200)
+        self.assertNotContains(page_response, "game-server-secret")
+
+        response = self.client.get(reverse("server-access-api"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "play.example.com")
-        self.assertContains(response, "game-server-secret")
+        self.assertEqual(response.json()["host"], "play.example.com")
+        self.assertEqual(response.json()["password"], "game-server-secret")
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
 

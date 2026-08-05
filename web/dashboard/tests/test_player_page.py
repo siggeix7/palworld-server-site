@@ -96,13 +96,25 @@ class PlayerDetailTests(TestCase):
         self.assertEqual(self.client.get("/api/v1/player/" + "z" * 24).status_code, 404)
         self.assertEqual(self.client.get("/api/v1/player/not-a-player").status_code, 404)
 
-    def test_page_renders_for_existing_player(self):
+    def test_page_renders_spa_shell_for_existing_player(self):
         response = self.client.get(f"/giocatori/{self.PUBLIC_ID}/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-player-public-id="' + self.PUBLIC_ID + '"')
-        self.assertContains(response, "player.js")
+        self.assertTemplateUsed(response, "dashboard/app.html")
+        self.assertContains(response, 'id="root"')
+        self.assertContains(response, "dashboard/live-map/live-map.js")
+        self.assertNotContains(response, 'id="initial-player"')
+        self.assertNotContains(response, "dashboard/js/player.js")
 
-    def test_page_404_for_unknown_player(self):
-        response = self.client.get("/giocatori/" + "b" * 24 + "/")
-        self.assertEqual(response.status_code, 404)
-        self.assertIn("Giocatore non trovato", response.content.decode())
+    def test_page_404_shell_for_unknown_or_invalid_player(self):
+        for public_id in ("b" * 24, "z" * 24, "not-a-player"):
+            with self.subTest(public_id=public_id):
+                response = self.client.get(f"/giocatori/{public_id}/")
+                self.assertEqual(response.status_code, 404)
+                self.assertTemplateUsed(response, "dashboard/app.html")
+                self.assertContains(response, 'id="root"', status_code=404)
+                self.assertContains(
+                    response,
+                    "dashboard/live-map/live-map.js",
+                    status_code=404,
+                )
+                self.assertIn("no-store", response.headers["Cache-Control"])

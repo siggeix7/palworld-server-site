@@ -22,9 +22,6 @@ from .models import (
     PositionSample,
     ServerEvent,
 )
-from .accounts import is_site_admin
-
-
 # Server-side cache TTL for heavy read-only aggregations. The collector refreshes
 # the underlying data every 15-30s, so a 5s cache is invisible to users while
 # collapsing redundant work across concurrent dashboard clients.
@@ -261,117 +258,23 @@ def _session_stats(public_ids, now):
     return result
 
 
-def _shared_context(request, **extra):
-    return {
-        "app_version": settings.APP_VERSION,
-        "public_site_url": settings.PUBLIC_SITE_URL,
-        "site_admin": is_site_admin(request.user),
-        **extra,
-    }
-
-
-def _palworld_access():
-    return {
-        "host": settings.PALWORLD_PUBLIC_HOST,
-        "port": settings.PALWORLD_PUBLIC_PORT,
-        "password": settings.PALWORLD_PUBLIC_PASSWORD,
-    }
-
-
-@require_GET
-@never_cache
-def home(request):
-    return render(
-        request,
-        "dashboard/home.html",
-        _shared_context(request, active_nav="home"),
-    )
-
-
 @require_GET
 @never_cache
 def terms_page(request):
     return render(
         request,
         "dashboard/terms.html",
-        _shared_context(
-            request,
-            active_nav="terms",
-            terms_version=settings.CURRENT_TERMS_VERSION,
-            terms_effective_date=settings.CURRENT_TERMS_EFFECTIVE_DATE,
-            privacy_controller_name=settings.PRIVACY_CONTROLLER_NAME,
-            privacy_contact_email=settings.PRIVACY_CONTACT_EMAIL,
-        ),
-    )
-
-
-@require_GET
-@never_cache
-def telemetry_page(request):
-    return render(
-        request,
-        "dashboard/telemetry.html",
-        _shared_context(request, active_nav="telemetry"),
-    )
-
-
-@require_GET
-@never_cache
-def players_page(request):
-    return render(
-        request,
-        "dashboard/players.html",
-        _shared_context(request, active_nav="players"),
-    )
-
-
-@require_GET
-@never_cache
-def access_page(request):
-    return render(
-        request,
-        "dashboard/access.html",
-        _shared_context(
-            request,
-            active_nav="access",
-            palworld_access=_palworld_access(),
-        ),
-    )
-
-
-@require_GET
-@never_cache
-def world_page(request):
-    return render(request, "dashboard/world.html", _shared_context(request, active_nav="world"))
-
-
-@require_GET
-@never_cache
-def activity_page(request):
-    return render(
-        request,
-        "dashboard/activity.html",
-        _shared_context(request, active_nav="activity"),
-    )
-
-
-@require_GET
-@never_cache
-def leaderboard_page(request):
-    return render(
-        request,
-        "dashboard/leaderboard.html",
-        _shared_context(request, active_nav="leaderboard"),
-    )
-
-
-@require_GET
-@never_cache
-def peak_hours_page(request):
-    return render(
-        request,
-        "dashboard/peak_hours.html",
-        _shared_context(request, active_nav="peak-hours"),
+        {
+            "canonical_url": (
+                f"{settings.PUBLIC_SITE_URL}{request.path}"
+                if settings.PUBLIC_SITE_URL
+                else ""
+            ),
+            "terms_version": settings.CURRENT_TERMS_VERSION,
+            "terms_effective_date": settings.CURRENT_TERMS_EFFECTIVE_DATE,
+            "privacy_controller_name": settings.PRIVACY_CONTROLLER_NAME,
+            "privacy_contact_email": settings.PRIVACY_CONTACT_EMAIL,
+        },
     )
 
 
@@ -887,25 +790,6 @@ def player_detail(request, public_id):
     response = JsonResponse(payload)
     response.headers["Cache-Control"] = "no-store"
     return response
-
-
-@require_GET
-@never_cache
-def player_page(request, public_id):
-    if not PLAYER_PUBLIC_ID_PATTERN.fullmatch(public_id) or not Player.objects.filter(
-        public_id=public_id
-    ).exists():
-        return render(
-            request,
-            "dashboard/player.html",
-            _shared_context(request, active_nav="players", player_public_id=None),
-            status=404,
-        )
-    return render(
-        request,
-        "dashboard/player.html",
-        _shared_context(request, active_nav="players", player_public_id=public_id),
-    )
 
 
 ACTIVITY_RANGES = {

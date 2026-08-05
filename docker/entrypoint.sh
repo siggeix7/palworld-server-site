@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 : "${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}"
 : "${PRIVATE_API_TOKEN:?PRIVATE_API_TOKEN is required}"
 : "${PALWORLD_API_URL:?PALWORLD_API_URL is required}"
 : "${PALWORLD_API_PASSWORD:?PALWORLD_API_PASSWORD is required}"
 
-mkdir -p "$(dirname "${DATABASE_PATH}")"
+database_dir="$(dirname -- "${DATABASE_PATH}")"
+mkdir -p "${database_dir}"
+chmod 0700 "${database_dir}"
 
 python3 web/manage.py migrate --noinput
 python3 web/manage.py shell -c \
   "from django.db import connection; c=connection.cursor(); c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA synchronous=NORMAL')" \
   >/dev/null
+for private_path in "${DATABASE_PATH}" "${DATABASE_PATH}-wal" "${DATABASE_PATH}-shm" "${COLLECTOR_LOCK_PATH}"; do
+  [[ ! -e "${private_path}" ]] || chmod 0600 "${private_path}"
+done
 
 public_pid=""
 private_pid=""
@@ -50,6 +56,7 @@ gunicorn palworld_site.ingest_wsgi:application \
   --threads 1 \
   --timeout 60 \
   --access-logfile - \
+  --access-logformat 'remote=%(h)s method=%(m)s status=%(s)s bytes=%(b)s duration_us=%(D)s' \
   --error-logfile - &
 private_pid=$!
 
@@ -63,6 +70,7 @@ gunicorn palworld_site.wsgi:application \
   --threads 2 \
   --timeout 30 \
   --access-logfile - \
+  --access-logformat 'remote=%(h)s method=%(m)s status=%(s)s bytes=%(b)s duration_us=%(D)s' \
   --error-logfile - &
 public_pid=$!
 

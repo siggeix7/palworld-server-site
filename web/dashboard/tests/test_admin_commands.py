@@ -61,24 +61,24 @@ class AdminCommandTests(TestCase):
                     url, data=body, content_type="application/json"
                 )
                 self.assertEqual(response.status_code, 403)
+                self.assertEqual(response.json(), {"error": "permission denied"})
+                self.assertIn("no-store", response.headers["Cache-Control"])
+                self.assertIn("private", response.headers["Cache-Control"])
         response = self.client.get(reverse("palworld-admin-players"))
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"error": "permission denied"})
 
-    def test_admin_panel_exposes_command_controls_only_to_admin(self):
+    def test_admin_panel_serves_spa_shell_only_to_admin(self):
         self.client.force_login(self.member)
         self.assertEqual(self.client.get(reverse("admin-panel")).status_code, 403)
 
         self.client.force_login(self.admin)
         response = self.client.get(reverse("admin-panel"))
         self.assertEqual(response.status_code, 200)
-        for element_id in (
-            "announceForm",
-            "commandPlayersTable",
-            "refreshCommandPlayers",
-            "unbanForm",
-            "playerIpsTable",
-        ):
-            self.assertContains(response, f'id="{element_id}"')
+        self.assertTemplateUsed(response, "dashboard/app.html")
+        self.assertContains(response, 'id="root"')
+        self.assertContains(response, "dashboard/live-map/live-map.js")
+        self.assertNotContains(response, 'id="announceForm"')
         self.assertIn("csrftoken", response.cookies)
 
     def test_stored_player_ips_are_admin_only(self):
@@ -112,6 +112,8 @@ class AdminCommandTests(TestCase):
             reverse("palworld-announce"), payload, content_type="application/json"
         )
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"error": "CSRF verification failed"})
+        self.assertIn("no-store", response.headers["Cache-Control"])
 
         page = csrf_client.get(reverse("admin-panel"))
         token = page.cookies["csrftoken"].value

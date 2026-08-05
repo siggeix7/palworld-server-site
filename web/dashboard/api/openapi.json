@@ -1,0 +1,1638 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Palworld Server Observatory API",
+    "version": "1.0.0",
+    "description": "API consumed by the authenticated dashboard SPA and by the private collector. Public-listener operations use the Django session cookie. Private-listener operations are available only on the isolated ingest listener."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Django public listener"
+    }
+  ],
+  "security": [
+    {
+      "cookieAuth": []
+    }
+  ],
+  "tags": [
+    {"name": "Bootstrap"},
+    {"name": "Dashboard"},
+    {"name": "Players"},
+    {"name": "World"},
+    {"name": "Live map"},
+    {"name": "Guilds"},
+    {"name": "Administration"},
+    {"name": "Private collector"}
+  ],
+  "paths": {
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiDocument",
+        "tags": ["Bootstrap"],
+        "summary": "Return this OpenAPI document",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1 document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/session": {
+      "get": {
+        "operationId": "getSession",
+        "tags": ["Bootstrap"],
+        "summary": "Return the current Django session bootstrap data",
+        "responses": {
+          "200": {
+            "description": "Authenticated session and account routes",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Session"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/server/access": {
+      "get": {
+        "operationId": "getServerAccess",
+        "tags": ["Bootstrap"],
+        "summary": "Return connection details for an approved member",
+        "description": "The response contains the configured game-server password and must not be stored or shared.",
+        "responses": {
+          "200": {
+            "description": "Connection details. Sent with Cache-Control: no-store, private.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ServerAccess"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/snapshot": {
+      "get": {
+        "operationId": "getSnapshot",
+        "tags": ["Dashboard"],
+        "summary": "Return the latest server snapshot",
+        "responses": {
+          "200": {
+            "description": "Latest sanitized server state",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Snapshot"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/history": {
+      "get": {
+        "operationId": "getHistory",
+        "tags": ["Dashboard"],
+        "summary": "Return sampled server metric history",
+        "parameters": [
+          {"$ref": "#/components/parameters/HistoryRange"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Metric history for the selected window",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/History"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/players": {
+      "get": {
+        "operationId": "listPlayers",
+        "tags": ["Players"],
+        "summary": "Return the player archive",
+        "responses": {
+          "200": {
+            "description": "Player archive with telemetry and save progression",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/PlayerArchive"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/player/{public_id}": {
+      "get": {
+        "operationId": "getPlayer",
+        "tags": ["Players"],
+        "summary": "Return one player profile",
+        "parameters": [
+          {"$ref": "#/components/parameters/PlayerPublicId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Player profile, sessions, ping and presence",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/PlayerDetail"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/api/v1/leaderboard": {
+      "get": {
+        "operationId": "getLeaderboard",
+        "tags": ["Players"],
+        "summary": "Return player rankings",
+        "responses": {
+          "200": {
+            "description": "Playtime and level rankings",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Leaderboard"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/activity/heatmap": {
+      "get": {
+        "operationId": "getActivityHeatmap",
+        "tags": ["Players"],
+        "summary": "Return player activity grouped by weekday and hour",
+        "parameters": [
+          {"$ref": "#/components/parameters/ActivityRange"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity heatmap",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ActivityHeatmap"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/world/objects": {
+      "get": {
+        "operationId": "getWorldObjects",
+        "tags": ["World"],
+        "summary": "Return sanitized world objects",
+        "parameters": [
+          {"$ref": "#/components/parameters/IfNoneMatch"}
+        ],
+        "responses": {
+          "200": {
+            "description": "World object dataset",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/WorldObjects"}
+              }
+            }
+          },
+          "304": {"description": "Dataset has not changed"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/live-map/config": {
+      "get": {
+        "operationId": "getLiveMapConfig",
+        "tags": ["Live map"],
+        "summary": "Return live-map polling and layer configuration",
+        "responses": {
+          "200": {
+            "description": "Live-map configuration",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/LiveMapConfig"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/live-map/catalogue": {
+      "get": {
+        "operationId": "getLiveMapCatalogue",
+        "tags": ["Live map"],
+        "summary": "Return the immutable landmark catalogue",
+        "parameters": [
+          {
+            "name": "v",
+            "in": "query",
+            "required": false,
+            "description": "SHA-256 catalogue version returned by the config endpoint",
+            "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          },
+          {"$ref": "#/components/parameters/IfNoneMatch"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Landmark catalogue",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/LiveMapCatalogue"}
+              }
+            }
+          },
+          "304": {"description": "Catalogue has not changed"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/live-map/players": {
+      "get": {
+        "operationId": "getLiveMapPlayers",
+        "tags": ["Live map"],
+        "summary": "Return players and current server status for the map",
+        "responses": {
+          "200": {
+            "description": "Live-map player state",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/LiveMapPlayers"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/live-map/objects": {
+      "get": {
+        "operationId": "getLiveMapObjects",
+        "tags": ["Live map"],
+        "summary": "Return world objects adapted for the map",
+        "parameters": [
+          {"$ref": "#/components/parameters/IfNoneMatch"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Live-map object state",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/LiveMapObjects"}
+              }
+            }
+          },
+          "304": {"description": "Dataset has not changed"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/telemetry/stats": {
+      "get": {
+        "operationId": "getTelemetryStats",
+        "tags": ["Dashboard"],
+        "summary": "Return aggregate telemetry statistics",
+        "responses": {
+          "200": {
+            "description": "Telemetry aggregates",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TelemetryStats"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/world/diff": {
+      "get": {
+        "operationId": "getWorldDiff",
+        "tags": ["World"],
+        "summary": "Return settings that differ from vanilla defaults",
+        "responses": {
+          "200": {
+            "description": "Current settings differences",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/WorldDiff"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/palworld/players": {
+      "get": {
+        "operationId": "getPalworldPlayers",
+        "tags": ["Administration"],
+        "summary": "Return the latest sanitized Palworld player dataset",
+        "description": "Site-admin access is required.",
+        "responses": {
+          "200": {
+            "description": "Latest stored player dataset",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/PalworldPlayers"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/admin/player-ips": {
+      "get": {
+        "operationId": "getAdminPlayerIps",
+        "tags": ["Administration"],
+        "summary": "Return stored player IP observations",
+        "description": "Site-admin access is required.",
+        "responses": {
+          "200": {
+            "description": "Player IP observations",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/AdminPlayerIps"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/palworld/info": {
+      "get": {
+        "operationId": "getPalworldInfo",
+        "tags": ["Administration"],
+        "summary": "Return the latest sanitized server metadata",
+        "description": "Site-admin access is required.",
+        "responses": {
+          "200": {
+            "description": "Latest server metadata",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/PalworldInfo"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/palworld/admin/players": {
+      "get": {
+        "operationId": "getPalworldAdminPlayers",
+        "tags": ["Administration"],
+        "summary": "Query command targets from the Palworld REST API",
+        "description": "Site-admin access is required.",
+        "responses": {
+          "200": {
+            "description": "Current command targets",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/AdminCommandPlayers"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "502": {"$ref": "#/components/responses/UpstreamError"}
+        }
+      }
+    },
+    "/api/v1/palworld/announce": {
+      "post": {
+        "operationId": "announcePalworldMessage",
+        "tags": ["Administration"],
+        "summary": "Send a server announcement",
+        "description": "Site-admin access and Django CSRF validation are required.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/AnnouncementCommand"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/CommandAccepted"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "502": {"$ref": "#/components/responses/UpstreamError"}
+        }
+      }
+    },
+    "/api/v1/palworld/kick": {
+      "post": {
+        "operationId": "kickPalworldPlayer",
+        "tags": ["Administration"],
+        "summary": "Kick a player from the game server",
+        "description": "Site-admin access and Django CSRF validation are required.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {"$ref": "#/components/requestBodies/PlayerCommand"},
+        "responses": {
+          "200": {"$ref": "#/components/responses/CommandAccepted"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "502": {"$ref": "#/components/responses/UpstreamError"}
+        }
+      }
+    },
+    "/api/v1/palworld/ban": {
+      "post": {
+        "operationId": "banPalworldPlayer",
+        "tags": ["Administration"],
+        "summary": "Ban a player from the game server",
+        "description": "Site-admin access and Django CSRF validation are required.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {"$ref": "#/components/requestBodies/PlayerCommand"},
+        "responses": {
+          "200": {"$ref": "#/components/responses/CommandAccepted"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "502": {"$ref": "#/components/responses/UpstreamError"}
+        }
+      }
+    },
+    "/api/v1/palworld/unban": {
+      "post": {
+        "operationId": "unbanPalworldPlayer",
+        "tags": ["Administration"],
+        "summary": "Remove a player ban",
+        "description": "Site-admin access and Django CSRF validation are required.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {"$ref": "#/components/requestBodies/PlayerCommand"},
+        "responses": {
+          "200": {"$ref": "#/components/responses/CommandAccepted"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "502": {"$ref": "#/components/responses/UpstreamError"}
+        }
+      }
+    },
+    "/api/v1/guild/data": {
+      "get": {
+        "operationId": "getGuildData",
+        "tags": ["Guilds"],
+        "summary": "Return the latest guild and base snapshot",
+        "responses": {
+          "200": {
+            "description": "Guild snapshot. Admin users additionally receive alerts.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/GuildData"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/healthz/": {
+      "get": {
+        "operationId": "getPrivateCollectorHealth",
+        "tags": ["Private collector"],
+        "summary": "Return private collector health",
+        "description": "Private ingest listener only. This path has different behavior on the public listener.",
+        "x-listener": "private",
+        "servers": [{"url": "http://127.0.0.1:8001", "description": "Private ingest listener"}],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Collector is healthy",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CollectorHealth"}
+              }
+            }
+          },
+          "503": {
+            "description": "Collector is starting or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CollectorHealth"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/collector/status": {
+      "get": {
+        "operationId": "getPrivateCollectorStatus",
+        "tags": ["Private collector"],
+        "summary": "Return detailed collector state",
+        "x-listener": "private",
+        "servers": [{"url": "http://127.0.0.1:8001", "description": "Private ingest listener"}],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Collector runtime state",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CollectorStatus"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/v1/guild/ingest": {
+      "post": {
+        "operationId": "ingestPrivateGuildData",
+        "tags": ["Private collector"],
+        "summary": "Store a minimized guild/save snapshot",
+        "x-listener": "private",
+        "servers": [{"url": "http://127.0.0.1:8001", "description": "Private ingest listener"}],
+        "security": [{"bearerAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/GuildIngest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/CommandAccepted"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "413": {"$ref": "#/components/responses/PayloadTooLarge"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionid",
+        "description": "Authenticated Django session. The site-access middleware also enforces approval, password change and current terms acceptance."
+      },
+      "csrfToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRFToken",
+        "description": "Django CSRF token required for session-authenticated unsafe requests."
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Private API token configured on the isolated ingest listener."
+      }
+    },
+    "parameters": {
+      "HistoryRange": {
+        "name": "range",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": ["6h", "24h", "7d", "30d", "90d"],
+          "default": "24h"
+        }
+      },
+      "ActivityRange": {
+        "name": "range",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": ["7d", "30d", "90d"],
+          "default": "30d"
+        }
+      },
+      "PlayerPublicId": {
+        "name": "public_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{24}$"
+        }
+      },
+      "IfNoneMatch": {
+        "name": "If-None-Match",
+        "in": "header",
+        "required": false,
+        "schema": {"type": "string"}
+      }
+    },
+    "requestBodies": {
+      "PlayerCommand": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/PlayerCommand"}
+          }
+        }
+      }
+    },
+    "responses": {
+      "CommandAccepted": {
+        "description": "Command accepted",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/CommandResult"}
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Authentication is missing or invalid",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The authenticated account cannot perform this operation",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "Request body exceeds the private API limit",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "Content-Type must be application/json",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "JSON payload failed schema validation",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "UpstreamError": {
+        "description": "The Palworld REST API could not complete the command",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Required private API configuration is unavailable",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "CommandResult": {
+        "type": "object",
+        "required": ["ok"],
+        "properties": {
+          "ok": {"type": "boolean", "const": true}
+        },
+        "additionalProperties": false
+      },
+      "Timestamp": {
+        "type": ["string", "null"],
+        "format": "date-time"
+      },
+      "Session": {
+        "type": "object",
+        "required": ["authenticated", "user", "siteAdmin", "appVersion", "routes"],
+        "properties": {
+          "authenticated": {"type": "boolean"},
+          "user": {
+            "oneOf": [
+              {"$ref": "#/components/schemas/SessionUser"},
+              {"type": "null"}
+            ]
+          },
+          "siteAdmin": {"type": "boolean"},
+          "appVersion": {"type": "string"},
+          "routes": {"$ref": "#/components/schemas/SessionRoutes"}
+        },
+        "additionalProperties": false
+      },
+      "SessionUser": {
+        "type": "object",
+        "required": ["username", "email"],
+        "properties": {
+          "username": {"type": "string"},
+          "email": {"type": "string", "format": "email"}
+        },
+        "additionalProperties": false
+      },
+      "SessionRoutes": {
+        "type": "object",
+        "required": ["terms", "profile", "password", "members", "admin"],
+        "properties": {
+          "terms": {"type": "string"},
+          "profile": {"type": "string"},
+          "password": {"type": "string"},
+          "members": {"type": ["string", "null"]},
+          "admin": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      },
+      "ServerAccess": {
+        "type": "object",
+        "required": ["host", "port", "password", "address", "configured"],
+        "properties": {
+          "host": {"type": "string"},
+          "port": {"type": "string"},
+          "password": {"type": "string", "description": "Sensitive game-server password."},
+          "address": {"type": "string"},
+          "configured": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      },
+      "Snapshot": {
+        "type": "object",
+        "required": ["status", "info", "metrics", "players", "settings", "events", "summary_24h", "version"],
+        "properties": {
+          "status": {"$ref": "#/components/schemas/SnapshotStatus"},
+          "info": {"type": "object", "additionalProperties": true},
+          "metrics": {"type": "object", "additionalProperties": true},
+          "players": {"type": "array", "items": {"$ref": "#/components/schemas/SnapshotPlayer"}},
+          "settings": {"type": "object", "additionalProperties": true},
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/PlayerEvent"}},
+          "summary_24h": {
+            "type": "object",
+            "required": ["peak_players", "average_players", "average_fps", "minimum_fps"],
+            "properties": {
+              "peak_players": {"type": "integer"},
+              "average_players": {"type": "number"},
+              "average_fps": {"type": "number"},
+              "minimum_fps": {"type": "number"}
+            },
+            "additionalProperties": false
+          },
+          "version": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "SnapshotStatus": {
+        "type": "object",
+        "required": ["online", "reachable", "stale", "data_age_seconds", "players_stale", "last_updated", "started_at"],
+        "properties": {
+          "online": {"type": "boolean"},
+          "reachable": {"type": "boolean"},
+          "stale": {"type": "boolean"},
+          "data_age_seconds": {"type": ["integer", "null"]},
+          "players_stale": {"type": "boolean"},
+          "last_updated": {"$ref": "#/components/schemas/Timestamp"},
+          "started_at": {"$ref": "#/components/schemas/Timestamp"}
+        },
+        "additionalProperties": false
+      },
+      "SnapshotPlayer": {
+        "type": "object",
+        "required": ["id", "name", "location_available", "session"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "accountName": {"type": "string"},
+          "ping": {"type": ["number", "null"]},
+          "location_x": {"type": ["number", "null"]},
+          "location_y": {"type": ["number", "null"]},
+          "level": {"type": "integer"},
+          "building_count": {"type": "integer"},
+          "location_available": {"type": "boolean"},
+          "session": {
+            "type": "object",
+            "properties": {
+              "first_seen": {"$ref": "#/components/schemas/Timestamp"},
+              "last_seen": {"$ref": "#/components/schemas/Timestamp"},
+              "current_session": {"type": "integer"},
+              "online_7d": {"type": "integer"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": true
+      },
+      "History": {
+        "type": "object",
+        "required": ["range", "window", "fps_health", "samples"],
+        "properties": {
+          "range": {"type": "string", "enum": ["6h", "24h", "7d", "30d", "90d"]},
+          "window": {
+            "type": "object",
+            "required": ["from", "to"],
+            "properties": {
+              "from": {"type": "string", "format": "date-time"},
+              "to": {"type": "string", "format": "date-time"}
+            },
+            "additionalProperties": false
+          },
+          "fps_health": {"$ref": "#/components/schemas/FpsHealth"},
+          "samples": {"type": "array", "items": {"$ref": "#/components/schemas/MetricSample"}}
+        },
+        "additionalProperties": false
+      },
+      "FpsHealth": {
+        "type": "object",
+        "required": ["state", "score", "label", "sample_count"],
+        "properties": {
+          "state": {"type": "string", "enum": ["no_data", "calibrating", "stale", "ok"]},
+          "score": {"type": ["integer", "null"]},
+          "label": {"type": "string"},
+          "sample_count": {"type": "integer"},
+          "coverage_seconds": {"type": "integer"},
+          "newest_sample_age_seconds": {"type": "integer"},
+          "nominal_cadence_seconds": {"type": "number"},
+          "gap_threshold_seconds": {"type": "number"},
+          "median_fps": {"type": "number"},
+          "recent_median_fps": {"type": "number"},
+          "average_fps": {"type": "number"},
+          "under_30_percent": {"type": "number"},
+          "longest_dip_seconds": {"type": "integer"},
+          "components": {"type": "object", "additionalProperties": {"type": "number"}}
+        },
+        "additionalProperties": false
+      },
+      "MetricSample": {
+        "type": "object",
+        "required": ["timestamp", "fps", "fps_average", "frame_time", "players", "max_players", "bases", "gap_before"],
+        "properties": {
+          "timestamp": {"type": "string", "format": "date-time"},
+          "fps": {"type": "number"},
+          "fps_average": {"type": "number"},
+          "frame_time": {"type": "number"},
+          "players": {"type": "integer"},
+          "max_players": {"type": "integer"},
+          "bases": {"type": "integer"},
+          "gap_before": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      },
+      "PlayerArchive": {
+        "type": "object",
+        "required": ["generated_at", "windows", "save_updated_at", "players"],
+        "properties": {
+          "generated_at": {"type": "string", "format": "date-time"},
+          "windows": {"$ref": "#/components/schemas/PlaytimeWindows"},
+          "save_updated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "players": {"type": "array", "items": {"$ref": "#/components/schemas/ArchivedPlayer"}}
+        },
+        "additionalProperties": false
+      },
+      "PlaytimeWindows": {
+        "type": "object",
+        "required": ["month_days", "year_days"],
+        "properties": {
+          "month_days": {"type": "integer"},
+          "year_days": {"type": "integer"}
+        },
+        "additionalProperties": false
+      },
+      "ArchivedPlayer": {
+        "type": "object",
+        "required": ["id", "name", "accountName", "level", "building_count", "first_seen", "last_seen", "online", "session_count", "minutes_30d", "minutes_365d", "minutes_all", "average_session_minutes", "longest_session_minutes", "active_days_30d", "periods", "save_available", "save_only", "saved_level", "exp", "owned_pal_count", "unused_status_points", "status_points", "guild_name", "is_guild_admin"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "accountName": {"type": "string"},
+          "level": {"type": "integer"},
+          "building_count": {"type": "integer"},
+          "first_seen": {"$ref": "#/components/schemas/Timestamp"},
+          "last_seen": {"$ref": "#/components/schemas/Timestamp"},
+          "online": {"type": "boolean"},
+          "session_count": {"type": "integer"},
+          "minutes_30d": {"type": "integer"},
+          "minutes_365d": {"type": "integer"},
+          "minutes_all": {"type": "integer"},
+          "average_session_minutes": {"type": "integer"},
+          "longest_session_minutes": {"type": "integer"},
+          "active_days_30d": {"type": "integer"},
+          "ping_7d": {
+            "oneOf": [
+              {"$ref": "#/components/schemas/PingStats"},
+              {"type": "null"}
+            ]
+          },
+          "periods": {"type": "array", "items": {"$ref": "#/components/schemas/PlayerSession"}},
+          "save_available": {"type": "boolean"},
+          "save_only": {"type": "boolean"},
+          "saved_level": {"type": ["integer", "null"]},
+          "exp": {"type": ["integer", "null"]},
+          "owned_pal_count": {"type": ["integer", "null"]},
+          "unused_status_points": {"type": ["integer", "null"]},
+          "status_points": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "guild_name": {"type": "string"},
+          "is_guild_admin": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      },
+      "PingStats": {
+        "type": "object",
+        "required": ["average", "minimum", "maximum", "sample_count"],
+        "properties": {
+          "average": {"type": "number"},
+          "minimum": {"type": "number"},
+          "maximum": {"type": "number"},
+          "sample_count": {"type": "integer"}
+        },
+        "additionalProperties": false
+      },
+      "PlayerSession": {
+        "type": "object",
+        "required": ["started_at", "ended_at", "active", "duration_minutes"],
+        "properties": {
+          "started_at": {"type": "string", "format": "date-time"},
+          "ended_at": {"$ref": "#/components/schemas/Timestamp"},
+          "active": {"type": "boolean"},
+          "duration_minutes": {"type": "integer"}
+        },
+        "additionalProperties": false
+      },
+      "PlayerDetail": {
+        "type": "object",
+        "required": ["player", "sessions", "ping", "presence", "events", "generated_at"],
+        "properties": {
+          "player": {"$ref": "#/components/schemas/PlayerProfile"},
+          "sessions": {"type": "array", "items": {"$ref": "#/components/schemas/PlayerSession"}},
+          "ping": {"type": "array", "items": {"$ref": "#/components/schemas/PingSample"}},
+          "presence": {"$ref": "#/components/schemas/PresenceGrid"},
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/PlayerEvent"}},
+          "generated_at": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      },
+      "PlayerProfile": {
+        "type": "object",
+        "required": ["public_id", "name", "account_name", "level", "building_count", "first_seen", "last_seen", "online", "current_session", "minutes_lifetime", "session_count_lifetime", "longest_session_minutes"],
+        "properties": {
+          "public_id": {"type": "string"},
+          "name": {"type": "string"},
+          "account_name": {"type": "string"},
+          "level": {"type": "integer"},
+          "building_count": {"type": "integer"},
+          "first_seen": {"type": "string", "format": "date-time"},
+          "last_seen": {"type": "string", "format": "date-time"},
+          "online": {"type": "boolean"},
+          "current_session": {"type": ["integer", "null"]},
+          "minutes_lifetime": {"type": "integer"},
+          "session_count_lifetime": {"type": "integer"},
+          "longest_session_minutes": {"type": "integer"}
+        },
+        "additionalProperties": false
+      },
+      "PingSample": {
+        "type": "object",
+        "required": ["timestamp", "ping"],
+        "properties": {
+          "timestamp": {"type": "string", "format": "date-time"},
+          "ping": {"type": "number"}
+        },
+        "additionalProperties": false
+      },
+      "PresenceGrid": {
+        "type": "object",
+        "required": ["weeks", "rows", "cols", "grid"],
+        "properties": {
+          "weeks": {"type": "integer"},
+          "rows": {"type": "integer", "const": 7},
+          "cols": {"type": "integer", "const": 24},
+          "grid": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "integer"}}
+          }
+        },
+        "additionalProperties": false
+      },
+      "PlayerEvent": {
+        "type": "object",
+        "required": ["type", "timestamp"],
+        "properties": {
+          "type": {"type": "string"},
+          "player": {"type": "string"},
+          "player_id": {"type": "string"},
+          "timestamp": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      },
+      "Leaderboard": {
+        "type": "object",
+        "required": ["generated_at", "windows", "by_playtime", "by_level", "total_players"],
+        "properties": {
+          "generated_at": {"type": "string", "format": "date-time"},
+          "windows": {"$ref": "#/components/schemas/PlaytimeWindows"},
+          "by_playtime": {
+            "type": "object",
+            "required": ["30d", "365d", "all"],
+            "properties": {
+              "30d": {"type": "array", "items": {"$ref": "#/components/schemas/LeaderboardPlayer"}},
+              "365d": {"type": "array", "items": {"$ref": "#/components/schemas/LeaderboardPlayer"}},
+              "all": {"type": "array", "items": {"$ref": "#/components/schemas/LeaderboardPlayer"}}
+            },
+            "additionalProperties": false
+          },
+          "by_level": {"type": "array", "items": {"$ref": "#/components/schemas/LeaderboardPlayer"}},
+          "total_players": {"type": "integer"}
+        },
+        "additionalProperties": false
+      },
+      "LeaderboardPlayer": {
+        "type": "object",
+        "required": ["id", "name", "account_name", "level", "first_seen", "last_seen", "online", "minutes_30d", "minutes_365d", "minutes_all"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "account_name": {"type": "string"},
+          "level": {"type": "integer"},
+          "first_seen": {"type": "string", "format": "date-time"},
+          "last_seen": {"type": "string", "format": "date-time"},
+          "online": {"type": "boolean"},
+          "minutes_30d": {"type": "integer"},
+          "minutes_365d": {"type": "integer"},
+          "minutes_all": {"type": "integer"}
+        },
+        "additionalProperties": false
+      },
+      "ActivityHeatmap": {
+        "type": "object",
+        "required": ["generated_at", "range", "weekday_labels", "grid", "hour_totals", "day_totals", "peak_hour", "peak_day", "session_count", "total_minutes"],
+        "properties": {
+          "generated_at": {"type": "string", "format": "date-time"},
+          "range": {"type": "string", "enum": ["7d", "30d", "90d"]},
+          "weekday_labels": {"type": "array", "items": {"type": "string"}},
+          "grid": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
+          "hour_totals": {"type": "array", "items": {"type": "number"}},
+          "day_totals": {"type": "array", "items": {"type": "number"}},
+          "peak_hour": {"type": ["integer", "null"]},
+          "peak_day": {"type": ["string", "null"]},
+          "session_count": {"type": "integer"},
+          "total_minutes": {"type": "number"}
+        },
+        "additionalProperties": false
+      },
+      "WorldObjects": {
+        "type": "object",
+        "required": ["available", "objects", "count", "source_count", "supported_count", "source_counts", "active_counts", "kind_counts", "omitted_counts", "truncated", "stale", "updated_at"],
+        "properties": {
+          "available": {"type": "boolean"},
+          "objects": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+          "count": {"type": "integer"},
+          "source_count": {"type": "integer"},
+          "supported_count": {"type": "integer"},
+          "source_counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "active_counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "kind_counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "omitted_counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "truncated": {"type": "boolean"},
+          "stale": {"type": "boolean"},
+          "updated_at": {"$ref": "#/components/schemas/Timestamp"}
+        },
+        "additionalProperties": false
+      },
+      "LiveMapConfig": {
+        "type": "object",
+        "required": ["pollIntervalMs", "worldPollIntervalMs", "worldDataEnabled", "layers", "catalogueUrl", "landmarks", "landmarkCatalogue", "upstreamRevision"],
+        "properties": {
+          "pollIntervalMs": {"type": "integer"},
+          "worldPollIntervalMs": {"type": "integer"},
+          "worldDataEnabled": {"type": "boolean"},
+          "layers": {"type": "array", "items": {"$ref": "#/components/schemas/MapLayer"}},
+          "catalogueUrl": {"type": "string"},
+          "landmarks": {"type": "array", "items": {"$ref": "#/components/schemas/MapLocation"}},
+          "landmarkCatalogue": {"$ref": "#/components/schemas/CatalogueMetadata"},
+          "upstreamRevision": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "MapLayer": {
+        "type": "object",
+        "required": ["id", "name", "imageUrl", "bounds"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "imageUrl": {"type": "string"},
+          "bounds": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}}
+        },
+        "additionalProperties": false
+      },
+      "CatalogueMetadata": {
+        "type": "object",
+        "required": ["gameVersion", "generator", "decoder"],
+        "properties": {
+          "gameVersion": {"type": "string"},
+          "generator": {"type": "string"},
+          "decoder": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "LiveMapCatalogue": {
+        "type": "object",
+        "required": ["gameVersion", "generator", "decoder", "locations"],
+        "properties": {
+          "gameVersion": {"type": "string"},
+          "generator": {"type": "string"},
+          "decoder": {"type": "string"},
+          "locations": {"type": "array", "items": {"$ref": "#/components/schemas/MapLocation"}}
+        },
+        "additionalProperties": false
+      },
+      "MapLocation": {
+        "type": "object",
+        "required": ["id", "kind", "name", "x", "y", "map"],
+        "properties": {
+          "id": {"type": "string"},
+          "kind": {"type": "string"},
+          "name": {"type": "string"},
+          "detail": {"type": "string"},
+          "level": {"type": "integer"},
+          "x": {"type": "number"},
+          "y": {"type": "number"},
+          "map": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "LiveMapPlayers": {
+        "type": "object",
+        "required": ["server", "metrics", "metricsAvailable", "metricsStale", "connected", "stale", "saveEnabled", "saveAvailable", "saveStale", "players"],
+        "properties": {
+          "server": {
+            "type": "object",
+            "required": ["name", "description", "version"],
+            "properties": {
+              "name": {"type": "string"},
+              "description": {"type": "string"},
+              "version": {"type": "string"}
+            },
+            "additionalProperties": false
+          },
+          "metrics": {
+            "type": "object",
+            "required": ["currentPlayers", "maxPlayers", "serverFps", "serverFrameTime", "uptimeSeconds", "baseCount", "days"],
+            "properties": {
+              "currentPlayers": {"type": "integer"},
+              "maxPlayers": {"type": "integer"},
+              "serverFps": {"type": "number"},
+              "serverFrameTime": {"type": "number"},
+              "uptimeSeconds": {"type": "number"},
+              "baseCount": {"type": "integer"},
+              "days": {"type": "integer"}
+            },
+            "additionalProperties": false
+          },
+          "metricsAvailable": {"type": "boolean"},
+          "metricsStale": {"type": "boolean"},
+          "connected": {"type": "boolean"},
+          "stale": {"type": "boolean"},
+          "saveEnabled": {"type": "boolean"},
+          "saveAvailable": {"type": "boolean"},
+          "saveStale": {"type": "boolean"},
+          "metricsUpdatedAt": {"type": "string", "format": "date-time"},
+          "lastSuccessAt": {"type": "string", "format": "date-time"},
+          "saveUpdatedAt": {"type": "string", "format": "date-time"},
+          "saveSnapshotAt": {"type": "string", "format": "date-time"},
+          "players": {"type": "array", "items": {"$ref": "#/components/schemas/LiveMapPlayer"}}
+        },
+        "additionalProperties": false
+      },
+      "LiveMapPlayer": {
+        "type": "object",
+        "required": ["id", "name", "level", "online", "lastSeenAt", "x", "y", "map"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "level": {"type": "integer"},
+          "online": {"type": "boolean"},
+          "lastSeenAt": {"type": "string", "format": "date-time"},
+          "x": {"type": "number"},
+          "y": {"type": "number"},
+          "map": {"type": "string"},
+          "guildKey": {"type": "string"},
+          "guildName": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "LiveMapObjects": {
+        "type": "object",
+        "required": ["enabled", "available", "stale", "unsupported", "truncated", "total", "objects"],
+        "properties": {
+          "enabled": {"type": "boolean"},
+          "available": {"type": "boolean"},
+          "stale": {"type": "boolean"},
+          "unsupported": {"type": "boolean"},
+          "truncated": {"type": "boolean"},
+          "total": {"type": "integer"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "lastError": {"type": "string"},
+          "objects": {"type": "array", "items": {"$ref": "#/components/schemas/LiveMapObject"}}
+        },
+        "additionalProperties": false
+      },
+      "LiveMapObject": {
+        "type": "object",
+        "required": ["id", "kind", "name", "x", "y", "map"],
+        "properties": {
+          "id": {"type": ["string", "null"]},
+          "kind": {"type": "string"},
+          "name": {"type": "string"},
+          "x": {"type": "number"},
+          "y": {"type": "number"},
+          "map": {"type": "string"},
+          "detail": {"type": "string"},
+          "baseId": {"type": "string"},
+          "guildKey": {"type": "string"},
+          "guildName": {"type": "string"},
+          "level": {"type": "integer"},
+          "ownerId": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "TelemetryStats": {
+        "type": "object",
+        "required": ["generated_at", "uptime", "fps", "players", "world", "data_age_threshold_seconds"],
+        "properties": {
+          "generated_at": {"type": "string", "format": "date-time"},
+          "uptime": {"type": "object", "additionalProperties": true},
+          "fps": {"type": "object", "additionalProperties": true},
+          "players": {"type": "object", "additionalProperties": true},
+          "world": {"type": "object", "additionalProperties": true},
+          "data_age_threshold_seconds": {"type": "integer"}
+        },
+        "additionalProperties": false
+      },
+      "WorldDiff": {
+        "type": "object",
+        "required": ["generated_at", "diffs", "total", "has_settings"],
+        "properties": {
+          "generated_at": {"type": "string", "format": "date-time"},
+          "diffs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "vanilla", "current"],
+              "properties": {
+                "key": {"type": "string"},
+                "vanilla": {},
+                "current": {}
+              },
+              "additionalProperties": false
+            }
+          },
+          "total": {"type": "integer"},
+          "has_settings": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      },
+      "PalworldPlayers": {
+        "type": "object",
+        "required": ["available", "players", "generated_at", "stale"],
+        "properties": {
+          "available": {"type": "boolean"},
+          "players": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+          "generated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "stale": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      },
+      "AdminPlayerIps": {
+        "type": "object",
+        "required": ["players"],
+        "properties": {
+          "players": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "account_name", "ip", "observed_at", "last_seen", "online"],
+              "properties": {
+                "name": {"type": "string"},
+                "account_name": {"type": "string"},
+                "ip": {"type": "string"},
+                "observed_at": {"$ref": "#/components/schemas/Timestamp"},
+                "last_seen": {"type": "string", "format": "date-time"},
+                "online": {"type": "boolean"}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PalworldInfo": {
+        "type": "object",
+        "required": ["available", "generated_at", "stale"],
+        "properties": {
+          "available": {"type": "boolean"},
+          "generated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "stale": {"type": "boolean"}
+        },
+        "additionalProperties": true
+      },
+      "AdminCommandPlayers": {
+        "type": "object",
+        "required": ["players"],
+        "properties": {
+          "players": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["userId", "name", "level", "ping", "location_x", "location_y"],
+              "properties": {
+                "userId": {"type": "string"},
+                "name": {"type": "string"},
+                "level": {"type": "integer"},
+                "ping": {"type": "number"},
+                "location_x": {"type": "number"},
+                "location_y": {"type": "number"}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnnouncementCommand": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "additionalProperties": false
+      },
+      "PlayerCommand": {
+        "type": "object",
+        "required": ["userid"],
+        "properties": {
+          "userid": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_:.\\-]+$"}
+        },
+        "additionalProperties": false
+      },
+      "GuildData": {
+        "type": "object",
+        "required": ["schema_version", "guilds", "bases", "world", "updated_at", "stale"],
+        "properties": {
+          "schema_version": {"type": "integer"},
+          "guilds": {"type": "array", "items": {"$ref": "#/components/schemas/Guild"}},
+          "bases": {"type": "array", "items": {"$ref": "#/components/schemas/GuildBase"}},
+          "world": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "updated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "stale": {"type": "boolean"},
+          "alerts": {"type": "array", "items": {"$ref": "#/components/schemas/GuildAlert"}}
+        },
+        "additionalProperties": false
+      },
+      "GuildAlert": {
+        "type": "object",
+        "required": ["level", "title", "detail"],
+        "properties": {
+          "level": {"type": "string", "enum": ["warning", "danger"]},
+          "title": {"type": "string"},
+          "detail": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "CollectorHealth": {
+        "type": "object",
+        "required": ["status", "collector", "version"],
+        "properties": {
+          "status": {"type": "string", "enum": ["ok", "starting"]},
+          "collector": {"type": "string"},
+          "version": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "CollectorStatus": {
+        "type": "object",
+        "required": ["state", "started_at", "heartbeat", "datasets"],
+        "properties": {
+          "state": {"type": "string"},
+          "started_at": {"$ref": "#/components/schemas/Timestamp"},
+          "heartbeat": {"$ref": "#/components/schemas/Timestamp"},
+          "datasets": {"type": "object", "additionalProperties": true}
+        },
+        "additionalProperties": false
+      },
+      "GuildIngest": {
+        "type": "object",
+        "required": ["schema_version", "guilds", "bases", "world", "diagnostics"],
+        "properties": {
+          "schema_version": {"type": "integer", "enum": [2, 3]},
+          "guilds": {"type": "array", "maxItems": 256, "items": {"$ref": "#/components/schemas/Guild"}},
+          "bases": {"type": "array", "maxItems": 512, "items": {"$ref": "#/components/schemas/GuildBase"}},
+          "players": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/components/schemas/SavedPlayer"}},
+          "world": {"$ref": "#/components/schemas/GuildWorld"},
+          "diagnostics": {"$ref": "#/components/schemas/GuildDiagnostics"}
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["schema_version"],
+              "properties": {"schema_version": {"const": 3}}
+            },
+            "then": {"required": ["players"]}
+          }
+        ],
+        "additionalProperties": false
+      },
+      "Guild": {
+        "type": "object",
+        "required": ["group_id", "guild_name", "players"],
+        "properties": {
+          "group_id": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+          "guild_name": {"type": "string"},
+          "players": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "required": ["player_name", "is_admin"],
+              "properties": {
+                "player_name": {"type": "string"},
+                "is_admin": {"type": "boolean"}
+              },
+              "additionalProperties": false
+            }
+          },
+          "base_count": {"type": "integer", "minimum": 0},
+          "pal_count": {"type": "integer", "minimum": 0},
+          "worker_count": {"type": "integer", "minimum": 0},
+          "working_count": {"type": "integer", "minimum": 0},
+          "problem_worker_count": {"type": "integer", "minimum": 0},
+          "active_raid_count": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      },
+      "GuildBase": {
+        "type": "object",
+        "required": ["base_id", "group_id", "name", "location_x", "location_y", "work_types", "raid_active"],
+        "properties": {
+          "base_id": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+          "group_id": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+          "name": {"type": "string"},
+          "location_x": {"type": "number"},
+          "location_y": {"type": "number"},
+          "worker_count": {"type": "integer", "minimum": 0},
+          "working_count": {"type": "integer", "minimum": 0},
+          "sick_count": {"type": "integer", "minimum": 0},
+          "hungry_count": {"type": "integer", "minimum": 0},
+          "low_sanity_count": {"type": "integer", "minimum": 0},
+          "problem_worker_count": {"type": "integer", "minimum": 0},
+          "raid_active": {"type": "boolean"},
+          "work_types": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "required": ["key", "count"],
+              "properties": {
+                "key": {"type": "string"},
+                "count": {"type": "integer", "minimum": 0}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SavedPlayer": {
+        "type": "object",
+        "required": ["player_id", "player_name", "guild_id", "is_admin", "level", "exp", "owned_pal_count", "unused_status_points", "status_points"],
+        "properties": {
+          "player_id": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+          "player_name": {"type": "string", "minLength": 1, "maxLength": 128},
+          "guild_id": {"type": "string", "pattern": "^(?:[0-9a-f]{20})?$"},
+          "is_admin": {"type": "boolean"},
+          "level": {"type": "integer", "minimum": 0},
+          "exp": {"type": "integer", "minimum": 0},
+          "owned_pal_count": {"type": "integer", "minimum": 0},
+          "unused_status_points": {"type": "integer", "minimum": 0},
+          "status_points": {
+            "type": "object",
+            "properties": {
+              "max_hp": {"type": "integer", "minimum": 0},
+              "stamina": {"type": "integer", "minimum": 0},
+              "attack": {"type": "integer", "minimum": 0},
+              "carry_weight": {"type": "integer", "minimum": 0},
+              "capture_rate": {"type": "integer", "minimum": 0},
+              "work_speed": {"type": "integer", "minimum": 0}
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "GuildWorld": {
+        "type": "object",
+        "properties": {
+          "active_raid_count": {"type": "integer", "minimum": 0},
+          "oil_rig_count": {"type": "integer", "minimum": 0},
+          "oil_rig_alert_count": {"type": "integer", "minimum": 0},
+          "oil_rig_cleared_count": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      },
+      "GuildDiagnostics": {
+        "type": "object",
+        "properties": {
+          "unowned_base_count": {"type": "integer", "minimum": 0},
+          "missing_worker_container_count": {"type": "integer", "minimum": 0},
+          "unresolved_worker_count": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

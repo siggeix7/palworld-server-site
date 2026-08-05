@@ -3,7 +3,9 @@ FROM node:24-alpine AS live-map-build
 WORKDIR /build
 COPY web/live-map/package.json web/live-map/package-lock.json ./
 RUN npm ci
+COPY web/dashboard/api/openapi.json /dashboard/api/openapi.json
 COPY web/live-map/ ./
+RUN npm run generate:api
 RUN npm run check
 RUN npm test
 RUN npm run build
@@ -25,7 +27,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN dnf -y install python3-pip shadow-utils \
+RUN dnf -y upgrade --security \
+    && dnf -y install python3-pip shadow-utils \
     && dnf clean all \
     && ln -sf python3 /usr/bin/python
 
@@ -34,7 +37,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 RUN useradd --create-home --uid 1000 palworld-site \
     && mkdir -p /data /app/staticfiles \
-    && chown -R palworld-site:palworld-site /data /app/staticfiles
+    && chown -R palworld-site:palworld-site /data /app/staticfiles \
+    && chmod 0700 /data
 
 COPY web/palworld_site/ ./web/palworld_site/
 COPY web/dashboard/ ./web/dashboard/

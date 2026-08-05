@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
@@ -66,13 +66,15 @@ const responses: Record<string, unknown> = {
   }
 }
 
-function mockAPI(resolve: (path: string) => unknown | Promise<unknown> = (path) => responses[path]) {
+function mockAPI(
+  resolve: (path: string, init?: RequestInit) => unknown | Promise<unknown> = (path) => responses[path]
+) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: string | URL | Request) => {
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const path =
         typeof input === 'string' ? input : input instanceof URL ? input.pathname : new URL(input.url).pathname
-      const body = await resolve(path)
+      const body = await resolve(path, init)
       if (body instanceof Error) throw body
       if (body instanceof Response) return body
       return body
@@ -101,6 +103,22 @@ describe('App', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Retry' }))
     expect(await screen.findByRole('heading', { name: 'Test Realm' })).toBeVisible()
+  })
+
+  it('surfaces a configuration request timeout with a retry action', async () => {
+    vi.useFakeTimers()
+    mockAPI((path, init) => {
+      if (path !== '/api/v1/live-map/config') return responses[path]
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      })
+    })
+    render(<App />)
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_001))
+    vi.useRealTimers()
+    expect(screen.getByRole('main')).toHaveTextContent('Map unavailable')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible()
   })
 
   it('clears private map data when authentication expires', async () => {
@@ -404,14 +422,16 @@ describe('App', () => {
     expect(within(explorer).getByRole('button', { name: 'Expand Offline Players section' })).toBeVisible()
     expect(within(explorer).getByRole('button', { name: 'Expand Guilds section' })).toBeVisible()
 
-    for (const category of ['Wild Pals', 'Alpha Pals', 'Tower Bosses', 'Live NPCs']) {
-      const checkbox = within(explorer).getByRole('checkbox', { name: `Show ${category}` })
-      // Populated categories are shown on the map automatically, even though their
-      // sections stay collapsed to keep the list tidy.
-      expect(checkbox).toBeChecked()
-      expect(checkbox).toBeEnabled()
-      expect(within(explorer).getByRole('button', { name: `Expand ${category} section` })).toBeVisible()
-    }
+    await waitFor(() => {
+      for (const category of ['Wild Pals', 'Alpha Pals', 'Tower Bosses', 'Live NPCs']) {
+        const checkbox = within(explorer).getByRole('checkbox', { name: `Show ${category}` })
+        // Populated categories are shown on the map automatically, even though their
+        // sections stay collapsed to keep the list tidy.
+        expect(checkbox).toBeChecked()
+        expect(checkbox).toBeEnabled()
+        expect(within(explorer).getByRole('button', { name: `Expand ${category} section` })).toBeVisible()
+      }
+    })
     expect(within(explorer).queryByText(/Companion Pals/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Wild Default' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'NPC Default' })).toBeInTheDocument()

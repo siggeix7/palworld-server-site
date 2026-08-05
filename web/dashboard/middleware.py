@@ -94,21 +94,29 @@ class SiteAccessMiddleware:
             return self.get_response(request)
         if not request.user.is_authenticated:
             if request.path.startswith("/api/"):
-                return JsonResponse({"error": "authentication required"}, status=401)
+                response = JsonResponse({"error": "authentication required"}, status=401)
+                patch_cache_control(response, no_store=True, private=True)
+                return response
             query = urlencode({"next": request.get_full_path()})
             return redirect(f"{reverse('login')}?{query}")
         profile = get_user_profile(request.user)
         if not profile.email_verified or not profile.approved:
             if request.path.startswith("/api/"):
-                return JsonResponse({"error": "account approval required"}, status=403)
+                response = JsonResponse({"error": "account approval required"}, status=403)
+                patch_cache_control(response, no_store=True, private=True)
+                return response
             return redirect("pending-approval")
         if profile.must_change_password:
             if request.path.startswith("/api/"):
-                return JsonResponse({"error": "password change required"}, status=403)
+                response = JsonResponse({"error": "password change required"}, status=403)
+                patch_cache_control(response, no_store=True, private=True)
+                return response
             return redirect("password_change")
         if needs_terms_acceptance(profile):
             if request.path.startswith("/api/"):
-                return JsonResponse({"error": "terms acceptance required"}, status=403)
+                response = JsonResponse({"error": "terms acceptance required"}, status=403)
+                patch_cache_control(response, no_store=True, private=True)
+                return response
             query = urlencode({"next": request.get_full_path()})
             return redirect(f"{reverse('accept-terms')}?{query}")
         return self.get_response(request)

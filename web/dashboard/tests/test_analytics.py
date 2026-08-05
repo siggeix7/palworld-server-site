@@ -145,19 +145,25 @@ class NewPageTests(TestCase):
         self.member = self.create_user()
         self.client.force_login(self.member)
 
-    def test_leaderboard_page_renders(self):
+    def test_leaderboard_page_renders_spa_shell(self):
         response = self.client.get(reverse("leaderboard"))
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "dashboard/app.html")
         self.assertContains(response, "Classifica")
-        self.assertContains(response, "leaderboard.js")
+        self.assertContains(response, "dashboard/live-map/live-map.js")
+        self.assertNotContains(response, "leaderboard.js")
 
-    def test_peak_hours_page_renders(self):
+    def test_peak_hours_page_renders_spa_shell(self):
         response = self.client.get(reverse("peak-hours"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Orari di punta")
-        self.assertContains(response, "peak_hours.js")
+        self.assertTemplateUsed(response, "dashboard/app.html")
+        self.assertContains(response, "Orari")
+        self.assertContains(response, "dashboard/live-map/live-map.js")
+        self.assertNotContains(response, "peak_hours.js")
 
-    def test_navbar_includes_new_sections(self):
+    def test_home_uses_route_neutral_spa_shell(self):
         response = self.client.get(reverse("home"))
-        self.assertContains(response, reverse("leaderboard"))
-        self.assertContains(response, reverse("peak-hours"))
+        self.assertTemplateUsed(response, "dashboard/app.html")
+        self.assertContains(response, 'id="root"')
+        self.assertNotContains(response, reverse("leaderboard"))
+        self.assertNotContains(response, reverse("peak-hours"))

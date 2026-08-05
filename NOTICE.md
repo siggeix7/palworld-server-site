@@ -21,9 +21,12 @@ Adapted material and modifications:
   health model were moved server-side and rewritten for the local 20-second
   collection cadence, time-weighted coverage and dynamic gap thresholds.
 - `lib/palworld.ts`: alternate player payload field names were added to the
-  ingest sanitizer. Raw player/user IDs and IP addresses are still discarded.
+  ingest sanitizer. Raw player/user IDs are discarded; the last observed game
+  IP is retained separately for security and moderation and is available only
+  to configured site administrators.
 - `lib/theme-context.tsx`: theme names and accent palette were adapted to the
-  existing Observatory CSS variables without React, Tailwind or Radix.
+  Observatory design system. The current SPA implements those themes with
+  React and Tailwind; no Radix implementation was copied.
 
 The public site exposes a condensed notice through
 `web/dashboard/static/dashboard/THIRD_PARTY_NOTICES.txt`.
@@ -48,9 +51,10 @@ Pinned map-asset version: `1.0.1.100619`.
 Current catalogue game-data version: `1.0.2.101103`.
 
 - `web/live-map/` contains the upstream React 19, TypeScript, Vite and Tailwind
-  client. Local changes point it at authenticated Django endpoints, add a return
-  link to the Observatory and produce deterministic bundle names. The complete
-  upstream MIT license is retained in `web/live-map/LICENSE`.
+  client. Local changes integrate the former Django dashboard into the same SPA,
+  add React Router navigation and Zod validation, point all features at
+  authenticated Django endpoints and produce deterministic bundle names. The
+  complete upstream MIT license is retained in `web/live-map/LICENSE`.
 - `web/dashboard/static/dashboard/live-map/maps/palpagos.jpg` and
   `world-tree.jpg` are the original 8192x8192 upstream assets. Their SHA-256
   hashes are respectively

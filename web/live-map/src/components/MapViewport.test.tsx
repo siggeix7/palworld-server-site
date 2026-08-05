@@ -174,8 +174,11 @@ describe('MapViewport zoom controls', () => {
     )
 
     expect(screen.getByRole('application')).toHaveClass('map-layer-palpagos')
-    expect(container.querySelector('.map-artwork')).toHaveClass('block')
-    expect(container.querySelector('.map-artwork')).not.toHaveClass('map-artwork-palpagos')
+    const artwork = container.querySelector('.map-artwork')
+    expect(artwork).toHaveClass('block', 'pointer-events-none')
+    expect(artwork).toHaveAttribute('draggable', 'false')
+    expect(fireEvent.dragStart(artwork as Element)).toBe(false)
+    expect(artwork).not.toHaveClass('map-artwork-palpagos')
     expect(container.querySelector('.fallback-grid')).not.toBeInTheDocument()
     expect(container.querySelector('.map-cartography-frame')).not.toBeInTheDocument()
     expect(screen.getByRole('application')).toHaveStyle({ '--map-background': 'rgb(11 20 31)' })
@@ -389,6 +392,53 @@ describe('MapViewport zoom controls', () => {
     fireEvent.wheel(screen.getByRole('application'), { clientX: 600, clientY: 300, deltaY: -100 })
 
     expect(readTransform(scene).scale).toBeGreaterThan(fitted.scale)
+  })
+
+  it('handles two-finger zoom on the map interaction layer', () => {
+    installViewportMocks()
+    const marker: MapItem = {
+      id: 'touch-marker',
+      kind: 'players',
+      name: 'Touch marker',
+      x: 0,
+      y: 0,
+      map: layer.id
+    }
+    const scene = renderViewport([marker], new Set<ItemKind>(['players']))
+    const fitted = readTransform(scene)
+    const viewport = screen.getByRole('application')
+    const interactionLayer = viewport.querySelector<HTMLElement>('.map-interaction-layer')
+    if (!interactionLayer) throw new Error('Expected map interaction layer')
+
+    expect(viewport).not.toHaveClass('touch-pinch-zoom')
+    expect(interactionLayer).toHaveStyle({ touchAction: 'none' })
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Touch marker' }), {
+      pointerId: 1,
+      pointerType: 'touch',
+      button: 0,
+      clientX: 500,
+      clientY: 300
+    })
+    fireEvent.pointerDown(interactionLayer, {
+      pointerId: 2,
+      pointerType: 'touch',
+      button: 0,
+      clientX: 700,
+      clientY: 300
+    })
+    fireEvent.pointerMove(interactionLayer, { pointerId: 2, pointerType: 'touch', clientX: 800, clientY: 300 })
+
+    expect(readTransform(scene).scale).toBeGreaterThan(fitted.scale)
+
+    fireEvent.pointerUp(interactionLayer, { pointerId: 2, pointerType: 'touch', clientX: 800, clientY: 300 })
+    fireEvent.pointerUp(screen.getByRole('button', { name: 'Touch marker' }), {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 500,
+      clientY: 300
+    })
+    expect(interactionLayer.style.cursor).toBe('grab')
   })
 
   it('restores the saved zoom level for the active map', () => {

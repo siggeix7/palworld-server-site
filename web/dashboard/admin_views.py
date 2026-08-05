@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import re
 import secrets
 from urllib.parse import urljoin, urlsplit
@@ -12,7 +13,6 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
-from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
@@ -29,6 +29,8 @@ ADMIN_USERID_MAX_LENGTH = 64
 ADMIN_USERID_PATTERN = re.compile(r"^[A-Za-z0-9_:.\-]{1,64}\Z")
 ADMIN_ANNOUNCE_MAX_LENGTH = 500
 ADMIN_COMMAND_TIMEOUT = 10
+SNAPSHOT_NAME_MAX_LENGTH = 128
+SNAPSHOT_KEY_MAX_LENGTH = 64
 GUILD_FIELDS = {
     "group_id", "guild_name", "players", "base_count", "pal_count",
     "worker_count", "working_count", "problem_worker_count",
@@ -78,6 +80,36 @@ def _is_nonnegative_int(value):
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
+def _valid_snapshot_text(value, max_length, *, allow_empty=True):
+    return (
+        isinstance(value, str)
+        and (allow_empty or bool(value))
+        and len(value) <= max_length
+        and all(character.isprintable() for character in value)
+    )
+
+
+def _reject_json_constant(value):
+    raise ValueError(f"unsupported JSON constant: {value}")
+
+
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _load_json_body(request):
+    return json.loads(
+        request.body or b"{}",
+        parse_constant=_reject_json_constant,
+        object_pairs_hook=_unique_json_object,
+    )
+
+
 def _validate_guild_payload(payload):
     if not isinstance(payload, dict):
         return "payload must be an object"
@@ -110,8 +142,10 @@ def _validate_guild_payload(payload):
             return "each guild must contain only supported fields"
         if not OPAQUE_ID_PATTERN.fullmatch(guild.get("group_id", "")):
             return "each guild must be an object with a group_id"
-        if not isinstance(guild.get("guild_name"), str):
-            return "guild_name must be a string"
+        if not _valid_snapshot_text(
+            guild.get("guild_name"), SNAPSHOT_NAME_MAX_LENGTH
+        ):
+            return "guild_name must be a printable string of at most 128 characters"
         if any(
             field in guild and not _is_nonnegative_int(guild[field])
             for field in COUNT_FIELDS
@@ -124,7 +158,11 @@ def _validate_guild_payload(payload):
             return "each guild player must be an object"
         if any(
             set(player) - {"player_name", "is_admin"}
-            or not isinstance(player.get("player_name"), str)
+            or not _valid_snapshot_text(
+                player.get("player_name"),
+                SNAPSHOT_NAME_MAX_LENGTH,
+                allow_empty=False,
+            )
             or not isinstance(player.get("is_admin"), bool)
             for player in players
         ):
@@ -137,11 +175,14 @@ def _validate_guild_payload(payload):
             base.get("base_id", "")
         ) or not OPAQUE_ID_PATTERN.fullmatch(base.get("group_id", "")):
             return "each base must have a base_id and group_id"
-        if not isinstance(base.get("name"), str):
-            return "base name must be a string"
+        if not _valid_snapshot_text(
+            base.get("name"), SNAPSHOT_NAME_MAX_LENGTH
+        ):
+            return "base name must be a printable string of at most 128 characters"
         if any(
             not isinstance(base.get(field), (int, float))
             or isinstance(base.get(field), bool)
+            or not math.isfinite(base.get(field))
             for field in ("location_x", "location_y")
         ):
             return "base coordinates must be numeric"
@@ -159,7 +200,9 @@ def _validate_guild_payload(payload):
             return "each base work type must be an object"
         if any(
             set(work_type) != {"key", "count"}
-            or not isinstance(work_type["key"], str)
+            or not _valid_snapshot_text(
+                work_type["key"], SNAPSHOT_KEY_MAX_LENGTH, allow_empty=False
+            )
             or not _is_nonnegative_int(work_type["count"])
             for work_type in work_types
         ):
@@ -171,9 +214,11 @@ def _validate_guild_payload(payload):
         if not OPAQUE_ID_PATTERN.fullmatch(player.get("player_id", "")):
             return "each saved player must have a player_id"
         if (
-            not isinstance(player.get("player_name"), str)
-            or not player["player_name"]
-            or len(player["player_name"]) > 128
+            not _valid_snapshot_text(
+                player.get("player_name"),
+                SNAPSHOT_NAME_MAX_LENGTH,
+                allow_empty=False,
+            )
         ):
             return "saved player names must be non-empty strings"
         guild_id = player.get("guild_id")
@@ -315,35 +360,6 @@ def _guild_alerts(snapshot, now=None):
             "detail": f"{oil_rig_alerts} piattaforme risultano in allerta nello snapshot.",
         })
     return alerts
-
-
-@require_GET
-@never_cache
-@login_required
-def admin_panel(request):
-    _admin_required(request)
-    return render(request, "dashboard/admin_panel.html", {
-        "app_version": settings.APP_VERSION,
-        "public_site_url": settings.PUBLIC_SITE_URL,
-        "site_admin": True,
-        "active_nav": "admin",
-    })
-
-
-@require_GET
-@never_cache
-@login_required
-def guild_data_page(request):
-    return render(
-        request,
-        "dashboard/guilds.html",
-        {
-            "app_version": settings.APP_VERSION,
-            "public_site_url": settings.PUBLIC_SITE_URL,
-            "site_admin": is_site_admin(request.user),
-            "active_nav": "guilds",
-        },
-    )
 
 
 @require_GET
@@ -563,8 +579,8 @@ def palworld_announce(request):
     if request.content_type != "application/json":
         return JsonResponse({"error": "Content-Type must be application/json"}, status=415)
     try:
-        body = json.loads(request.body or b"{}")
-    except (json.JSONDecodeError, UnicodeDecodeError):
+        body = _load_json_body(request)
+    except (ValueError, UnicodeDecodeError):
         return JsonResponse({"error": "invalid JSON"}, status=400)
     if not isinstance(body, dict):
         return JsonResponse({"error": "JSON body must be an object"}, status=400)
@@ -595,8 +611,8 @@ def _command_target_from_body(request):
             {"error": "Content-Type must be application/json"}, status=415
         )
     try:
-        body = json.loads(request.body or b"{}")
-    except (json.JSONDecodeError, UnicodeDecodeError):
+        body = _load_json_body(request)
+    except (ValueError, UnicodeDecodeError):
         return None, JsonResponse({"error": "invalid JSON"}, status=400)
     if not isinstance(body, dict):
         return None, JsonResponse({"error": "JSON body must be an object"}, status=400)
@@ -668,7 +684,9 @@ def guild_ingest(request):
     if not expected:
         return JsonResponse({"error": "private API token is not configured"}, status=503)
     authorization = request.headers.get("Authorization", "")
-    provided = authorization[7:] if authorization.startswith("Bearer ") else ""
+    scheme, separator, provided = authorization.partition(" ")
+    if not separator or scheme.casefold() != "bearer":
+        provided = ""
     if not provided or not secrets.compare_digest(
         provided.encode("utf-8"), expected.encode("utf-8")
     ):
@@ -684,7 +702,7 @@ def guild_ingest(request):
     if len(request.body) > settings.PRIVATE_API_MAX_BYTES:
         return JsonResponse({"error": "request body is too large"}, status=413)
     try:
-        body = json.loads(request.body or b"{}")
+        body = _load_json_body(request)
         validation_error = _validate_guild_payload(body)
         if validation_error:
             return JsonResponse({"error": validation_error}, status=422)
@@ -696,7 +714,7 @@ def guild_ingest(request):
             },
         )
         return JsonResponse({"ok": True})
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except (ValueError, UnicodeDecodeError):
         return JsonResponse({"error": "invalid JSON"}, status=400)
 
 

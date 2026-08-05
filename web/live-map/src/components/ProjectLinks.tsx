@@ -2,9 +2,10 @@ import { IconArrowLeft, IconBrandGithub } from '@tabler/icons-react'
 
 interface ProjectLinksProps {
   hidden: boolean
+  onObservatoryNavigate?: () => void
 }
 
-export function ProjectLinks({ hidden }: ProjectLinksProps) {
+export function ProjectLinks({ hidden, onObservatoryNavigate }: ProjectLinksProps) {
   return (
     <nav
       className={`pal-glass-surface absolute right-[354px] bottom-[18px] z-[18] flex h-11 items-center overflow-hidden transition-[opacity,transform] max-sm:right-3.5 max-sm:bottom-[68px] ${
@@ -18,6 +19,11 @@ export function ProjectLinks({ hidden }: ProjectLinksProps) {
       <a
         className="pal-interactive flex h-full min-h-11 items-center gap-2 border-r border-white/10 px-3 text-[#dff9fc] shadow-[inset_3px_0_#55d4e7] no-underline focus-visible:outline-none"
         href="/"
+        onClick={(event) => {
+          if (!onObservatoryNavigate) return
+          event.preventDefault()
+          onObservatoryNavigate()
+        }}
         aria-label="Torna all'Osservatorio"
         title="Torna al resto del sito"
       >

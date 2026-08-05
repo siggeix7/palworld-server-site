@@ -9,7 +9,6 @@ from pathlib import Path
 from django.conf import settings
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
@@ -120,16 +119,6 @@ def _catalogue_asset():
     ):
         raise ValueError("live map catalogue has an invalid schema or provenance")
     return data, hashlib.sha256(data).hexdigest()
-
-
-@require_GET
-@never_cache
-def page(request):
-    return render(
-        request,
-        "dashboard/map.html",
-        {"app_version": settings.APP_VERSION},
-    )
 
 
 @require_GET

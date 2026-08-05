@@ -1,10 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  LiveMapCatalogueSchema,
+  LiveMapConfigSchema,
+  LiveMapObjectsSchema,
+  LiveMapPlayersSchema
+} from './api/liveMapContracts'
 import { type Detail, DetailsDialog } from './components/DetailsDialog'
 import { Explorer } from './components/Explorer'
 import { MapViewport, type MapViewportHandle } from './components/MapViewport'
 import { ProjectLinks } from './components/ProjectLinks'
 import { StatusBar } from './components/StatusBar'
-import { AUTHENTICATION_REQUIRED_EVENT, notifyAuthenticationRequired, usePolling } from './hooks/usePolling'
+import {
+  ACCESS_FORBIDDEN_EVENT,
+  AUTHENTICATION_REQUIRED_EVENT,
+  notifyAccessForbidden,
+  notifyAuthenticationRequired,
+  usePolling
+} from './hooks/usePolling'
 import { guildIdForBase } from './lib/guilds'
 import type { LeaderboardId } from './lib/leaderboards'
 import {
@@ -22,8 +34,7 @@ import {
   type ObjectState,
   type PlayerState,
   type PlayerStatus,
-  type PublicConfig,
-  type WorldCatalogue
+  type PublicConfig
 } from './types'
 
 const API_BASE = '/api/v1/live-map'
@@ -44,36 +55,56 @@ function landmarkCatalogueCompatibility(catalogueVersion: string, serverVersion:
     : 'mismatch'
 }
 
-export function App() {
+interface AppProps {
+  onObservatoryNavigate?: () => void
+}
+
+export function App({ onObservatoryNavigate }: AppProps = {}) {
   const [config, setConfig] = useState<PublicConfig | null>(null)
   const [configError, setConfigError] = useState(false)
   const [configAttempt, setConfigAttempt] = useState(0)
   const [authenticationRequired, setAuthenticationRequired] = useState(false)
+  const [accessForbidden, setAccessForbidden] = useState(false)
 
   useEffect(() => {
     const requireAuthentication = () => setAuthenticationRequired(true)
+    const denyAccess = () => setAccessForbidden(true)
     window.addEventListener(AUTHENTICATION_REQUIRED_EVENT, requireAuthentication)
-    return () => window.removeEventListener(AUTHENTICATION_REQUIRED_EVENT, requireAuthentication)
+    window.addEventListener(ACCESS_FORBIDDEN_EVENT, denyAccess)
+    return () => {
+      window.removeEventListener(AUTHENTICATION_REQUIRED_EVENT, requireAuthentication)
+      window.removeEventListener(ACCESS_FORBIDDEN_EVENT, denyAccess)
+    }
   }, [])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: incrementing configAttempt deliberately retries the request
   useEffect(() => {
     const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort('timeout'), 10_000)
     const load = async () => {
       try {
-        const response = await fetch(`${API_BASE}/config`, { cache: 'no-store', signal: controller.signal })
-        if (response.status === 401 || response.status === 403) {
+        const response = await fetch(`${API_BASE}/config`, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: controller.signal
+        })
+        if (response.status === 401) {
           notifyAuthenticationRequired()
           return
         }
+        if (response.status === 403) {
+          notifyAccessForbidden()
+          return
+        }
         if (!response.ok) throw new Error(`${API_BASE}/config returned ${response.status}`)
-        const nextConfig = (await response.json()) as PublicConfig
+        const nextConfig = LiveMapConfigSchema.parse(await response.json())
         const catalogueResponse = await fetch(nextConfig.catalogueUrl, {
           cache: 'force-cache',
+          credentials: 'same-origin',
           signal: controller.signal
         })
         if (!catalogueResponse.ok) throw new Error(`${nextConfig.catalogueUrl} returned ${catalogueResponse.status}`)
-        const catalogue = (await catalogueResponse.json()) as WorldCatalogue
+        const catalogue = LiveMapCatalogueSchema.parse(await catalogueResponse.json())
         const locations = Array.from(
           new Map(
             [...(nextConfig.landmarks || []), ...(catalogue.locations || [])].map((location) => [location.id, location])
@@ -90,12 +121,29 @@ export function App() {
         })
         setConfigError(false)
       } catch {
-        if (!controller.signal.aborted) setConfigError(true)
+        if (!controller.signal.aborted || controller.signal.reason === 'timeout') setConfigError(true)
       }
     }
     void load()
-    return () => controller.abort()
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
   }, [configAttempt])
+
+  if (accessForbidden) {
+    return (
+      <div className="grid h-dvh place-items-center bg-[#111416] px-5 text-center text-[#f4f5f5]">
+        <main className="pal-glass-surface grid max-w-md justify-items-center gap-3 p-7">
+          <h1 className="m-0 text-xl">Accesso alla mappa non autorizzato</h1>
+          <p className="m-0 text-sm leading-6 text-[#9fb0b5]">Il tuo account non dispone dei permessi necessari.</p>
+          <a className="pal-glass-control mt-1 px-4 py-3 text-sm text-[#e5f7f8] no-underline" href="/">
+            Torna all'Osservatorio
+          </a>
+        </main>
+      </div>
+    )
+  }
 
   if (authenticationRequired) {
     return (
@@ -140,12 +188,17 @@ export function App() {
     )
   }
 
-  return <LiveMap config={config} />
+  return <LiveMap config={config} onObservatoryNavigate={onObservatoryNavigate} />
 }
 
-function LiveMap({ config }: { config: PublicConfig }) {
-  const players = usePolling<PlayerState>(`${API_BASE}/players`, config.pollIntervalMs)
-  const objects = usePolling<ObjectState>(`${API_BASE}/objects`, config.worldPollIntervalMs, config.worldDataEnabled)
+function LiveMap({ config, onObservatoryNavigate }: { config: PublicConfig; onObservatoryNavigate?: () => void }) {
+  const players = usePolling<PlayerState>(`${API_BASE}/players`, config.pollIntervalMs, LiveMapPlayersSchema)
+  const objects = usePolling<ObjectState>(
+    `${API_BASE}/objects`,
+    config.worldPollIntervalMs,
+    LiveMapObjectsSchema,
+    config.worldDataEnabled
+  )
   const playerState = players.data
   const objectState = objects.data || { ...EMPTY_OBJECT_STATE, enabled: config.worldDataEnabled }
   const initialPreferences = useMemo(loadFilterPreferences, [])
@@ -589,7 +642,10 @@ function LiveMap({ config }: { config: PublicConfig }) {
                 {saveNotice}
               </p>
             ) : null}
-            <ProjectLinks hidden={Boolean(detail && detail.kind !== 'leaderboard')} />
+            <ProjectLinks
+              hidden={Boolean(detail && detail.kind !== 'leaderboard')}
+              onObservatoryNavigate={onObservatoryNavigate}
+            />
             <DetailsDialog
               detail={detail}
               items={items}

@@ -385,8 +385,10 @@ class PublicApiTests(TestCase):
         self.assertEqual(response.json()["players"], [])
         self.assertTrue(response.json()["status"]["players_stale"])
 
-    def test_home_sets_security_headers(self):
+    def test_spa_shell_sets_security_headers_without_legacy_footer(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
-        self.assertContains(response, "THIRD_PARTY_NOTICES.txt")
+        self.assertTemplateUsed(response, "dashboard/app.html")
+        self.assertContains(response, "dashboard/live-map/live-map.js")
+        self.assertNotContains(response, "THIRD_PARTY_NOTICES.txt")

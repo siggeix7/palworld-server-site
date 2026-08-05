@@ -20,10 +20,11 @@ class LiveMapTests(TestCase):
     def setUp(self):
         self.now = timezone.now()
 
-    def test_page_is_the_standalone_upstream_application(self):
+    def test_page_uses_the_shared_spa_shell(self):
         response = self.client.get(reverse("map"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "dashboard/app.html")
         self.assertContains(response, 'id="root"')
         self.assertContains(response, "dashboard/live-map/live-map.css")
         self.assertContains(response, "dashboard/live-map/live-map.js")

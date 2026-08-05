@@ -13,7 +13,9 @@ from .models import RuntimeState
 
 def _authorized(request):
     authorization = request.headers.get("Authorization", "")
-    provided = authorization[7:] if authorization.startswith("Bearer ") else ""
+    scheme, separator, provided = authorization.partition(" ")
+    if not separator or scheme.casefold() != "bearer":
+        provided = ""
     expected = settings.PRIVATE_API_TOKEN
     return bool(provided and expected) and secrets.compare_digest(
         provided.encode("utf-8"), expected.encode("utf-8")

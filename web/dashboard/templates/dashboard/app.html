@@ -1,0 +1,23 @@
+{% load static %}
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{ meta_description }}">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="application-version" content="{{ app_version }}">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#09151b">
+  <link rel="icon" type="image/svg+xml" href="{% static 'dashboard/live-map/favicon.svg' %}">
+  <link rel="apple-touch-icon" href="{% static 'dashboard/live-map/favicon.svg' %}">
+  {% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
+  <title>{{ page_title }}</title>
+  <link rel="stylesheet" href="{% static 'dashboard/live-map/live-map.css' %}">
+</head>
+<body>
+  <div id="root"></div>
+  <noscript>La dashboard richiede JavaScript.</noscript>
+  <script type="module" src="{% static 'dashboard/live-map/live-map.js' %}"></script>
+</body>
+</html>

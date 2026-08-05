@@ -4,8 +4,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{% block meta_description %}Accesso riservato a Palworld Server Observatory{% endblock %}">
   <meta name="theme-color" content="#071a1d">
   <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" type="image/svg+xml" href="{% static 'dashboard/images/favicon.svg' %}">
+  <link rel="apple-touch-icon" href="{% static 'dashboard/images/favicon.svg' %}">
+  {% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
   <title>{% block title %}Account{% endblock %} · Palworld Server Observatory</title>
   <link rel="stylesheet" href="{% static 'dashboard/css/site.css' %}">
 </head>

@@ -73,6 +73,20 @@ class GuildIngestTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(GuildSnapshot.objects.get(pk=1).payload, payload)
 
+    def test_bearer_scheme_is_case_insensitive(self):
+        payload = {
+            "schema_version": 2,
+            "guilds": [],
+            "bases": [],
+            "world": {},
+            "diagnostics": {},
+        }
+        response = self.post(
+            payload,
+            HTTP_AUTHORIZATION="bearer test-private-token",
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_rejects_raw_ids_malformed_payloads_and_bad_auth(self):
         raw_payload = {
             "schema_version": 2,
@@ -95,6 +109,49 @@ class GuildIngestTests(TestCase):
             HTTP_AUTHORIZATION="Bearer wrong-token",
         )
         self.assertEqual(response.status_code, 401)
+        self.assertFalse(GuildSnapshot.objects.exists())
+
+    def test_rejects_nonstandard_or_ambiguous_json(self):
+        duplicate_key = (
+            '{"schema_version":2,"schema_version":2,"guilds":[],"bases":[],'
+            '"world":{},"diagnostics":{}}'
+        )
+        non_finite = (
+            '{"schema_version":2,"guilds":[],"bases":[{"base_id":"'
+            + "b" * 20
+            + '","group_id":"'
+            + "a" * 20
+            + '","name":"Base","location_x":NaN,"location_y":0,'
+            '"worker_count":0,"work_types":[],"raid_active":false}],'
+            '"world":{},"diagnostics":{}}'
+        )
+
+        for body in (duplicate_key, non_finite):
+            with self.subTest(body=body):
+                response = self.client.post(
+                    "/api/v1/guild/ingest",
+                    data=body,
+                    content_type="application/json",
+                    **self.headers,
+                )
+                self.assertEqual(response.status_code, 400)
+        self.assertFalse(GuildSnapshot.objects.exists())
+
+    def test_rejects_oversized_or_control_character_names(self):
+        base_payload = {
+            "schema_version": 2,
+            "guilds": [{
+                "group_id": "a" * 20,
+                "guild_name": "x" * 129,
+                "players": [],
+            }],
+            "bases": [],
+            "world": {},
+            "diagnostics": {},
+        }
+        self.assertEqual(self.post(base_payload).status_code, 422)
+        base_payload["guilds"][0]["guild_name"] = "bad\nname"
+        self.assertEqual(self.post(base_payload).status_code, 422)
         self.assertFalse(GuildSnapshot.objects.exists())
 
     @override_settings(PRIVATE_API_TOKEN="")

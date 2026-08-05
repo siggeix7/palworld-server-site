@@ -44,6 +44,13 @@ interface Drag {
   viewY: number
 }
 
+interface Pinch {
+  pointers: [number, number]
+  distance: number
+  midpoint: Point
+  view: View
+}
+
 interface RenderViewport {
   view: View
   width: number
@@ -120,6 +127,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
   const viewRef = useRef<View>(initialViewport.view)
   const viewportSizeRef = useRef<{ width: number; height: number } | null>(null)
   const dragRef = useRef<Drag | null>(null)
+  const pointersRef = useRef(new Map<number, Point>())
+  const pinchRef = useRef<Pinch | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const resizeSyncTimeoutRef = useRef<number | null>(null)
   const zoomSaveTimeoutRef = useRef<number | null>(null)
@@ -470,74 +479,150 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
     return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 0, y: 0 }
   }
 
+  const startPinch = () => {
+    const pointers = Array.from(pointersRef.current.entries()).slice(0, 2)
+    if (pointers.length !== 2) return
+    const [[firstId, first], [secondId, second]] = pointers
+    pinchRef.current = {
+      pointers: [firstId, secondId],
+      distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+      midpoint: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+      view: { ...viewRef.current }
+    }
+  }
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const interactiveTarget = event.target instanceof Element && event.target.closest('button')
+    if (interactiveTarget && event.pointerType === 'mouse') return
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (pointersRef.current.size >= 2) {
+      event.preventDefault()
+      cancelViewAnimation()
+      cancelResizeRenderSync()
+      for (const pointer of pointersRef.current.keys()) event.currentTarget.setPointerCapture?.(pointer)
+      dragRef.current = null
+      startPinch()
+      event.currentTarget.style.cursor = 'grabbing'
+      return
+    }
+    if (interactiveTarget) return
+
+    event.preventDefault()
+    cancelViewAnimation()
+    cancelResizeRenderSync()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    const current = viewRef.current
+    dragRef.current = {
+      pointer: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      viewX: current.x,
+      viewY: current.y
+    }
+    event.currentTarget.style.cursor = 'grabbing'
+  }
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const current = viewRef.current
+    const world = toWorld(
+      {
+        x: (event.clientX - rect.left - current.x) / current.scale,
+        y: (event.clientY - rect.top - current.y) / current.scale
+      },
+      activeLayer,
+      size
+    )
+    if (coordinatesRef.current)
+      coordinatesRef.current.textContent = `X ${Math.round(world.x)}\u00a0\u00a0Y ${Math.round(world.y)}`
+
+    if (!pointersRef.current.has(event.pointerId)) return
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const pinch = pinchRef.current
+    if (pinch) {
+      const first = pointersRef.current.get(pinch.pointers[0])
+      const second = pointersRef.current.get(pinch.pointers[1])
+      if (!first || !second) return
+      const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
+      const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y))
+      const minimum = fitScale(rect.width, rect.height, size)
+      const maximum = coverScale(rect.width, rect.height, size) * MAX_ZOOM_RATIO
+      const scale = Math.min(maximum, Math.max(minimum, pinch.view.scale * (distance / pinch.distance)))
+      const initialX = pinch.midpoint.x - rect.left
+      const initialY = pinch.midpoint.y - rect.top
+      const sceneX = (initialX - pinch.view.x) / pinch.view.scale
+      const sceneY = (initialY - pinch.view.y) / pinch.view.scale
+      applyView(
+        clampView(
+          {
+            scale,
+            x: midpoint.x - rect.left - sceneX * scale,
+            y: midpoint.y - rect.top - sceneY * scale
+          },
+          rect.width,
+          rect.height,
+          size
+        )
+      )
+      queueZoomPreference(Math.max(1, scale / minimum))
+      syncRenderViewportDuringPan()
+      return
+    }
+
+    const drag = dragRef.current
+    if (!drag || drag.pointer !== event.pointerId) return
+    applyView(
+      clampView(
+        { scale: current.scale, x: drag.viewX + event.clientX - drag.x, y: drag.viewY + event.clientY - drag.y },
+        rect.width,
+        rect.height,
+        size
+      )
+    )
+    syncRenderViewportDuringPan()
+  }
+
+  const finishPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointersRef.current.delete(event.pointerId)) return
+    pinchRef.current = null
+    if (pointersRef.current.size >= 2) {
+      dragRef.current = null
+      startPinch()
+    } else {
+      const remaining = pointersRef.current.entries().next().value as [number, Point] | undefined
+      if (remaining) {
+        const [pointer, position] = remaining
+        const current = viewRef.current
+        dragRef.current = {
+          pointer,
+          x: position.x,
+          y: position.y,
+          viewX: current.x,
+          viewY: current.y
+        }
+      } else {
+        dragRef.current = null
+        event.currentTarget.style.cursor = 'grab'
+      }
+    }
+    syncRenderViewport()
+  }
+
   return (
     <section
       ref={viewportRef}
-      className={`map-viewport map-layer-${activeLayer.id} relative size-full touch-pinch-zoom overflow-hidden active:cursor-grabbing`}
+      className={`map-viewport map-layer-${activeLayer.id} relative size-full overflow-hidden`}
       role="application"
       aria-label="Interactive world map. Use arrow keys to pan and plus or minus to zoom."
       // biome-ignore lint/a11y/noNoninteractiveTabindex: the map is an interactive pan and zoom canvas
       tabIndex={0}
       style={
         {
-          cursor: dragRef.current ? 'grabbing' : 'grab',
           ...(imageBackground ? { '--map-background': imageBackground } : {})
         } as React.CSSProperties
       }
-      onPointerDown={(event) => {
-        if (event.button !== 0 || (event.target as Element).closest('button, input, aside, search, [role="search"]'))
-          return
-        cancelViewAnimation()
-        cancelResizeRenderSync()
-        const current = viewRef.current
-        dragRef.current = {
-          pointer: event.pointerId,
-          x: event.clientX,
-          y: event.clientY,
-          viewX: current.x,
-          viewY: current.y
-        }
-        event.currentTarget.setPointerCapture(event.pointerId)
-        event.currentTarget.style.cursor = 'grabbing'
-      }}
-      onPointerMove={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect()
-        const current = viewRef.current
-        const world = toWorld(
-          {
-            x: (event.clientX - rect.left - current.x) / current.scale,
-            y: (event.clientY - rect.top - current.y) / current.scale
-          },
-          activeLayer,
-          size
-        )
-        if (coordinatesRef.current)
-          coordinatesRef.current.textContent = `X ${Math.round(world.x)}\u00a0\u00a0Y ${Math.round(world.y)}`
-
-        const drag = dragRef.current
-        if (!drag || drag.pointer !== event.pointerId) return
-        applyView(
-          clampView(
-            { scale: current.scale, x: drag.viewX + event.clientX - drag.x, y: drag.viewY + event.clientY - drag.y },
-            rect.width,
-            rect.height,
-            size
-          )
-        )
-        syncRenderViewportDuringPan()
-      }}
-      onPointerUp={(event) => {
-        if (dragRef.current?.pointer !== event.pointerId) return
-        dragRef.current = null
-        event.currentTarget.style.cursor = 'grab'
-        syncRenderViewport()
-      }}
-      onPointerCancel={(event) => {
-        if (dragRef.current?.pointer !== event.pointerId) return
-        dragRef.current = null
-        event.currentTarget.style.cursor = 'grab'
-        syncRenderViewport()
-      }}
+      onDragStart={(event) => event.preventDefault()}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return
         const rect = event.currentTarget.getBoundingClientRect()
@@ -572,102 +657,111 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
       }}
     >
       <div
-        ref={sceneRef}
-        className="map-scene"
-        style={
-          {
-            width: size,
-            height: size,
-            '--marker-scale': '1'
-          } as React.CSSProperties
-        }
+        className="map-interaction-layer absolute inset-0 cursor-grab active:cursor-grabbing"
+        style={{ touchAction: 'none' }}
+        onPointerDownCapture={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishPointer}
+        onPointerCancel={finishPointer}
       >
-        {imageUrl && (
-          <img
-            className={`map-artwork absolute inset-0 size-full select-none object-fill ${
-              imageState === 'ready' ? 'block' : 'hidden'
-            }`}
-            src={imageUrl}
-            alt=""
-            draggable={false}
-            onLoad={(event) =>
-              setImageResult({
-                url: imageUrl,
-                state: 'ready',
-                background: sampleImageBackground(
-                  event.currentTarget,
-                  activeLayer.id === 'palpagos' ? [-1, -1, 0] : undefined
+        <div
+          ref={sceneRef}
+          className="map-scene"
+          style={
+            {
+              width: size,
+              height: size,
+              '--marker-scale': '1'
+            } as React.CSSProperties
+          }
+        >
+          {imageUrl && (
+            <img
+              className={`map-artwork pointer-events-none absolute inset-0 size-full select-none object-fill ${
+                imageState === 'ready' ? 'block' : 'hidden'
+              }`}
+              src={imageUrl}
+              alt=""
+              draggable={false}
+              onLoad={(event) =>
+                setImageResult({
+                  url: imageUrl,
+                  state: 'ready',
+                  background: sampleImageBackground(
+                    event.currentTarget,
+                    activeLayer.id === 'palpagos' ? [-1, -1, 0] : undefined
+                  )
+                })
+              }
+              onError={() => setImageResult({ url: imageUrl, state: 'error' })}
+            />
+          )}
+          {imageState !== 'ready' && <div className="fallback-grid absolute inset-0 size-full" aria-hidden="true" />}
+          <div className="absolute inset-0">
+            {renderMarkers.map(({ key, item, position, count }) => {
+              if (!item) {
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className="map-marker map-cluster"
+                    style={{ left: position.x, top: position.y }}
+                    aria-label={`Zoom to ${count} nearby map items`}
+                    tabIndex={-1}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      const viewport = viewportRef.current
+                      if (!viewport) return
+                      const rect = viewport.getBoundingClientRect()
+                      const minimum = coverScale(rect.width, rect.height, size)
+                      const scale = Math.min(minimum * MAX_ZOOM_RATIO, viewRef.current.scale * 2.5)
+                      const target = clampView(
+                        {
+                          scale,
+                          x: rect.width / 2 - position.x * scale,
+                          y: rect.height / 2 - position.y * scale
+                        },
+                        rect.width,
+                        rect.height,
+                        size
+                      )
+                      queueZoomPreference(Math.max(1, scale / fitScale(rect.width, rect.height, size)))
+                      animateView(target, ITEM_FOCUS_DURATION_MS)
+                    }}
+                  >
+                    <span>{count && count > 999 ? '999+' : count}</span>
+                  </button>
                 )
-              })
-            }
-            onError={() => setImageResult({ url: imageUrl, state: 'error' })}
-          />
-        )}
-        {imageState !== 'ready' && <div className="fallback-grid absolute inset-0 size-full" aria-hidden="true" />}
-        <div className="absolute inset-0">
-          {renderMarkers.map(({ key, item, position, count }) => {
-            if (!item) {
+              }
+              const selected = selectedId === item.id
               return (
                 <button
                   key={key}
                   type="button"
-                  className="map-marker map-cluster"
-                  style={{ left: position.x, top: position.y }}
-                  aria-label={`Zoom to ${count} nearby map items`}
+                  className={`map-marker ${selected ? 'selected' : ''}`}
+                  style={
+                    {
+                      left: position.x,
+                      top: position.y,
+                      '--marker-stack': selected ? SELECTED_MARKER_STACK : markerStackOrder(item.kind)
+                    } as React.CSSProperties
+                  }
+                  aria-label={markerText(item)}
                   tabIndex={-1}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation()
-                    const viewport = viewportRef.current
-                    if (!viewport) return
-                    const rect = viewport.getBoundingClientRect()
-                    const minimum = coverScale(rect.width, rect.height, size)
-                    const scale = Math.min(minimum * MAX_ZOOM_RATIO, viewRef.current.scale * 2.5)
-                    const target = clampView(
-                      {
-                        scale,
-                        x: rect.width / 2 - position.x * scale,
-                        y: rect.height / 2 - position.y * scale
-                      },
-                      rect.width,
-                      rect.height,
-                      size
-                    )
-                    queueZoomPreference(Math.max(1, scale / fitScale(rect.width, rect.height, size)))
-                    animateView(target, ITEM_FOCUS_DURATION_MS)
+                    setSelectedId(item.id)
+                    onShowItem(item, event.currentTarget)
                   }}
                 >
-                  <span>{count && count > 999 ? '999+' : count}</span>
+                  <MarkerGlyph kind={item.kind} online={item.online} />
+                  <span className="marker-label">{markerText(item)}</span>
                 </button>
               )
-            }
-            const selected = selectedId === item.id
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`map-marker ${selected ? 'selected' : ''}`}
-                style={
-                  {
-                    left: position.x,
-                    top: position.y,
-                    '--marker-stack': selected ? SELECTED_MARKER_STACK : markerStackOrder(item.kind)
-                  } as React.CSSProperties
-                }
-                aria-label={markerText(item)}
-                tabIndex={-1}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setSelectedId(item.id)
-                  onShowItem(item, event.currentTarget)
-                }}
-              >
-                <MarkerGlyph kind={item.kind} online={item.online} />
-                <span className="marker-label">{markerText(item)}</span>
-              </button>
-            )
-          })}
+            })}
+          </div>
         </div>
       </div>
 

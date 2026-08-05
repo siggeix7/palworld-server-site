@@ -1,9 +1,9 @@
 # Palworld Server Observatory
 
-Dashboard Django riservata per un server dedicato Palworld. Il container legge
-direttamente le REST API Palworld, sanitizza i payload prima della persistenza e
-integra gli snapshot compatti estratti da `Level.sav` tramite lo script in
-`ops/PalworldGuildSync`.
+Dashboard Django riservata per un server dedicato Palworld, con interfaccia SPA
+React/Vite. Il container legge direttamente le REST API Palworld, sanitizza i
+payload prima della persistenza e integra gli snapshot compatti estratti da
+`Level.sav` tramite lo script in `ops/PalworldGuildSync`.
 
 ## Funzioni
 
@@ -23,7 +23,7 @@ Palworld REST API
         |
         | Basic Auth, richieste in uscita dal container
         v
-collector Django -> sanitizer -> SQLite -> sito autenticato :8000
+collector Django -> sanitizer -> SQLite -> API Django -> SPA autenticata :8000
 
 Level.sav -> PalworldGuildSync -> API privata :8001 -> SQLite
                                       |
@@ -62,8 +62,9 @@ collector sullo stesso volume.
 I payload REST grezzi non vengono salvati. La sanitizzazione avviene prima di
 ogni scrittura nel database:
 
-- `userId`, `playerId`, `InstanceID`, `TrainerInstanceID`, `GuildID` e IP non
-  vengono persistiti;
+- `userId`, `playerId`, `InstanceID`, `TrainerInstanceID` e `GuildID` non
+  vengono persistiti; l'ultimo IP di gioco osservato viene conservato
+  separatamente per sicurezza e moderazione ed è accessibile solo agli admin;
 - per kick/ban, il pannello admin legge i `userId` raw direttamente dalla REST
   API Palworld solo on-demand; sono visibili esclusivamente agli admin e non
   vengono salvati nel database;
@@ -103,6 +104,7 @@ PALWORLD_API_VERIFY_TLS=true
 PALWORLD_API_ALLOW_INSECURE_HTTP=false
 PALWORLD_API_CONNECT_TIMEOUT=3
 COLLECTOR_LOCK_PATH=/data/palworld-collector.lock
+AUTH_TRUSTED_PROXY_ADDRESSES=127.0.0.1,::1
 ```
 
 `PALWORLD_API_URL` deve essere un'origine HTTP(S), senza credenziali, path,
@@ -111,6 +113,12 @@ una catena di certificati attendibile nel container. Palworld espone normalmente
 la REST API in HTTP: in quel caso `PALWORLD_API_ALLOW_INSECURE_HTTP=true` è un
 opt-in obbligatorio e l'indirizzo deve essere raggiungibile esclusivamente su
 LAN fidata o VPN, perché Basic Auth e payload non sono cifrati.
+
+`AUTH_TRUSTED_PROXY_ADDRESSES` deve contenere soltanto gli indirizzi sorgente
+dei reverse proxy direttamente connessi a Gunicorn. Il proxy deve sostituire,
+non inoltrare ciecamente, `X-Forwarded-For`: il rate limit degli endpoint di
+autenticazione usa l'indirizzo client più a destra solo per richieste provenienti
+da questi proxy fidati.
 
 La configurazione completa, inclusi SMTP, accesso al server di gioco, retention
 e privacy, è documentata direttamente in `.env.example`.
@@ -129,11 +137,14 @@ bind mount host. Prima del primo avvio creare la directory con ownership
 corretta, altrimenti `migrate` non può scrivere il database:
 
 ```bash
-install -d -o 1000 -g 1000 "${DATA_PATH:-/opt/palworld-server-site/data}"
+install -d -m 0700 -o 1000 -g 1000 "${DATA_PATH:-/opt/palworld-server-site/data}"
 ```
 
 Il volume configurato con `DATA_PATH` contiene database SQLite e lock del
-collector. L'entrypoint applica automaticamente le migrazioni e abilita WAL.
+collector. L'entrypoint applica automaticamente le migrazioni, abilita WAL e
+normalizza directory e file rispettivamente a `0700` e `0600`. Gli access log
+non includono path o query string, così i token monouso presenti negli URL di
+verifica e recupero password non vengono registrati.
 
 Verifiche locali:
 
@@ -176,9 +187,13 @@ Porta pubblica, autenticazione sito obbligatoria salvo health e pagine account:
 
 ```text
 GET /healthz/
+GET /api/openapi.json
+GET /api/v1/session
+GET /api/v1/server/access
 GET /api/v1/snapshot
 GET /api/v1/history?range=24h
 GET /api/v1/players
+GET /api/v1/player/<public_id>
 GET /api/v1/leaderboard
 GET /api/v1/activity/heatmap?range=30d
 GET /api/v1/world/objects
@@ -195,6 +210,9 @@ Endpoint riservati agli utenti in `SITE_ADMIN_USERS` (sessione autenticata e
 CSRF obbligatorio per i POST):
 
 ```text
+GET  /api/v1/palworld/players
+GET  /api/v1/admin/player-ips
+GET  /api/v1/palworld/info
 GET  /api/v1/palworld/admin/players
 POST /api/v1/palworld/announce
 POST /api/v1/palworld/kick
@@ -214,7 +232,14 @@ POST /api/v1/guild/ingest
 
 ```bash
 make test
+cd web/live-map
+npm ci
+npm run generate:api
+npm run check
+npm test
+npm run build
 ```
 
-Il target esegue i check Django, verifica che non manchino migrazioni e lancia
-l'intera suite `dashboard`.
+Il target `make test` esegue i check Django, verifica che non manchino migrazioni
+e lancia l'intera suite `dashboard`. Il build Docker esegue anche generazione dei
+tipi OpenAPI, lint, typecheck, test e build di produzione della SPA.
