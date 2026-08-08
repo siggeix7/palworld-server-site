@@ -1,22 +1,19 @@
-Report settimanale del server Palworld
-Periodo: {{ since_label }} → {{ until_label }}
-{{ public_site_url }}
+Ciao {{ user_name }},
 
-Salute del flusso
-- Uptime 24h: {{ uptime_24h|floatformat:1 }}%
-- Uptime 7 giorni: {{ uptime_7d|floatformat:1 }}%
-- Giocatori medi: {{ average_players|floatformat:1 }} · picco: {{ peak_players }}
-- FPS medio: {{ average_fps|floatformat:1 }} · minimo: {{ minimum_fps|default_if_none:"--" }}
+ecco il riepilogo della tua settimana su Palworld Server Observatory
+({{ since_label }} → {{ until_label }}).
 
-Mondo
-- Giorno in-game: {{ world_days|default:"--" }}
-- Campi base: {{ base_camps|default:"--" }}
-
-Attività
-- Sessioni avviate: {{ session_count }}
-- Nuovi giocatori: {{ new_player_count }}{% if new_players %} ({{ new_players|join:", " }}){% endif %}
-{% if top_players %}Top 5 per tempo di gioco
-{% for player in top_players %}{{ forloop.counter }}. {{ player.name }} — {{ player.minutes }} minuti
-{% endfor %}{% else %}Nessuna sessione registrata nel periodo.
+LE TUE STATISTICHE
+- Tempo di gioco: {% if week_hours %}{{ week_hours }} {% if week_hours == 1 %}ora{% else %}ore{% endif %}{% if week_minutes_remainder %} e {{ week_minutes_remainder }} {% if week_minutes_remainder == 1 %}minuto{% else %}minuti{% endif %}{% endif %}{% else %}{{ week_minutes }} {% if week_minutes == 1 %}minuto{% else %}minuti{% endif %}{% endif %} ({% if prev_pct is None %}prima settimana di attività{% elif prev_pct == 0 %}come la settimana precedente{% elif prev_pct > 0 %}+{{ prev_pct }}% rispetto alla settimana precedente{% else %}{{ prev_pct }}% rispetto alla settimana precedente{% endif %})
+- Sessioni: {{ session_count }}{% if longest_session_minutes %} · più lunga: {{ longest_session_minutes }} {% if longest_session_minutes == 1 %}minuto{% else %}minuti{% endif %}{% endif %}
+- Giorni attivi: {{ active_days }} su 7{% if top_day %} · giorno più giocato: {{ top_day }}{% endif %}
+- Livello: {{ level }} · costruzioni: {{ building_count }}
+{% if avg_ping %}- Ping medio: {{ avg_ping }} ms
+{% endif %}- Posizione: {{ rank }}° su {{ active_total }} {% if active_total == 1 %}giocatore attivo{% else %}giocatori attivi{% endif %} della settimana
+{% if guild_name %}- Gilda: {{ guild_name }}{% if guild_bases %} · {{ guild_bases }} {% if guild_bases == 1 %}campo base{% else %}campi base{% endif %}{% endif %}
 {% endif %}
-Il sito continua a raccogliere la telemetria: gli admin non ricevono questo report se non è configurato alcun destinatario.
+{% if top_players %}CLASSIFICA DELLA SETTIMANA
+{% for player in top_players %}{{ forloop.counter }}. {{ player.name }} — {{ player.minutes }} minuti{% if player.name == user_name %} (sei tu!){% endif %}
+{% endfor %}{% endif %}La prossima settimana ti aspettiamo sul server. Buon divertimento!
+
+Palworld Server Observatory · {{ public_site_url }}

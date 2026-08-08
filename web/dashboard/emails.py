@@ -111,16 +111,13 @@ def admin_email_recipients():
     return sorted(recipients)
 
 
-def send_weekly_report_email(subject, context):
-    recipients = admin_email_recipients()
-    if not recipients:
-        return 0
+def send_weekly_player_email(user, context):
     return _send_html_email(
-        subject,
+        f"Il tuo report settimanale Palworld · {context['since_label']} → {context['until_label']}",
         "dashboard/emails/weekly_report.txt",
         "dashboard/emails/weekly_report.html",
         context,
-        recipients,
+        [user.email],
     )
 
 
