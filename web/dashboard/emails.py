@@ -3,7 +3,7 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db.models import Q
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -42,19 +42,37 @@ def _absolute_url(request, path):
     return f"{public_site.scheme}://{public_site.netloc}{path}"
 
 
+def _email_context(**extra):
+    context = {"public_site_url": settings.PUBLIC_SITE_URL}
+    context.update(extra)
+    return context
+
+
+def _send_html_email(subject, text_template, html_template, context, recipients, **kwargs):
+    text_message = render_to_string(text_template, context)
+    html_message = render_to_string(html_template, context)
+    message = EmailMultiAlternatives(
+        subject,
+        text_message,
+        kwargs.get("from_email", settings.DEFAULT_FROM_EMAIL),
+        recipients,
+    )
+    message.attach_alternative(html_message, "text/html")
+    return message.send(fail_silently=kwargs.get("fail_silently", False))
+
+
 def send_verification_email(request, user):
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = email_verification_token.make_token(user)
     verify_url = _absolute_url(
         request, reverse("verify-email", kwargs={"uidb64": uid, "token": token})
     )
-    message = render_to_string(
-        "dashboard/emails/verify_email.txt", {"user": user, "verify_url": verify_url}
-    )
-    send_mail(
+    context = _email_context(user=user, verify_url=verify_url)
+    _send_html_email(
         "Conferma la registrazione a Palworld Server Observatory",
-        message,
-        settings.DEFAULT_FROM_EMAIL,
+        "dashboard/emails/verify_email.txt",
+        "dashboard/emails/verify_email.html",
+        context,
         [user.email],
     )
 
@@ -65,14 +83,12 @@ def send_approval_email(request, user):
     except ValueError as exc:
         logger.error("Approval email not sent: %s", exc)
         return
-    message = render_to_string(
-        "dashboard/emails/account_approved.txt",
-        {"user": user, "login_url": login_url},
-    )
-    send_mail(
+    context = _email_context(user=user, login_url=login_url)
+    _send_html_email(
         "Il tuo account Palworld Server Observatory è stato abilitato",
-        message,
-        settings.DEFAULT_FROM_EMAIL,
+        "dashboard/emails/account_approved.txt",
+        "dashboard/emails/account_approved.html",
+        context,
         [user.email],
         fail_silently=True,
     )
@@ -95,16 +111,16 @@ def admin_email_recipients():
     return sorted(recipients)
 
 
-def send_weekly_report_email(subject, message):
+def send_weekly_report_email(subject, context):
     recipients = admin_email_recipients()
     if not recipients:
         return 0
-    return send_mail(
+    return _send_html_email(
         subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
+        "dashboard/emails/weekly_report.txt",
+        "dashboard/emails/weekly_report.html",
+        context,
         recipients,
-        fail_silently=False,
     )
 
 
@@ -117,14 +133,11 @@ def notify_admins_of_pending_user(request, user):
     except ValueError as exc:
         logger.error("Pending member notification not sent: %s", exc)
         return 0
-    message = render_to_string(
-        "dashboard/emails/admin_new_member.txt",
-        {"user": user, "members_url": members_url},
-    )
-    return send_mail(
+    context = _email_context(user=user, members_url=members_url)
+    return _send_html_email(
         "Nuovo membro in attesa di approvazione",
-        message,
-        settings.DEFAULT_FROM_EMAIL,
+        "dashboard/emails/admin_new_member.txt",
+        "dashboard/emails/admin_new_member.html",
+        context,
         sorted(recipients),
-        fail_silently=False,
     )

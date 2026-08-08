@@ -1,0 +1,14 @@
+{% extends "dashboard/emails/base.html" %}
+{% block preheader %}<div style="display:none;max-height:0;overflow:hidden;">Il tuo account Palworld Server Observatory &egrave; stato approvato: ora puoi accedere.</div>{% endblock %}
+{% block content %}
+  <h1 style="margin:0 0 16px;font-size:20px;color:#e9e0c5;">Ciao {{ user.username }},</h1>
+  <p style="margin:0 0 20px;">il tuo account <strong style="color:#4ce0c1;">Palworld Server Observatory</strong> &egrave; stato approvato. Ora puoi accedere alla dashboard e seguire lo stato del server.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+    <tr>
+      <td style="border-radius:8px;background-color:#1a917f;">
+        <a href="{{ login_url }}" style="display:inline-block;padding:12px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">Accedi ora</a>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0;color:#aeb7a6;font-size:13px;">Il primo accesso richieder&agrave; di accettare le condizioni d'uso aggiornate.</p>
+{% endblock %}

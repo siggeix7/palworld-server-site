@@ -167,6 +167,13 @@ class AccountAccessTests(TestCase):
         )
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("https://palworld.example.com/accounts/verify/", mail.outbox[0].body)
+        verify_html = [
+            content for content, mimetype in mail.outbox[0].alternatives
+            if mimetype == "text/html"
+        ]
+        self.assertEqual(len(verify_html), 1)
+        self.assertIn("Conferma e-mail", verify_html[0])
+        self.assertIn("https://palworld.example.com/accounts/verify/", verify_html[0])
 
     @override_settings(ALLOWED_HOSTS=["internal.example"])
     def test_registration_accepts_canonical_origin_behind_proxy(self):
@@ -568,6 +575,16 @@ class AccountAccessTests(TestCase):
         self.assertIn(
             "https://palworld.example.com/accounts/reset/",
             mail.outbox[0].body,
+        )
+        reset_html = [
+            content for content, mimetype in mail.outbox[0].alternatives
+            if mimetype == "text/html"
+        ]
+        self.assertEqual(len(reset_html), 1)
+        self.assertIn("Reimposta password", reset_html[0])
+        self.assertIn(
+            "https://palworld.example.com/accounts/reset/",
+            reset_html[0],
         )
 
     @override_settings(PUBLIC_SITE_URL="")

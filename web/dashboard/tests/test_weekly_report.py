@@ -75,6 +75,17 @@ class WeeklyReportTests(TestCase):
         self.assertIn("Uptime 24h: 4,1%", email.body)
         self.assertIn("Giorno in-game: 5702", email.body)
         self.assertIn("Campi base: 8", email.body)
+        html_parts = [
+            content for content, mimetype in email.alternatives if mimetype == "text/html"
+        ]
+        self.assertEqual(len(html_parts), 1)
+        html = html_parts[0]
+        self.assertIn("<html lang=\"it\">", html)
+        self.assertIn("PALWORLD", html)
+        self.assertIn("Explorer", html)
+        self.assertIn("5702", html)
+        self.assertIn("Top 5 per tempo di gioco", html)
+        self.assertNotIn("Old Timer", html)
 
     def test_command_fails_without_recipients(self):
         with override_settings(SITE_ADMIN_USERS=set()):

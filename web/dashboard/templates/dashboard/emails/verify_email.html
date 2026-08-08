@@ -1,0 +1,19 @@
+{% extends "dashboard/emails/base.html" %}
+{% block preheader %}<div style="display:none;max-height:0;overflow:hidden;">Conferma il tuo indirizzo email per completare la registrazione a Palworld Server Observatory.</div>{% endblock %}
+{% block content %}
+  <h1 style="margin:0 0 16px;font-size:20px;color:#e9e0c5;">Ciao {{ user.username }},</h1>
+  <p style="margin:0 0 20px;">conferma il tuo indirizzo email per completare la registrazione a <strong style="color:#4ce0c1;">Palworld Server Observatory</strong>.</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+    <tr>
+      <td style="border-radius:8px;background-color:#1a917f;">
+        <a href="{{ verify_url }}" style="display:inline-block;padding:12px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">Conferma e-mail</a>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0 0 20px;color:#aeb7a6;font-size:13px;">Dopo la verifica, un amministratore dovr&agrave; approvare il tuo account prima del primo accesso.</p>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#123235;border-left:3px solid #e5b85c;border-radius:6px;">
+    <tr>
+      <td style="padding:12px 16px;font-size:13px;color:#e9e0c5;">Se non hai richiesto questa registrazione, ignora il messaggio: il tuo indirizzo non verr&agrave; utilizzato.</td>
+    </tr>
+  </table>
+{% endblock %}

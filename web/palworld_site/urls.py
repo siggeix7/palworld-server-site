@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
@@ -59,7 +60,11 @@ urlpatterns = [
             template_name="dashboard/accounts/password_reset.html",
             form_class=CanonicalPasswordResetForm,
             email_template_name="dashboard/emails/password_reset_email.txt",
+            html_email_template_name="dashboard/emails/password_reset_email.html",
             subject_template_name="dashboard/emails/password_reset_subject.txt",
+            extra_email_context={
+                "public_site_url": settings.PUBLIC_SITE_URL,
+            },
         ),
         name="password_reset",
     ),

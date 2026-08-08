@@ -4,7 +4,6 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Avg, Max, Min
-from django.template.loader import render_to_string
 from django.utils import timezone
 
 from dashboard.emails import send_weekly_report_email
@@ -86,10 +85,9 @@ class Command(BaseCommand):
             "top_players": top_players,
             "public_site_url": settings.PUBLIC_SITE_URL,
         }
-        message = render_to_string("dashboard/emails/weekly_report.txt", context)
         sent = send_weekly_report_email(
             f"Report settimanale Palworld · {context['since_label']} → {context['until_label']}",
-            message,
+            context,
         )
         if not sent:
             raise CommandError("no administrator recipients configured")
