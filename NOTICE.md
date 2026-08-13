@@ -45,10 +45,11 @@ https://github.com/LukeHollandDev/palworld-live-map
 
 Pinned upstream revision:
 
-`19f3e3f8e684481bde58fef6c76845f811d57614`
+`711ededa62e6fbf9301a68e1d9e093af4c4210f6`
 
-Pinned map-asset version: `1.0.1.100619`.
-Current catalogue game-data version: `1.0.2.101103`.
+Pinned map-asset version: `1.0.3.101283` (image content unchanged since
+`1.0.1.100619`).
+Current catalogue game-data version: `1.0.3.101283`.
 
 - `web/live-map/` contains the upstream React 19, TypeScript, Vite and Tailwind
   client. Local changes integrate the former Django dashboard into the same SPA,
@@ -64,13 +65,13 @@ Current catalogue game-data version: `1.0.2.101103`.
   the landmark datasets. It contains 1,146 locations across 11
   categories, with internal game IDs, object paths, instance IDs, state keys,
   class names, icon paths and source objects removed. Source IDs use the prior
-  deterministic one-way projection. The `1.0.2.101103` export was verified
-  against Pocketpair's official `ghcr.io/pocketpairjp/palserver` image digest
-  `sha256:09343cac3d92b997634f034ade4ce702388e156ec726668c85ad3bc47faa33f4`;
-  its `Pal-LinuxServer.pak` SHA-256 is
-  `94a364adc846c148c27af907231b37a20f1096f0f93c3022636b68de40f5294c`.
-  All 1,146 projected locations are unchanged from `1.0.1.100619`. Output
-  SHA-256: `04a51a485cdad67d6b207fe5e2778fa0346bafbc62645ba7142dbc939e4acbff`.
+  deterministic one-way projection. The upstream `1.0.3.101283` export records
+  a 40,527,155,723-byte `Pal-Windows.pak` with SHA-256
+  `c0a7d3a756ec57d3ca38d81b252d8645532bfae300c26d18426515c670531bdf`.
+  Its four catalogue datasets and all map images are unchanged from
+  `1.0.2.101103`; only the `Zenara & Astralym` detail changed from
+  `Within the Seal` to `Sealed Sanctum`. Output SHA-256:
+  `be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8`.
 - `web/dashboard/live_map.py` adapts only already-sanitized Django snapshots to
   the upstream `PublicConfig`, `PlayerState`, `ObjectState` and
   `WorldCatalogue` contracts. The browser never receives raw Palworld player,

@@ -1,5 +1,4 @@
 import json
-import re
 from collections import Counter
 from datetime import timedelta
 
@@ -45,15 +44,20 @@ class LiveMapTests(TestCase):
         )
         self.assertIn("palpagos.jpg", payload["layers"][0]["imageUrl"])
         self.assertIn("world-tree.jpg", payload["layers"][1]["imageUrl"])
-        self.assertRegex(
+        self.assertEqual(
             payload["catalogueUrl"],
-            rf"^{re.escape(reverse('live-map-catalogue'))}\?v=[0-9a-f]{{64}}$",
+            f"{reverse('live-map-catalogue')}?v="
+            "be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8",
         )
         self.assertEqual(
             payload["upstreamRevision"],
-            "19f3e3f8e684481bde58fef6c76845f811d57614",
+            "711ededa62e6fbf9301a68e1d9e093af4c4210f6",
         )
-        self.assertEqual(payload["landmarkCatalogue"]["gameVersion"], "1.0.2.101103")
+        self.assertEqual(payload["landmarkCatalogue"]["gameVersion"], "1.0.3.101283")
+        self.assertEqual(
+            payload["landmarkCatalogue"]["decoder"],
+            "CUE4Parse/1.2.2.202608",
+        )
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
 
@@ -63,8 +67,13 @@ class LiveMapTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["gameVersion"], "1.0.2.101103")
+        self.assertEqual(payload["gameVersion"], "1.0.3.101283")
+        self.assertEqual(payload["decoder"], "CUE4Parse/1.2.2.202608")
         self.assertEqual(len(payload["locations"]), 1146)
+        self.assertEqual(
+            Counter(item["map"] for item in payload["locations"]),
+            {"palpagos": 1064, "world-tree": 82},
+        )
         self.assertEqual(
             Counter(item["kind"] for item in payload["locations"]),
             {
@@ -85,6 +94,17 @@ class LiveMapTests(TestCase):
         self.assertTrue(
             all(set(location) <= allowed for location in payload["locations"])
         )
+        self.assertIn(
+            {
+                "name": "Zenara & Astralym",
+                "detail": "Sealed Sanctum",
+            },
+            [
+                {key: location[key] for key in ("name", "detail")}
+                for location in payload["locations"]
+                if location["name"] == "Zenara & Astralym"
+            ],
+        )
         serialized = response.content.decode()
         for forbidden in (
             "InstanceID",
@@ -96,6 +116,10 @@ class LiveMapTests(TestCase):
         ):
             self.assertNotIn(forbidden, serialized)
         self.assertIn("immutable", response.headers["Cache-Control"])
+        self.assertEqual(
+            response.headers["ETag"],
+            '"be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8"',
+        )
         not_modified = self.client.get(
             config["catalogueUrl"],
             HTTP_IF_NONE_MATCH=response.headers["ETag"],

@@ -12,19 +12,19 @@ const responses: Record<string, unknown> = {
     catalogueUrl: '/assets/test-world-catalogue.json',
     landmarks: [],
     landmarkCatalogue: {
-      gameVersion: '1.0.1.100619',
+      gameVersion: '1.0.3.101283',
       generator: 'palworld-asset-exporter/3',
-      decoder: 'CUE4Parse'
+      decoder: 'CUE4Parse/1.2.2.202608'
     }
   },
   '/assets/test-world-catalogue.json': {
-    gameVersion: '1.0.1.100619',
+    gameVersion: '1.0.3.101283',
     generator: 'palworld-asset-exporter/4',
-    decoder: 'CUE4Parse',
+    decoder: 'CUE4Parse/1.2.2.202608',
     locations: []
   },
   '/api/v1/live-map/players': {
-    server: { name: 'Test Realm', description: 'A test server', version: 'v1.0.1.100619' },
+    server: { name: 'Test Realm', description: 'A test server', version: 'v1.0.3.101283' },
     metrics: {
       currentPlayers: 1,
       maxPlayers: 32,
@@ -443,7 +443,7 @@ describe('App', () => {
       if (path === '/api/v1/live-map/players') {
         return {
           ...(responses[path] as Record<string, unknown>),
-          server: { name: 'Test Realm', version: 'v1.0.1.100620' }
+          server: { name: 'Test Realm', version: 'v1.0.3.101284' }
         }
       }
       return responses[path]
@@ -453,7 +453,7 @@ describe('App', () => {
     await screen.findByRole('heading', { name: 'Test Realm' })
     const explorer = await screen.findByRole('complementary', { name: 'Map filters' })
     expect(within(explorer).getByText(/World catalogue version mismatch:/)).toHaveTextContent(
-      'locations were exported for Palworld 1.0.1.100619, but this server reports v1.0.1.100620'
+      'locations were exported for Palworld 1.0.3.101283, but this server reports v1.0.3.101284'
     )
     expect(within(explorer).getByText(/World catalogue version mismatch:/)).toHaveTextContent(
       'regenerate the catalogue from current Palworld assets'
@@ -465,7 +465,7 @@ describe('App', () => {
       if (path === '/api/v1/live-map/players') {
         return {
           ...(responses[path] as Record<string, unknown>),
-          server: { name: 'Test Realm', version: 'v1.0.1.100619' }
+          server: { name: 'Test Realm', version: 'v1.0.3.101283' }
         }
       }
       return responses[path]
@@ -499,7 +499,7 @@ describe('App', () => {
       if (path === '/api/v1/live-map/players') {
         return {
           ...(responses[path] as Record<string, unknown>),
-          server: { name: 'Test Realm', version: 'v1.0.1.0100619' }
+          server: { name: 'Test Realm', version: 'v1.0.3.0101283' }
         }
       }
       return responses[path]
@@ -516,7 +516,7 @@ describe('App', () => {
       if (path === '/api/v1/live-map/players') {
         return {
           ...(responses[path] as Record<string, unknown>),
-          server: { name: 'Test Realm', version: 'release-1.0.1.100619+build' }
+          server: { name: 'Test Realm', version: 'release-1.0.3.101283+build' }
         }
       }
       return responses[path]
@@ -526,7 +526,7 @@ describe('App', () => {
     await screen.findByRole('heading', { name: 'Test Realm' })
     const explorer = await screen.findByRole('complementary', { name: 'Map filters' })
     expect(within(explorer).getByText(/catalogue compatibility could not be verified/)).toHaveTextContent(
-      'server reports an unrecognised version (release-1.0.1.100619+build)'
+      'server reports an unrecognised version (release-1.0.3.101283+build)'
     )
   })
 

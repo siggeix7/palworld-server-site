@@ -19,12 +19,12 @@ from .models import GuildSnapshot, LatestDataset, Player, PositionSample
 from .services import WORLD_MAP_BOUNDS
 
 
-UPSTREAM_REVISION = "19f3e3f8e684481bde58fef6c76845f811d57614"
+UPSTREAM_REVISION = "711ededa62e6fbf9301a68e1d9e093af4c4210f6"
 CATALOGUE_PATH = Path(settings.BASE_DIR) / "dashboard/data/live-map-catalogue.json"
 CATALOGUE_METADATA = {
-    "gameVersion": "1.0.2.101103",
+    "gameVersion": "1.0.3.101283",
     "generator": "palworld-asset-exporter/4",
-    "decoder": "CUE4Parse/1.2.2.202607",
+    "decoder": "CUE4Parse/1.2.2.202608",
 }
 SAVE_STALE_AFTER = timedelta(minutes=15)
 WORLD_OBJECT_KINDS = {
