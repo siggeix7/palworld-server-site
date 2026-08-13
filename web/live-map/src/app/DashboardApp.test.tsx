@@ -231,6 +231,15 @@ const responses: Record<string, unknown> = {
   '/api/v1/palworld/players': { available: true, stale: false, generated_at: '2026-08-05T12:00:00Z', players: [] },
   '/api/v1/admin/player-ips': { players: [] },
   '/api/v1/palworld/info': { available: true, generated_at: '2026-08-05T12:00:00Z', stale: false, servername: 'Test' },
+  '/api/v1/admin/weekly-report-schedule': {
+    enabled: true,
+    weekday: 0,
+    time: '08:00',
+    timezone: 'Europe/Rome',
+    next_run_at: '2026-08-10T06:00:00Z',
+    last_run: { scheduled_for: null, started_at: null, finished_at: null, status: 'never', error: null },
+    updated_at: '2026-08-05T12:00:00Z'
+  },
   '/api/v1/palworld/admin/players': { players: [] }
 }
 
@@ -355,6 +364,7 @@ describe('dashboard router and shell', () => {
     expect(paths).not.toContain('/api/v1/admin/player-ips')
     expect(paths).not.toContain('/api/v1/palworld/info')
     expect(paths).not.toContain('/api/v1/palworld/admin/players')
+    expect(paths).not.toContain('/api/v1/admin/weekly-report-schedule')
     expect(paths).not.toContain('/api/v1/guild/data')
   })
 

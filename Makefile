@@ -5,6 +5,7 @@ SITE_PORT ?= 8080
 PRIVATE_PORT ?= 8081
 TMP_IMAGE ?= /tmp/$(IMAGE_BASENAME)-$(TAG).tar
 PYTHON ?= python3
+VCS_REF ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf unknown)
 TEST_ENV := DJANGO_SECRET_KEY=test-key PLAYER_HASH_SECRET=test-player-key \
 	PUBLIC_SITE_URL=https://testserver SITE_ADMIN_USERS=admin@example.com \
 	PRIVATE_API_TOKEN=test-private-token \
@@ -15,7 +16,7 @@ TEST_ENV := DJANGO_SECRET_KEY=test-key PLAYER_HASH_SECRET=test-player-key \
 all: save
 
 build:
-	docker build --build-arg APP_VERSION=$(TAG) -t $(IMAGE):$(TAG) .
+	docker build --build-arg APP_VERSION=$(TAG) --build-arg VCS_REF=$(VCS_REF) -t $(IMAGE):$(TAG) .
 
 save: build
 	docker save $(IMAGE):$(TAG) -o $(TMP_IMAGE)

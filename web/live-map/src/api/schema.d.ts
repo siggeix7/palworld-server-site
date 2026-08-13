@@ -319,6 +319,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/admin/weekly-report-schedule': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Return the weekly report schedule
+     * @description Site-admin access is required.
+     */
+    get: operations['getWeeklyReportSchedule']
+    put?: never
+    /**
+     * Update the weekly report schedule
+     * @description Site-admin access and Django CSRF validation are required.
+     */
+    post: operations['updateWeeklyReportSchedule']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/palworld/info': {
     parameters: {
       query?: never
@@ -958,6 +982,29 @@ export interface components {
         last_seen: string
         online: boolean
       }[]
+    }
+    WeeklyReportScheduleUpdate: {
+      enabled: boolean
+      weekday: number
+      time: string
+      timezone: string
+    }
+    WeeklyReportSchedule: {
+      enabled: boolean
+      weekday: number
+      time: string
+      timezone: string
+      next_run_at: components['schemas']['Timestamp']
+      last_run: {
+        scheduled_for: components['schemas']['Timestamp']
+        started_at: components['schemas']['Timestamp']
+        finished_at: components['schemas']['Timestamp']
+        /** @enum {string} */
+        status: 'never' | 'running' | 'success' | 'failed' | 'interrupted'
+        error: string | null
+      }
+      /** Format: date-time */
+      updated_at: string
     }
     PalworldInfo: {
       available: boolean
@@ -1629,6 +1676,56 @@ export interface operations {
       }
       401: components['responses']['Unauthorized']
       403: components['responses']['Forbidden']
+    }
+  }
+  getWeeklyReportSchedule: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Persistent weekly report schedule and last run status */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WeeklyReportSchedule']
+        }
+      }
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+    }
+  }
+  updateWeeklyReportSchedule: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['WeeklyReportScheduleUpdate']
+      }
+    }
+    responses: {
+      /** @description Updated weekly report schedule */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WeeklyReportSchedule']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+      415: components['responses']['UnsupportedMediaType']
     }
   }
   getPalworldInfo: {

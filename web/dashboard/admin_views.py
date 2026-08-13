@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import time, timedelta
 import hashlib
 import hmac
 import json
@@ -7,19 +7,28 @@ import math
 import re
 import secrets
 from urllib.parse import urljoin, urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .accounts import is_site_admin
-from .models import GuildSnapshot, LatestDataset, Player, PlayerSession
+from .models import (
+    GuildSnapshot,
+    LatestDataset,
+    Player,
+    PlayerSession,
+    WeeklyReportSchedule,
+)
+from .weekly_scheduler import ensure_next_run
 
 logger = logging.getLogger(__name__)
 GUILD_SNAPSHOT_STALE_AFTER = timedelta(minutes=15)
@@ -29,6 +38,7 @@ ADMIN_USERID_MAX_LENGTH = 64
 ADMIN_USERID_PATTERN = re.compile(r"^[A-Za-z0-9_:.\-]{1,64}\Z")
 ADMIN_ANNOUNCE_MAX_LENGTH = 500
 ADMIN_COMMAND_TIMEOUT = 10
+SCHEDULE_TIME_PATTERN = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]\Z")
 SNAPSHOT_NAME_MAX_LENGTH = 128
 SNAPSHOT_KEY_MAX_LENGTH = 64
 GUILD_FIELDS = {
@@ -413,6 +423,132 @@ def player_ip_addresses(request):
             for player in players
         ],
     })
+
+
+def _schedule_payload(schedule):
+    return {
+        "enabled": schedule.enabled,
+        "weekday": schedule.weekday,
+        "time": schedule.run_time.strftime("%H:%M"),
+        "timezone": schedule.timezone,
+        "next_run_at": (
+            schedule.next_run_at.isoformat() if schedule.next_run_at else None
+        ),
+        "last_run": {
+            "scheduled_for": (
+                schedule.last_scheduled_for.isoformat()
+                if schedule.last_scheduled_for
+                else None
+            ),
+            "started_at": (
+                schedule.last_started_at.isoformat()
+                if schedule.last_started_at
+                else None
+            ),
+            "finished_at": (
+                schedule.last_finished_at.isoformat()
+                if schedule.last_finished_at
+                else None
+            ),
+            "status": schedule.last_status,
+            "error": schedule.last_error or None,
+        },
+        "updated_at": schedule.updated_at.isoformat(),
+    }
+
+
+@require_http_methods(["GET", "POST"])
+@never_cache
+@login_required
+def weekly_report_schedule(request):
+    _admin_required(request)
+    with transaction.atomic():
+        schedule, _ = WeeklyReportSchedule.objects.select_for_update().get_or_create(
+            id=1
+        )
+        if request.method == "POST":
+            if request.content_type != "application/json":
+                return JsonResponse(
+                    {"error": "Content-Type must be application/json"}, status=415
+                )
+            try:
+                body = _load_json_body(request)
+            except (ValueError, UnicodeDecodeError):
+                return JsonResponse({"error": "invalid JSON"}, status=400)
+            if not isinstance(body, dict) or set(body) != {
+                "enabled",
+                "weekday",
+                "time",
+                "timezone",
+            }:
+                return JsonResponse(
+                    {"error": "schedule must contain enabled, weekday, time and timezone"},
+                    status=400,
+                )
+            enabled = body["enabled"]
+            weekday = body["weekday"]
+            run_time = body["time"]
+            timezone_name = body["timezone"]
+            if not isinstance(enabled, bool):
+                return JsonResponse({"error": "enabled must be a boolean"}, status=400)
+            if (
+                not isinstance(weekday, int)
+                or isinstance(weekday, bool)
+                or not 0 <= weekday <= 6
+            ):
+                return JsonResponse(
+                    {"error": "weekday must be an integer between 0 and 6"},
+                    status=400,
+                )
+            if not isinstance(run_time, str) or not SCHEDULE_TIME_PATTERN.fullmatch(
+                run_time
+            ):
+                return JsonResponse(
+                    {"error": "time must use the HH:MM format"}, status=400
+                )
+            if (
+                not isinstance(timezone_name, str)
+                or not timezone_name
+                or len(timezone_name) > 64
+            ):
+                return JsonResponse(
+                    {"error": "timezone must be a valid IANA timezone"}, status=400
+                )
+            try:
+                ZoneInfo(timezone_name)
+            except (ZoneInfoNotFoundError, ValueError):
+                return JsonResponse(
+                    {"error": "timezone must be a valid IANA timezone"}, status=400
+                )
+            hour, minute = (int(part) for part in run_time.split(":"))
+            schedule.enabled = enabled
+            schedule.weekday = weekday
+            schedule.run_time = time(hour, minute)
+            schedule.timezone = timezone_name
+            schedule.next_run_at = None
+            ensure_next_run(schedule)
+            schedule.save(
+                update_fields=[
+                    "enabled",
+                    "weekday",
+                    "run_time",
+                    "timezone",
+                    "next_run_at",
+                    "updated_at",
+                ]
+            )
+            logger.info(
+                "Admin %s updated weekly report schedule enabled=%s weekday=%d time=%s timezone=%s",
+                request.user.username,
+                enabled,
+                weekday,
+                run_time,
+                timezone_name,
+            )
+        elif schedule.enabled and schedule.next_run_at is None:
+            ensure_next_run(schedule)
+            schedule.save(update_fields=["next_run_at", "updated_at"])
+        return JsonResponse(_schedule_payload(schedule))
 
 
 @require_GET

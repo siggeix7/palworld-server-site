@@ -8,6 +8,24 @@ from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def read_secret(file_variable, value_variable):
+    secret_path = os.getenv(file_variable, "").strip()
+    if secret_path:
+        try:
+            value = Path(secret_path).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ImproperlyConfigured(
+                f"Unable to read secret file configured by {file_variable}"
+            ) from exc
+    else:
+        value = os.getenv(value_variable, "").strip()
+    if not value:
+        raise ImproperlyConfigured(
+            f"{file_variable} or {value_variable} must be configured"
+        )
+    return value
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     raise ImproperlyConfigured("DJANGO_SECRET_KEY is required")
@@ -58,13 +76,44 @@ TEMPLATES = [
     }
 ]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": os.getenv("DATABASE_PATH", str(BASE_DIR / "db.sqlite3")),
-        "OPTIONS": {"timeout": 20},
+DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "sqlite").strip().lower()
+if DATABASE_ENGINE == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.getenv("DATABASE_PATH", str(BASE_DIR / "db.sqlite3")),
+            "OPTIONS": {"timeout": 20},
+        }
     }
-}
+elif DATABASE_ENGINE in {"postgres", "postgresql"}:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "HOST": os.getenv("DB_HOST", "db"),
+            "PORT": os.getenv("DB_PORT", "5432"),
+            "NAME": os.getenv("DB_NAME", "palworld_site"),
+            "USER": os.getenv("DB_USER", "palworld_app"),
+            "PASSWORD": read_secret("DB_PASSWORD_FILE", "DB_PASSWORD"),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {
+                "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
+                "application_name": "palworld-server-site",
+            },
+        }
+    }
+else:
+    raise ImproperlyConfigured(
+        "DATABASE_ENGINE must be either sqlite or postgresql"
+    )
+
+LEGACY_SQLITE_PATH = os.getenv("LEGACY_SQLITE_PATH", "").strip()
+if LEGACY_SQLITE_PATH:
+    DATABASES["legacy"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": f"file:{LEGACY_SQLITE_PATH}?mode=ro&immutable=1",
+        "OPTIONS": {"timeout": 20, "uri": True},
+    }
 
 LANGUAGE_CODE = "it-it"
 TIME_ZONE = os.getenv("TIME_ZONE", "Europe/Rome")
@@ -180,6 +229,9 @@ WORLD_DATA_STALE_SECONDS = int(os.getenv("WORLD_DATA_STALE_SECONDS", "90"))
 POSITION_RETENTION_DAYS = int(os.getenv("POSITION_RETENTION_DAYS", "7"))
 METRIC_RETENTION_DAYS = int(os.getenv("METRIC_RETENTION_DAYS", "90"))
 SESSION_RETENTION_DAYS = int(os.getenv("SESSION_RETENTION_DAYS", "365"))
+WEEKLY_REPORT_SCHEDULER_LOCK_PATH = os.getenv(
+    "WEEKLY_REPORT_SCHEDULER_LOCK_PATH", "/data/palworld-weekly-scheduler.lock"
+)
 SITE_AUTH_REQUIRED = True
 AUTH_TRUSTED_PROXY_ADDRESSES = {
     value.strip()

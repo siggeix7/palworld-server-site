@@ -407,6 +407,55 @@
         }
       }
     },
+    "/api/v1/admin/weekly-report-schedule": {
+      "get": {
+        "operationId": "getWeeklyReportSchedule",
+        "tags": ["Administration"],
+        "summary": "Return the weekly report schedule",
+        "description": "Site-admin access is required.",
+        "responses": {
+          "200": {
+            "description": "Persistent weekly report schedule and last run status",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/WeeklyReportSchedule"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      },
+      "post": {
+        "operationId": "updateWeeklyReportSchedule",
+        "tags": ["Administration"],
+        "summary": "Update the weekly report schedule",
+        "description": "Site-admin access and Django CSRF validation are required.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/WeeklyReportScheduleUpdate"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated weekly report schedule",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/WeeklyReportSchedule"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"}
+        }
+      }
+    },
     "/api/v1/palworld/info": {
       "get": {
         "operationId": "getPalworldInfo",
@@ -1408,6 +1457,42 @@
               "additionalProperties": false
             }
           }
+        },
+        "additionalProperties": false
+      },
+      "WeeklyReportScheduleUpdate": {
+        "type": "object",
+        "required": ["enabled", "weekday", "time", "timezone"],
+        "properties": {
+          "enabled": {"type": "boolean"},
+          "weekday": {"type": "integer", "minimum": 0, "maximum": 6},
+          "time": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+          "timezone": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "additionalProperties": false
+      },
+      "WeeklyReportSchedule": {
+        "type": "object",
+        "required": ["enabled", "weekday", "time", "timezone", "next_run_at", "last_run", "updated_at"],
+        "properties": {
+          "enabled": {"type": "boolean"},
+          "weekday": {"type": "integer", "minimum": 0, "maximum": 6},
+          "time": {"type": "string"},
+          "timezone": {"type": "string"},
+          "next_run_at": {"$ref": "#/components/schemas/Timestamp"},
+          "last_run": {
+            "type": "object",
+            "required": ["scheduled_for", "started_at", "finished_at", "status", "error"],
+            "properties": {
+              "scheduled_for": {"$ref": "#/components/schemas/Timestamp"},
+              "started_at": {"$ref": "#/components/schemas/Timestamp"},
+              "finished_at": {"$ref": "#/components/schemas/Timestamp"},
+              "status": {"type": "string", "enum": ["never", "running", "success", "failed", "interrupted"]},
+              "error": {"type": ["string", "null"]}
+            },
+            "additionalProperties": false
+          },
+          "updated_at": {"type": "string", "format": "date-time"}
         },
         "additionalProperties": false
       },

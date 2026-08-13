@@ -1,13 +1,60 @@
 services:
+  db:
+    image: "${POSTGRES_IMAGE:-postgres:17-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f}"
+    container_name: palworld-server-postgres
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_USER: "${POSTGRES_ADMIN_USER:-palworld_admin}"
+      POSTGRES_DB: "${POSTGRES_ADMIN_DB:-postgres}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-admin-password
+      APP_DB_NAME: "${DB_NAME:-palworld_site}"
+      APP_DB_USER: "${DB_USER:-palworld_app}"
+      APP_DB_PASSWORD_FILE: /run/secrets/postgres-app-password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets:
+      - postgres-admin-password
+      - postgres-app-password
+    volumes:
+      - "${POSTGRES_DATA_PATH:-./postgres-data}:/var/lib/postgresql/data"
+      - "${POSTGRES_INIT_PATH:-./docker/postgres-init.sh}:/docker-entrypoint-initdb.d/10-palworld-app.sh:ro"
+    networks:
+      - database
+    shm_size: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    pids_limit: 200
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   palworld-server-site:
     image: "${IMAGE:-palworld-server-site:latest}"
     container_name: palworld-server-site
     restart: unless-stopped
-    stop_grace_period: 40s
+    stop_grace_period: 180s
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "${SITE_BIND:-127.0.0.1}:${SITE_PORT:-8080}:8000"
       - "${PRIVATE_BIND:-127.0.0.1}:${PRIVATE_PORT:-8081}:8001"
     environment:
+      DATABASE_ENGINE: postgresql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: "${DB_NAME:-palworld_site}"
+      DB_USER: "${DB_USER:-palworld_app}"
+      DB_PASSWORD_FILE: /run/secrets/postgres-app-password
+      DB_CONNECT_TIMEOUT: "${DB_CONNECT_TIMEOUT:-5}"
+      DB_CONN_MAX_AGE: "${DB_CONN_MAX_AGE:-60}"
       PUBLIC_SITE_URL: "${PUBLIC_SITE_URL:?PUBLIC_SITE_URL is required}"
       DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:?DJANGO_ALLOWED_HOSTS is required}"
       DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}"
@@ -20,6 +67,7 @@ services:
       PALWORLD_API_ALLOW_INSECURE_HTTP: "${PALWORLD_API_ALLOW_INSECURE_HTTP:-false}"
       PALWORLD_API_CONNECT_TIMEOUT: "${PALWORLD_API_CONNECT_TIMEOUT:-3}"
       COLLECTOR_LOCK_PATH: "${COLLECTOR_LOCK_PATH:-/data/palworld-collector.lock}"
+      WEEKLY_REPORT_SCHEDULER_LOCK_PATH: "${WEEKLY_REPORT_SCHEDULER_LOCK_PATH:-/data/palworld-weekly-scheduler.lock}"
       SITE_ADMIN_USERS: "${SITE_ADMIN_USERS:?SITE_ADMIN_USERS is required}"
       CURRENT_TERMS_VERSION: "${CURRENT_TERMS_VERSION:-2026-07-31}"
       CURRENT_TERMS_EFFECTIVE_DATE: "${CURRENT_TERMS_EFFECTIVE_DATE:-31 luglio 2026}"
@@ -54,7 +102,12 @@ services:
       WEB_WORKERS: "${WEB_WORKERS:-2}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
     volumes:
-      - "${DATA_PATH:-/opt/palworld-server-site/data}:/data"
+      - "${DATA_PATH:-./data}:/data"
+    secrets:
+      - postgres-app-password
+    networks:
+      - default
+      - database
     read_only: true
     tmpfs:
       - /tmp:size=96m,mode=1777
@@ -70,3 +123,13 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+secrets:
+  postgres-admin-password:
+    file: "${POSTGRES_ADMIN_PASSWORD_FILE:-./secrets/postgres-admin-password}"
+  postgres-app-password:
+    file: "${POSTGRES_APP_PASSWORD_FILE:-./secrets/postgres-app-password}"
+
+networks:
+  database:
+    internal: true

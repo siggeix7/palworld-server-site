@@ -7,30 +7,54 @@ umask 077
 : "${PALWORLD_API_URL:?PALWORLD_API_URL is required}"
 : "${PALWORLD_API_PASSWORD:?PALWORLD_API_PASSWORD is required}"
 
-database_dir="$(dirname -- "${DATABASE_PATH}")"
-mkdir -p "${database_dir}"
-chmod 0700 "${database_dir}"
+mkdir -p /data
+chmod 0700 /data
+
+if [[ "${DATABASE_ENGINE:-sqlite}" == "sqlite" ]]; then
+  database_dir="$(dirname -- "${DATABASE_PATH}")"
+  mkdir -p "${database_dir}"
+  chmod 0700 "${database_dir}"
+fi
+
+database_ready=false
+for _ in {1..30}; do
+  if python3 web/manage.py shell -c \
+    "from django.db import connection; connection.ensure_connection()" \
+    >/dev/null 2>&1; then
+    database_ready=true
+    break
+  fi
+  sleep 2
+done
+if [[ "${database_ready}" != true ]]; then
+  printf 'Database did not become ready within 60 seconds\n' >&2
+  exit 1
+fi
 
 python3 web/manage.py migrate --noinput
-python3 web/manage.py shell -c \
-  "from django.db import connection; c=connection.cursor(); c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA synchronous=NORMAL')" \
-  >/dev/null
-for private_path in "${DATABASE_PATH}" "${DATABASE_PATH}-wal" "${DATABASE_PATH}-shm" "${COLLECTOR_LOCK_PATH}"; do
+if [[ "${DATABASE_ENGINE:-sqlite}" == "sqlite" ]]; then
+  python3 web/manage.py shell -c \
+    "from django.db import connection; c=connection.cursor(); c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA synchronous=NORMAL')" \
+    >/dev/null
+fi
+for private_path in "${DATABASE_PATH:-}" "${DATABASE_PATH:-}-wal" "${DATABASE_PATH:-}-shm" "${COLLECTOR_LOCK_PATH}" "${WEEKLY_REPORT_SCHEDULER_LOCK_PATH}"; do
+  [[ -n "${private_path}" ]] || continue
   [[ ! -e "${private_path}" ]] || chmod 0600 "${private_path}"
 done
 
 public_pid=""
 private_pid=""
 collector_pid=""
+scheduler_pid=""
 
 shutdown() {
   trap - TERM INT EXIT
   local pid running
-  local pids=("${public_pid}" "${private_pid}" "${collector_pid}")
+  local pids=("${public_pid}" "${private_pid}" "${collector_pid}" "${scheduler_pid}")
   for pid in "${pids[@]}"; do
     [[ -n "${pid}" ]] && kill -TERM "${pid}" 2>/dev/null || true
   done
-  for _ in {1..30}; do
+  for _ in {1..150}; do
     running=false
     for pid in "${pids[@]}"; do
       if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
@@ -45,7 +69,7 @@ shutdown() {
       kill -KILL "${pid}" 2>/dev/null || true
     fi
   done
-  wait "${public_pid}" "${private_pid}" "${collector_pid}" 2>/dev/null || true
+  wait "${public_pid}" "${private_pid}" "${collector_pid}" "${scheduler_pid}" 2>/dev/null || true
 }
 trap shutdown TERM INT EXIT
 
@@ -63,6 +87,9 @@ private_pid=$!
 python3 web/manage.py runcollector &
 collector_pid=$!
 
+python3 web/manage.py run_weekly_scheduler &
+scheduler_pid=$!
+
 gunicorn palworld_site.wsgi:application \
   --chdir /app/web \
   --bind "0.0.0.0:${SITE_INTERNAL_PORT}" \
@@ -74,4 +101,4 @@ gunicorn palworld_site.wsgi:application \
   --error-logfile - &
 public_pid=$!
 
-wait -n "${public_pid}" "${private_pid}" "${collector_pid}"
+wait -n "${public_pid}" "${private_pid}" "${collector_pid}" "${scheduler_pid}"

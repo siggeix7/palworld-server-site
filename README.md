@@ -23,18 +23,21 @@ Palworld REST API
         |
         | Basic Auth, richieste in uscita dal container
         v
-collector Django -> sanitizer -> SQLite -> API Django -> SPA autenticata :8000
+collector Django -> sanitizer -> PostgreSQL -> API Django -> SPA autenticata :8000
 
-Level.sav -> PalworldGuildSync -> API privata :8001 -> SQLite
+Level.sav -> PalworldGuildSync -> API privata :8001 -> PostgreSQL
                                       |
                                       +-> health e controllo collector
 ```
 
-Il container avvia tre processi:
+Il progetto Compose avvia PostgreSQL e il container applicativo. Quest'ultimo
+avvia quattro processi:
 
 - Gunicorn pubblico su `8000` per pagine e API consultabili dagli utenti;
 - Gunicorn privato su `8001` per health, stato collector e upload save;
 - `manage.py runcollector` per interrogare direttamente Palworld.
+- `manage.py run_weekly_scheduler` per inviare i report settimanali secondo la
+  pianificazione salvata nel database.
 
 La porta privata non espone pagine, file statici o API pubbliche. Deve essere
 pubblicata soltanto sulla rete amministrativa necessaria allo script save. Il
@@ -132,19 +135,62 @@ IMAGE=palworld-server-site:<versione> \
   docker compose --env-file /opt/palworld-server-site/.env up -d
 ```
 
-**Prerequisito permessi**: il container gira come uid 1000 e il volume è una
-bind mount host. Prima del primo avvio creare la directory con ownership
-corretta, altrimenti `migrate` non può scrivere il database:
+**Prerequisito permessi**: il container applicativo gira come uid 1000 e usa una
+bind mount host per i lock. Prima del primo avvio creare directory e secret:
 
 ```bash
-install -d -m 0700 -o 1000 -g 1000 "${DATA_PATH:-/opt/palworld-server-site/data}"
+install -d -m 0700 -o 1000 -g 1000 /opt/palworld-server-site/data
+install -d -m 0700 -o 999 -g 999 /opt/palworld-server-site/postgres-data
+install -d -m 0700 /opt/palworld-server-site/{secrets,backups}
+openssl rand -base64 48 > /opt/palworld-server-site/secrets/postgres-admin-password
+openssl rand -base64 48 > /opt/palworld-server-site/secrets/postgres-app-password
+chown root:root /opt/palworld-server-site/secrets/postgres-*-password
+chmod 0444 /opt/palworld-server-site/secrets/postgres-*-password
 ```
 
-Il volume configurato con `DATA_PATH` contiene database SQLite e lock del
-collector. L'entrypoint applica automaticamente le migrazioni, abilita WAL e
-normalizza directory e file rispettivamente a `0700` e `0600`. Gli access log
+I file sono leggibili nei container non root, ma la directory host `secrets`
+resta `0700` e ciascun servizio monta soltanto i secret necessari.
+
+`POSTGRES_DATA_PATH` contiene PostgreSQL; `DATA_PATH` contiene i lock applicativi
+e conserva il vecchio SQLite durante la finestra di rollback. L'entrypoint
+attende il database e applica automaticamente le migrazioni. PostgreSQL non
+pubblica porte sull'host ed è raggiungibile soltanto sulla rete Docker interna.
+Gli access log
 non includono path o query string, così i token monouso presenti negli URL di
 verifica e recupero password non vengono registrati.
+
+### Migrazione da SQLite
+
+Per il primo passaggio a PostgreSQL usare una copia coerente del database SQLite,
+creata con la backup API SQLite dopo aver fermato il container applicativo.
+Avviare solo `db`, applicare le migrazioni al database vuoto, quindi eseguire:
+
+```bash
+docker compose run --rm --no-deps \
+  -e LEGACY_SQLITE_PATH=/data/palworld-site.sqlite3 \
+  --entrypoint python3 palworld-server-site \
+  web/manage.py migrate_sqlite_to_postgres --confirm-empty-target
+```
+
+Il comando verifica integrità SQLite, target vuoto, permessi Django, conteggi,
+chiavi primarie e sequenze. Conservare SQLite finché la nuova versione non ha
+superato la finestra di osservazione.
+
+### Backup e trasferimento
+
+Per backup portabili usare `pg_dump` in formato custom sotto
+`/opt/palworld-server-site/backups`. È anche possibile fermare entrambi i
+container e copiare tutta `/opt/palworld-server-site`: `.env`, Compose, `docker/`,
+`secrets/`, `data/` e `postgres-data/`. Una copia fisica di `postgres-data` è
+valida solo con PostgreSQL fermo, stessa major e stessa architettura; negli altri
+casi usare `pg_dump` e `pg_restore`.
+
+### Report settimanale
+
+Il pannello `Admin` permette di abilitare l'invio, scegliere giorno, ora e fuso
+IANA e vedere ultima e prossima esecuzione. Non installare un cron host parallelo:
+lo scheduler interno anticipa la prossima occorrenza prima dell'invio, evitando
+duplicazioni dopo un riavvio.
 
 Verifiche locali:
 

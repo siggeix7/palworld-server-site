@@ -30,6 +30,11 @@ urlpatterns = [
         admin_views.player_ip_addresses,
         name="admin-player-ips",
     ),
+    path(
+        "api/v1/admin/weekly-report-schedule",
+        admin_views.weekly_report_schedule,
+        name="admin-weekly-report-schedule",
+    ),
     path("api/v1/palworld/info", admin_views.palworld_info, name="palworld-info"),
     path(
         "api/v1/palworld/admin/players",

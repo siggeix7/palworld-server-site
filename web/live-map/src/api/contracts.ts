@@ -328,6 +328,25 @@ export const AdminIpsSchema = z.object({
 export const AdminInfoSchema = z
   .object({ available: z.boolean(), generated_at: dateValue, stale: z.boolean() })
   .passthrough()
+export const WeeklyReportScheduleSchema = z
+  .object({
+    enabled: z.boolean(),
+    weekday: z.number().int().min(0).max(6),
+    time: z.string().regex(/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/),
+    timezone: z.string(),
+    next_run_at: dateValue,
+    last_run: z
+      .object({
+        scheduled_for: dateValue,
+        started_at: dateValue,
+        finished_at: dateValue,
+        status: z.enum(['never', 'running', 'success', 'failed', 'interrupted']),
+        error: z.string().nullable()
+      })
+      .strict(),
+    updated_at: z.string()
+  })
+  .strict()
 export const CommandPlayersSchema = z.object({
   players: z.array(
     z.object({
@@ -348,3 +367,4 @@ export type History = z.infer<typeof HistorySchema>
 export type ArchivePlayer = z.infer<typeof ArchivePlayerSchema>
 export type PlayerDetail = z.infer<typeof PlayerDetailSchema>
 export type GuildData = z.infer<typeof GuildDataSchema>
+export type WeeklyReportSchedule = z.infer<typeof WeeklyReportScheduleSchema>

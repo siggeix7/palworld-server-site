@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.conf import settings
 from django.db import models
 
@@ -133,3 +135,44 @@ class GuildSnapshot(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
     payload = models.JSONField(default=dict)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class WeeklyReportSchedule(models.Model):
+    NEVER = "never"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    INTERRUPTED = "interrupted"
+    STATUS_CHOICES = [
+        (NEVER, "Never"),
+        (RUNNING, "Running"),
+        (SUCCESS, "Success"),
+        (FAILED, "Failed"),
+        (INTERRUPTED, "Interrupted"),
+    ]
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    enabled = models.BooleanField(default=True)
+    weekday = models.PositiveSmallIntegerField(default=0)
+    run_time = models.TimeField(default=time(8, 0))
+    timezone = models.CharField(max_length=64, default="Europe/Rome")
+    next_run_at = models.DateTimeField(null=True, blank=True)
+    last_scheduled_for = models.DateTimeField(null=True, blank=True)
+    last_started_at = models.DateTimeField(null=True, blank=True)
+    last_finished_at = models.DateTimeField(null=True, blank=True)
+    last_status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=NEVER
+    )
+    last_error = models.CharField(max_length=64, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(id=1), name="weekly_report_schedule_singleton"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(weekday__gte=0, weekday__lte=6),
+                name="weekly_report_schedule_valid_weekday",
+            ),
+        ]

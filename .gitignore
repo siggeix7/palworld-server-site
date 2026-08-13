@@ -11,3 +11,6 @@ venv/
 htmlcov/
 web/live-map/node_modules/
 web/live-map/dist/
+/data/
+/postgres-data/
+/secrets/

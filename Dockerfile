@@ -13,6 +13,12 @@ RUN npm run build
 FROM rockylinux/rockylinux:10
 
 ARG APP_VERSION=dev
+ARG VCS_REF=unknown
+
+LABEL org.opencontainers.image.title="Palworld Server Observatory" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.source="https://github.com/siggeix7/palworld-server-site"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

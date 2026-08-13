@@ -2011,6 +2011,47 @@
   .command-form.inline {
     grid-template-columns: 1fr auto;
   }
+  .schedule-form {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.7fr) minmax(120px, 0.55fr) minmax(180px, 1fr) auto;
+    align-items: end;
+    gap: 12px;
+    margin: 18px 0;
+    padding: 16px;
+    border: 1px solid var(--dash-border);
+    background: var(--dash-inset);
+  }
+  .schedule-form label {
+    display: grid;
+    gap: 7px;
+    color: var(--dash-muted);
+    font: 9px var(--font-tech);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .schedule-form .schedule-toggle {
+    display: flex;
+    min-height: 42px;
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+  }
+  .schedule-form .schedule-toggle input {
+    width: 18px;
+    height: 18px;
+  }
+  .schedule-form button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px;
+  }
+  .schedule-form button svg {
+    width: 16px;
+  }
+  .schedule-status {
+    margin-top: 12px;
+  }
   .table-actions {
     white-space: nowrap;
   }
@@ -2251,10 +2292,12 @@
     grid-template-columns: 1fr;
   }
   .command-form,
-  .command-form.inline {
+  .command-form.inline,
+  .schedule-form {
     grid-template-columns: 1fr;
   }
-  .command-form button {
+  .command-form button,
+  .schedule-form button {
     justify-content: center;
   }
   .dash-footer {

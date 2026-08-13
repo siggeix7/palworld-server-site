@@ -24,3 +24,6 @@ LICENSE
 .env.example
 ops
 zabbix
+data
+postgres-data
+secrets

@@ -1,12 +1,20 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from dashboard.models import GuildSnapshot, Player, PlayerSession, PositionSample
+from dashboard.models import (
+    GuildSnapshot,
+    Player,
+    PlayerSession,
+    PositionSample,
+    UserProfile,
+)
 
 
 @override_settings(
@@ -18,12 +26,20 @@ class WeeklyReportTests(TestCase):
         self.now = timezone.now()
 
     def create_user(self, username, email):
-        return get_user_model().objects.create_user(
+        user = get_user_model().objects.create_user(
             username=username,
             email=email,
             password="password",
             is_active=True,
         )
+        UserProfile.objects.create(
+            user=user,
+            email_verified=True,
+            approved=True,
+            terms_version=settings.CURRENT_TERMS_VERSION,
+            terms_accepted_at=self.now,
+        )
+        return user
 
     def create_player(self, public_id, name, last_seen):
         return Player.objects.create(
@@ -184,6 +200,39 @@ class WeeklyReportTests(TestCase):
             "f" * 24, "Inactive", self.now - timedelta(days=30)
         )
         self.create_session(inactive, self.now - timedelta(days=30), 60)
+
+        call_command("send_weekly_report")
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_command_uses_explicit_cutoff_and_timezone(self):
+        cutoff = self.now.replace(microsecond=0)
+        self.create_user("Scheduled", "scheduled@example.com")
+        player = self.create_player("g" * 24, "Scheduled", cutoff)
+        self.create_session(player, cutoff - timedelta(hours=2), 30)
+
+        call_command(
+            "send_weekly_report",
+            until=cutoff.isoformat(),
+            report_timezone="Europe/Rome",
+        )
+
+        self.assertEqual(len(mail.outbox), 1)
+        local_cutoff = cutoff.astimezone(timezone.get_fixed_timezone(120))
+        self.assertIn(local_cutoff.strftime("%d/%m/%Y"), mail.outbox[0].body)
+
+    def test_command_rejects_naive_cutoff_and_invalid_timezone(self):
+        with self.assertRaises(CommandError):
+            call_command("send_weekly_report", until="2026-08-10T08:00:00")
+        with self.assertRaises(CommandError):
+            call_command("send_weekly_report", report_timezone="Invalid/Timezone")
+
+    def test_command_skips_unapproved_users(self):
+        user = self.create_user("Revoked", "revoked@example.com")
+        user.site_profile.approved = False
+        user.site_profile.save(update_fields=["approved"])
+        player = self.create_player("h" * 24, "Revoked", self.now)
+        self.create_session(player, self.now - timedelta(hours=2), 30)
 
         call_command("send_weekly_report")
 

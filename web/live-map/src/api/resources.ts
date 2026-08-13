@@ -15,6 +15,7 @@ import {
   SessionSchema,
   SnapshotSchema,
   TelemetryStatsSchema,
+  WeeklyReportScheduleSchema,
   WorldDiffSchema
 } from './contracts'
 
@@ -39,6 +40,21 @@ export const api = {
     requestJson('/api/v1/admin/player-ips', AdminIpsSchema, { signal, forbidden: 'home' }),
   adminInfo: (signal?: AbortSignal) =>
     requestJson('/api/v1/palworld/info', AdminInfoSchema, { signal, forbidden: 'home' }),
+  weeklyReportSchedule: (signal?: AbortSignal) =>
+    requestJson('/api/v1/admin/weekly-report-schedule', WeeklyReportScheduleSchema, {
+      signal,
+      forbidden: 'home'
+    }),
+  updateWeeklyReportSchedule: (
+    schedule: { enabled: boolean; weekday: number; time: string; timezone: string },
+    signal?: AbortSignal
+  ) =>
+    requestJson('/api/v1/admin/weekly-report-schedule', WeeklyReportScheduleSchema, {
+      method: 'POST',
+      json: schedule,
+      signal,
+      forbidden: 'home'
+    }),
   commandPlayers: (signal?: AbortSignal) =>
     requestJson('/api/v1/palworld/admin/players', CommandPlayersSchema, { signal, forbidden: 'home' }),
   announce: (message: string, signal?: AbortSignal) =>

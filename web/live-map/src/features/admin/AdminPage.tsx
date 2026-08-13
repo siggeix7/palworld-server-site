@@ -1,5 +1,5 @@
-import { IconAlertTriangle, IconRefresh, IconSend, IconShieldLock } from '@tabler/icons-react'
-import { type FormEvent, useState } from 'react'
+import { IconAlertTriangle, IconCalendarTime, IconRefresh, IconSend, IconShieldLock } from '@tabler/icons-react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { api } from '../../api/resources'
 import { useApiResource } from '../../api/useApiResource'
 import { sessionIsAdmin, useSession } from '../../app/session'
@@ -39,9 +39,32 @@ export function AdminPage() {
     enabled: adminEnabled,
     clearOnError: true
   })
+  const weeklySchedule = useApiResource((signal) => api.weeklyReportSchedule(signal), {
+    key: 'admin-weekly-report-schedule',
+    intervalMs: 60_000,
+    enabled: adminEnabled,
+    clearOnError: true
+  })
   const [message, setMessage] = useState('')
   const [unbanId, setUnbanId] = useState('')
+  const [scheduleForm, setScheduleForm] = useState({
+    enabled: true,
+    weekday: 0,
+    time: '08:00',
+    timezone: 'Europe/Rome'
+  })
+  const [scheduleDirty, setScheduleDirty] = useState(false)
   const [operation, setOperation] = useState({ pending: false, message: '', error: false })
+
+  useEffect(() => {
+    if (!weeklySchedule.data || scheduleDirty) return
+    setScheduleForm({
+      enabled: weeklySchedule.data.enabled,
+      weekday: weeklySchedule.data.weekday,
+      time: weeklySchedule.data.time,
+      timezone: weeklySchedule.data.timezone
+    })
+  }, [weeklySchedule.data, scheduleDirty])
 
   if (!adminEnabled) {
     return (
@@ -59,6 +82,7 @@ export function AdminPage() {
     info.reload()
     commands.reload()
     guilds.reload()
+    weeklySchedule.reload()
   }
   const mutate = async (description: string, action: () => Promise<unknown>) => {
     if (!window.confirm(`Confermi: ${description}?`)) return false
@@ -84,6 +108,25 @@ export function AdminPage() {
   const unban = async (event: FormEvent) => {
     event.preventDefault()
     if (await mutate(`revocare il ban per ${unbanId}`, () => api.playerCommand('unban', unbanId))) setUnbanId('')
+  }
+  const saveSchedule = async (event: FormEvent) => {
+    event.preventDefault()
+    if (
+      await mutate('salvare la pianificazione del report settimanale', () =>
+        api.updateWeeklyReportSchedule(scheduleForm)
+      )
+    ) {
+      setScheduleDirty(false)
+      weeklySchedule.reload()
+    }
+  }
+
+  const scheduleStatus = {
+    never: 'Mai eseguito',
+    running: 'Invio in corso',
+    success: 'Completato',
+    failed: 'Non riuscito',
+    interrupted: 'Interrotto'
   }
 
   return (
@@ -121,6 +164,100 @@ export function AdminPage() {
             Snapshot avvisi aggiornato: {date(guilds.data?.updated_at)}
             {guilds.data?.stale ? ' · in ritardo' : ''}
           </p>
+        </DataState>
+      </Panel>
+      <Panel title="Report settimanale" eyebrow="Pianificazione automatica">
+        <p className="section-hint">
+          Lo scheduler è eseguito nel container del sito. La finestra del report termina all'orario pianificato nel fuso
+          configurato, anche dopo un riavvio.
+        </p>
+        <DataState
+          loading={weeklySchedule.loading}
+          error={weeklySchedule.error}
+          onRetry={weeklySchedule.reload}
+          hasData={Boolean(weeklySchedule.data)}
+        >
+          <form className="schedule-form" onSubmit={saveSchedule}>
+            <label className="schedule-toggle">
+              <input
+                type="checkbox"
+                checked={scheduleForm.enabled}
+                onChange={(event) => {
+                  setScheduleDirty(true)
+                  setScheduleForm({ ...scheduleForm, enabled: event.target.checked })
+                }}
+              />
+              Invio automatico attivo
+            </label>
+            <label>
+              Giorno
+              <select
+                value={scheduleForm.weekday}
+                disabled={!scheduleForm.enabled}
+                onChange={(event) => {
+                  setScheduleDirty(true)
+                  setScheduleForm({ ...scheduleForm, weekday: Number(event.target.value) })
+                }}
+              >
+                {['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'].map((label, index) => (
+                  <option key={label} value={index}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ora
+              <input
+                type="time"
+                required
+                value={scheduleForm.time}
+                disabled={!scheduleForm.enabled}
+                onChange={(event) => {
+                  setScheduleDirty(true)
+                  setScheduleForm({ ...scheduleForm, time: event.target.value })
+                }}
+              />
+            </label>
+            <label>
+              Fuso orario
+              <input
+                required
+                maxLength={64}
+                value={scheduleForm.timezone}
+                disabled={!scheduleForm.enabled}
+                onChange={(event) => {
+                  setScheduleDirty(true)
+                  setScheduleForm({ ...scheduleForm, timezone: event.target.value })
+                }}
+              />
+            </label>
+            <button type="submit" disabled={operation.pending}>
+              <IconCalendarTime aria-hidden="true" /> Salva pianificazione
+            </button>
+          </form>
+          <dl className="stat-list horizontal schedule-status">
+            <div>
+              <dt>Stato</dt>
+              <dd>{scheduleStatus[weeklySchedule.data?.last_run.status || 'never']}</dd>
+            </div>
+            <div>
+              <dt>Prossimo invio</dt>
+              <dd>
+                {weeklySchedule.data?.enabled
+                  ? date(weeklySchedule.data.next_run_at, false, weeklySchedule.data.timezone)
+                  : 'Disattivato'}
+              </dd>
+            </div>
+            <div>
+              <dt>Ultimo avvio</dt>
+              <dd>{date(weeklySchedule.data?.last_run.started_at, false, weeklySchedule.data?.timezone)}</dd>
+            </div>
+            <div>
+              <dt>Esito tecnico</dt>
+              <dd>{weeklySchedule.data?.last_run.error || 'Nessun errore'}</dd>
+            </div>
+          </dl>
         </DataState>
       </Panel>
       <Panel title="Snapshot Palworld" eyebrow="Ultimo elenco ricevuto">

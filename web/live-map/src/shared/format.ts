@@ -18,7 +18,7 @@ export function minutes(value: unknown) {
   return duration((Number(value) || 0) * 60)
 }
 
-export function date(value: unknown, includeSeconds = false) {
+export function date(value: unknown, includeSeconds = false, timeZone?: string) {
   if (!value) return 'mai'
   const parsed = new Date(String(value))
   if (Number.isNaN(parsed.getTime())) return '--'
@@ -27,7 +27,8 @@ export function date(value: unknown, includeSeconds = false) {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    second: includeSeconds ? '2-digit' : undefined
+    second: includeSeconds ? '2-digit' : undefined,
+    timeZone
   }).format(parsed)
 }
 

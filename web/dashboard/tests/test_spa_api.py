@@ -132,6 +132,7 @@ class SpaApiTests(TestCase):
             "/api/v1/world/diff",
             "/api/v1/palworld/players",
             "/api/v1/admin/player-ips",
+            "/api/v1/admin/weekly-report-schedule",
             "/api/v1/palworld/info",
             "/api/v1/palworld/admin/players",
             "/api/v1/palworld/announce",

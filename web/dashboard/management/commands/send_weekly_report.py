@@ -1,9 +1,11 @@
 from collections import defaultdict
 from datetime import timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.utils.dateparse import parse_datetime
 from django.db.models import Avg
 from django.utils import timezone
 
@@ -27,10 +29,48 @@ class Command(BaseCommand):
         "player was active in the last 7 days"
     )
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--until",
+            help="Use this timezone-aware ISO-8601 timestamp as the report cutoff",
+        )
+        parser.add_argument(
+            "--since",
+            help="Use this timezone-aware ISO-8601 timestamp as the report start",
+        )
+        parser.add_argument(
+            "--previous-since",
+            help="Use this timezone-aware ISO-8601 timestamp as the comparison start",
+        )
+        parser.add_argument(
+            "--timezone",
+            dest="report_timezone",
+            default=settings.TIME_ZONE,
+            help="IANA timezone used for report labels and activity days",
+        )
+
     def handle(self, *args, **options):
-        now = timezone.now()
-        since = now - timedelta(days=7)
-        prev_since = since - timedelta(days=7)
+        def parse_cutoff(option, default):
+            value = options.get(option)
+            if not value:
+                return default
+            parsed = parse_datetime(value)
+            if parsed is None or timezone.is_naive(parsed):
+                raise CommandError(
+                    f"--{option.replace('_', '-')} must be a timezone-aware ISO-8601 timestamp"
+                )
+            return parsed
+
+        now = parse_cutoff("until", timezone.now())
+        try:
+            report_zone = ZoneInfo(options["report_timezone"])
+        except ZoneInfoNotFoundError as exc:
+            raise CommandError("--timezone must be a valid IANA timezone") from exc
+
+        since = parse_cutoff("since", now - timedelta(days=7))
+        prev_since = parse_cutoff("previous_since", since - timedelta(days=7))
+        if not prev_since < since < now:
+            raise CommandError("report cutoffs must satisfy previous-since < since < until")
         week_window = (since, now)
         prev_window = (prev_since, since)
 
@@ -89,11 +129,11 @@ class Command(BaseCommand):
             )
         }
 
-        session_stats = self._session_stats(player_sessions, since, now)
+        session_stats = self._session_stats(player_sessions, since, now, report_zone)
         ping_stats = dict(
             PositionSample.objects.filter(
                 source_clock__gte=since,
-                source_clock__lte=now,
+                source_clock__lt=now,
                 ping__gt=0,
             )
             .values("player_id")
@@ -105,7 +145,12 @@ class Command(BaseCommand):
         users = {
             user.username.casefold(): user
             for user in get_user_model()
-            .objects.filter(is_active=True)
+            .objects.filter(
+                is_active=True,
+                site_profile__email_verified=True,
+                site_profile__approved=True,
+                site_profile__terms_version=settings.CURRENT_TERMS_VERSION,
+            )
             .exclude(email="")
             .exclude(email__isnull=True)
         }
@@ -117,22 +162,43 @@ class Command(BaseCommand):
             )[:5]
         ]
 
-        sent = 0
+        assignments = defaultdict(list)
         for player_id, seconds in sorted(active.items(), key=lambda item: -item[1]):
             player = player_map[player_id]
-            user = users.get(player.name.casefold()) or users.get(
-                player.account_name.casefold()
-            )
-            if not user:
+            candidates = {
+                user.pk: user
+                for user in (
+                    users.get(player.name.casefold()),
+                    users.get(player.account_name.casefold()),
+                )
+                if user is not None
+            }
+            if len(candidates) != 1:
+                if candidates:
+                    self.stderr.write(
+                        f"Ambiguous site account match for player_id={player_id}; skipped"
+                    )
                 continue
+            user = next(iter(candidates.values()))
+            assignments[user.pk].append((user, player_id, seconds))
+
+        sent = 0
+        for user_id, matches in assignments.items():
+            if len(matches) != 1:
+                self.stderr.write(
+                    f"Multiple players match site user_id={user_id}; skipped"
+                )
+                continue
+            user, player_id, seconds = matches[0]
+            player = player_map[player_id]
             guild_info = guild_lookup[player.name.casefold()]
             week_minutes = int(seconds // 60)
             prev_minutes = int(prev_seconds[player_id] // 60)
             context = {
                 "user_name": user.username,
                 "public_site_url": settings.PUBLIC_SITE_URL,
-                "since_label": since.strftime("%d/%m/%Y"),
-                "until_label": now.strftime("%d/%m/%Y"),
+                "since_label": since.astimezone(report_zone).strftime("%d/%m/%Y"),
+                "until_label": now.astimezone(report_zone).strftime("%d/%m/%Y"),
                 "week_minutes": week_minutes,
                 "week_hours": week_minutes // 60,
                 "week_minutes_remainder": week_minutes % 60,
@@ -159,7 +225,7 @@ class Command(BaseCommand):
             sent += send_weekly_player_email(user, context)
         self.stdout.write(f"Weekly player report sent to {sent} recipient(s)")
 
-    def _session_stats(self, player_sessions, since, now):
+    def _session_stats(self, player_sessions, since, now, report_zone):
         stats = defaultdict(
             lambda: {
                 "session_count": 0,
@@ -185,9 +251,7 @@ class Command(BaseCommand):
                 stats[player_id]["longest_minutes"] = max(
                     stats[player_id]["longest_minutes"], int(seconds // 60)
                 )
-                day = session.started_at.astimezone(
-                    timezone.get_current_timezone()
-                ).date()
+                day = session.started_at.astimezone(report_zone).date()
                 seen_days.add(day)
                 day_seconds[day] += seconds
             stats[player_id]["active_days"] = len(seen_days)
