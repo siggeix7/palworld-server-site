@@ -203,6 +203,7 @@ class DirectArchitectureTests(SimpleTestCase):
         self.assertIn("palworld_site.ingest_wsgi:application", entrypoint)
         self.assertIn("postgres:17-bookworm", compose)
         self.assertIn("DATABASE_ENGINE: postgresql", compose)
+        self.assertIn('context: "${APP_BUILD_CONTEXT:-.}"', compose)
         self.assertIn('SESSION_RETENTION_DAYS: "${SESSION_RETENTION_DAYS:-365}"', compose)
         self.assertIn("--access-logformat", entrypoint)
         self.assertNotIn("%(U)s", entrypoint)

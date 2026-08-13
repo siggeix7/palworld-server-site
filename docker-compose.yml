@@ -37,6 +37,12 @@ services:
 
   palworld-server-site:
     image: "${IMAGE:-palworld-server-site:latest}"
+    build:
+      context: "${APP_BUILD_CONTEXT:-.}"
+      args:
+        APP_VERSION: "${APP_VERSION:-dev}"
+        VCS_REF: "${VCS_REF:-unknown}"
+    pull_policy: "${APP_PULL_POLICY:-missing}"
     container_name: palworld-server-site
     restart: unless-stopped
     stop_grace_period: 180s

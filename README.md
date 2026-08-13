@@ -88,6 +88,9 @@ Creare `/opt/palworld-server-site/.env` partendo da `.env.example`. Variabili
 principali:
 
 ```dotenv
+IMAGE=palworld-server-site:local
+APP_BUILD_CONTEXT=./source
+APP_PULL_POLICY=build
 SITE_BIND=127.0.0.1
 SITE_PORT=8080
 PRIVATE_BIND=127.0.0.1
@@ -180,8 +183,10 @@ superato la finestra di osservazione.
 
 Per backup portabili usare `pg_dump` in formato custom sotto
 `/opt/palworld-server-site/backups`. È anche possibile fermare entrambi i
-container e copiare tutta `/opt/palworld-server-site`: `.env`, Compose, `docker/`,
-`secrets/`, `data/` e `postgres-data/`. Una copia fisica di `postgres-data` è
+container e copiare tutta `/opt/palworld-server-site`: `.env`, Compose, `source/`,
+`docker/`, `secrets/`, `data/` e `postgres-data/`. Con `APP_PULL_POLICY=build`,
+`docker compose up -d` ricostruisce l'app da `source/` senza richiedere un
+registry privato. Una copia fisica di `postgres-data` è
 valida solo con PostgreSQL fermo, stessa major e stessa architettura; negli altri
 casi usare `pg_dump` e `pg_restore`.
 
