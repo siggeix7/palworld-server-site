@@ -19,7 +19,7 @@ from .models import GuildSnapshot, LatestDataset, Player, PositionSample
 from .services import WORLD_MAP_BOUNDS
 
 
-UPSTREAM_REVISION = "8ad00dbba656bdb404bc52e11a361004406c5f92"
+UPSTREAM_REVISION = "454acd087f9297538809a6744643835dfa51f979"
 CATALOGUE_PATH = Path(settings.BASE_DIR) / "dashboard/data/live-map-catalogue.json"
 CATALOGUE_METADATA = {
     "gameVersion": "1.0.3.101283",

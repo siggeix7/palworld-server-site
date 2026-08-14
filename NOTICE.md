@@ -45,7 +45,7 @@ https://github.com/LukeHollandDev/palworld-live-map
 
 Pinned upstream revision:
 
-`8ad00dbba656bdb404bc52e11a361004406c5f92` (`v1.1.0`)
+`454acd087f9297538809a6744643835dfa51f979` (`v1.1.1`)
 
 Pinned map-asset version: `1.0.3.101283` (image content unchanged since
 `1.0.1.100619`).
@@ -61,7 +61,8 @@ Current catalogue game-data version: `1.0.3.101283`.
   hashes are respectively
   `9961632d5c38a0a67fd18713fa63af0ac6f192e71fadeb5ba53ae696b8914dd1`
   and `77fee7b2bb90fa62f26eeb862396d54dbc8c7d2f0f5b12339c12585474f7c521`.
-- The container build uses the upstream `v1.1.0` tile generator, retained as
+- The container build uses the tile generator retained unchanged in upstream
+  `v1.1.1`, stored as
   `docker/generate-map-tiles.py` with SHA-256
   `70cf076bdb943f00f132afa0157f6e2e5a6cb7f5de8c23c37312940167097a14`,
   Pillow `11.3.0` and libwebp `1.5.0`. It deterministically creates 680
@@ -90,6 +91,11 @@ Current catalogue game-data version: `1.0.3.101283`.
   at 200 results.
   Django authentication, Zod contracts, local routing, multi-pointer gestures
   and the live Wild Pal/NPC layers remain local implementations.
+- Upstream `v1.1.1` only upgrades its bundled `palworld-save-reader` to `v0.2.0`
+  for legacy Mermaid Huffman streams. This site does not bundle that Go/GPL
+  decoder or its resolve-v3 leaderboard patch. Save snapshots are parsed on the
+  Palworld VM by the independent `ops/PalworldGuildSync` pipeline using the
+  separately pinned PalworldSaveTools/palsav implementation.
 - `web/dashboard/live_map.py` adapts only already-sanitized Django snapshots to
   the upstream `PublicConfig`, `PlayerState`, `ObjectState` and
   `WorldCatalogue` contracts. The browser never receives raw Palworld player,
@@ -99,7 +105,8 @@ Current catalogue game-data version: `1.0.3.101283`.
   implemented in Django. The collector persists only sanitized fields, opaque
   HMAC identifiers and aggregate diagnostics.
 
-No upstream Go server or exporter source code is included.
+No upstream Go server, `palworld-save-reader`, GPL leaderboard patch or exporter
+source code is included.
 
 ### Luke Holland MIT License
 
