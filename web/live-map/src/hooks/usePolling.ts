@@ -59,9 +59,9 @@ export function usePolling<T>(path: string, intervalMs: number, schema: ZodType<
           return
         }
         if (!response.ok) throw new Error(`${path} returned ${response.status}`)
-        etag = response.headers.get('ETag')
         const parsed = schema.safeParse(await response.json())
         if (!parsed.success) throw new Error(`${path} returned an invalid response`)
+        etag = response.headers.get('ETag')
         setData(parsed.data)
         setError(null)
       } catch (cause) {

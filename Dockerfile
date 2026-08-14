@@ -10,6 +10,23 @@ RUN npm run check
 RUN npm test
 RUN npm run build
 
+FROM python:3.13.5-slim-bookworm AS map-assets
+
+WORKDIR /build
+COPY docker/map-tiles-requirements.txt docker/generate-map-tiles.py ./tools/
+COPY web/dashboard/static/dashboard/live-map/maps ./maps
+RUN python -m pip install --disable-pip-version-check --no-cache-dir \
+      --only-binary=Pillow --requirement tools/map-tiles-requirements.txt \
+    && printf '%s  %s\n%s  %s\n' \
+      '9961632d5c38a0a67fd18713fa63af0ac6f192e71fadeb5ba53ae696b8914dd1' \
+      'maps/palpagos.jpg' \
+      '77fee7b2bb90fa62f26eeb862396d54dbc8c7d2f0f5b12339c12585474f7c521' \
+      'maps/world-tree.jpg' | sha256sum --check --strict \
+    && python tools/generate-map-tiles.py --if-needed maps \
+    && printf '%s  %s\n' \
+      'b1454293f3258c2db74fc51f984e864452554df9527d9146dea6992872afc261' \
+      'maps/manifest.json' | sha256sum --check --strict
+
 FROM rockylinux/rockylinux:10
 
 ARG APP_VERSION=dev
@@ -56,6 +73,7 @@ RUN chmod +x /app/docker/entrypoint.sh \
        PUBLIC_SITE_URL=https://build.invalid \
        SITE_ADMIN_USERS=build-admin@example.invalid \
        python3 web/manage.py collectstatic --noinput
+COPY --from=map-assets /build/maps/*.webp ./staticfiles/dashboard/live-map/maps/
 
 VOLUME ["/data"]
 EXPOSE 8000 8001

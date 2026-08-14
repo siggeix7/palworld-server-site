@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ItemKind } from '../types'
-import { DEFAULT_ENABLED_PLAYER_STATUSES, loadFilterPreferences, saveFilterPreferences } from './preferences'
+import {
+  DEFAULT_ENABLED_PLAYER_STATUSES,
+  FILTERABLE_KINDS,
+  loadFilterPreferences,
+  saveFilterPreferences
+} from './preferences'
 
 const WORLD_CATALOGUE_KINDS: ItemKind[] = [
   'bounties',
@@ -18,8 +23,17 @@ afterEach(() => window.localStorage.clear())
 
 describe('filter preferences', () => {
   it('enables only players and guild content by default', () => {
-    expect(loadFilterPreferences().enabledKinds).toEqual(new Set(['players', 'bases', 'workers']))
-    expect(loadFilterPreferences().enabledPlayerStatuses).toEqual(new Set(DEFAULT_ENABLED_PLAYER_STATUSES))
+    const preferences = loadFilterPreferences()
+
+    expect(preferences.enabledKinds).toEqual(new Set(['players', 'bases', 'workers']))
+    expect(preferences.enabledPlayerStatuses).toEqual(new Set(DEFAULT_ENABLED_PLAYER_STATUSES))
+    expect(preferences.seenKinds).toEqual(new Set(FILTERABLE_KINDS))
+  })
+
+  it('marks filterable kinds as seen when stored preferences are malformed', () => {
+    window.localStorage.setItem('palworld-live-map.filters.v1', '{malformed')
+
+    expect(loadFilterPreferences().seenKinds).toEqual(new Set(FILTERABLE_KINDS))
   })
 
   it('enables newly introduced landmark and world-catalogue kinds in legacy preferences', () => {
@@ -28,9 +42,10 @@ describe('filter preferences', () => {
       JSON.stringify({ activeLayerId: 'palpagos', enabledKinds: ['players'], hiddenIds: [] })
     )
 
-    expect(loadFilterPreferences().enabledKinds).toEqual(
-      new Set(['players', 'alpha-pals', 'bosses', ...WORLD_CATALOGUE_KINDS])
-    )
+    const preferences = loadFilterPreferences()
+
+    expect(preferences.enabledKinds).toEqual(new Set(['players', 'alpha-pals', 'bosses', ...WORLD_CATALOGUE_KINDS]))
+    expect(preferences.seenKinds).toEqual(new Set(FILTERABLE_KINDS))
   })
 
   it('adds world-catalogue kinds without restoring categories hidden in current preferences', () => {
@@ -52,6 +67,7 @@ describe('filter preferences', () => {
 
     expect(loadFilterPreferences().enabledKinds).toEqual(new Set(['players']))
     expect(loadFilterPreferences().enabledPlayerStatuses).toEqual(new Set(['online']))
+    expect(loadFilterPreferences().seenKinds).toEqual(new Set(FILTERABLE_KINDS))
   })
 
   it('migrates the previous all-enabled default and retires standalone companions', () => {
@@ -87,5 +103,6 @@ describe('filter preferences', () => {
 
     expect(loadFilterPreferences().enabledKinds).toEqual(new Set())
     expect(loadFilterPreferences().enabledPlayerStatuses).toEqual(new Set())
+    expect(loadFilterPreferences().seenKinds).toEqual(new Set<ItemKind>(['players', ...WORLD_CATALOGUE_KINDS]))
   })
 })

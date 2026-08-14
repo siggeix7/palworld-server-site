@@ -38,6 +38,11 @@ const SameOriginUrlSchema = z.string().refine(
   { error: 'URL must use the current origin' }
 )
 
+const TileUrlTemplateSchema = SameOriginUrlSchema.refine(
+  (value) => !value.includes('#') && ['{size}', '{x}', '{y}'].every((placeholder) => value.includes(placeholder)),
+  { error: 'Tile URL template must contain size, x, and y placeholders before any fragment' }
+)
+
 const WorldObjectSchema = z.object({
   id: z.string(),
   kind: z.enum(mapKinds),
@@ -63,7 +68,14 @@ export const LiveMapConfigSchema = z.object({
         id: z.string(),
         name: z.string(),
         imageUrl: SameOriginUrlSchema.optional(),
-        bounds: z.tuple([z.number(), z.number(), z.number(), z.number()])
+        bounds: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+        tilePyramid: z
+          .object({
+            tileSize: z.number().int().positive(),
+            levels: z.array(z.number().int().positive()).min(1),
+            urlTemplate: TileUrlTemplateSchema
+          })
+          .optional()
       })
     )
     .min(1),

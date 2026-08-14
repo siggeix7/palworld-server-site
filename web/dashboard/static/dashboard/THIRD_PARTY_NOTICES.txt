@@ -10,7 +10,7 @@ Detailed source paths and changes are recorded in the distributed NOTICE.md.
 
 LukeHollandDev/palworld-live-map
 https://github.com/LukeHollandDev/palworld-live-map
-Upstream revision: 711ededa62e6fbf9301a68e1d9e093af4c4210f6
+Upstream revision: 8ad00dbba656bdb404bc52e11a361004406c5f92 (v1.1.0)
 
 The site adapts the upstream React map interface into the unified dashboard SPA,
 uses the original 8192x8192 Palpagos and World Tree images, and includes a
@@ -18,6 +18,10 @@ minimized projection of 1,146 static locations in 11 categories, verified
 against Palworld 1.0.3.101283. The client uses authenticated Django APIs backed
 only by sanitized snapshots. No upstream Go server or exporter source is
 included.
+The container build adapts the v1.1.0 deterministic WebP tile pyramid and the
+client's spatial marker indexing, adaptive clustering and independent catalogue
+loading, plus lazy Explorer sections and bounded search results. The original
+JPEGs and projected catalogue remain byte-for-byte unchanged.
 Exact source/output hashes, modifications and data counts are in NOTICE.md.
 The projected catalogue SHA-256 is
 be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8.

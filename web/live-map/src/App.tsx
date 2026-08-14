@@ -17,8 +17,9 @@ import {
   notifyAuthenticationRequired,
   usePolling
 } from './hooks/usePolling'
-import { guildIdForBase } from './lib/guilds'
+import { buildGuildDetails, guildIdForBase } from './lib/guilds'
 import type { LeaderboardId } from './lib/leaderboards'
+import { itemSearchText } from './lib/map'
 import {
   DEFAULT_ENABLED_KINDS,
   DEFAULT_ENABLED_PLAYER_STATUSES,
@@ -63,6 +64,8 @@ export function App({ onObservatoryNavigate }: AppProps = {}) {
   const [config, setConfig] = useState<PublicConfig | null>(null)
   const [configError, setConfigError] = useState(false)
   const [configAttempt, setConfigAttempt] = useState(0)
+  const [catalogueError, setCatalogueError] = useState(false)
+  const [catalogueAttempt, setCatalogueAttempt] = useState(0)
   const [authenticationRequired, setAuthenticationRequired] = useState(false)
   const [accessForbidden, setAccessForbidden] = useState(false)
 
@@ -98,28 +101,9 @@ export function App({ onObservatoryNavigate }: AppProps = {}) {
         }
         if (!response.ok) throw new Error(`${API_BASE}/config returned ${response.status}`)
         const nextConfig = LiveMapConfigSchema.parse(await response.json())
-        const catalogueResponse = await fetch(nextConfig.catalogueUrl, {
-          cache: 'force-cache',
-          credentials: 'same-origin',
-          signal: controller.signal
-        })
-        if (!catalogueResponse.ok) throw new Error(`${nextConfig.catalogueUrl} returned ${catalogueResponse.status}`)
-        const catalogue = LiveMapCatalogueSchema.parse(await catalogueResponse.json())
-        const locations = Array.from(
-          new Map(
-            [...(nextConfig.landmarks || []), ...(catalogue.locations || [])].map((location) => [location.id, location])
-          ).values()
-        )
-        setConfig({
-          ...nextConfig,
-          landmarks: locations,
-          landmarkCatalogue: {
-            gameVersion: catalogue.gameVersion,
-            generator: catalogue.generator,
-            decoder: catalogue.decoder
-          }
-        })
+        setConfig(nextConfig)
         setConfigError(false)
+        setCatalogueError(false)
       } catch {
         if (!controller.signal.aborted || controller.signal.reason === 'timeout') setConfigError(true)
       }
@@ -130,6 +114,60 @@ export function App({ onObservatoryNavigate }: AppProps = {}) {
       controller.abort()
     }
   }, [configAttempt])
+
+  // Load the larger static catalogue independently so live data and controls can
+  // render as soon as the authenticated configuration is available.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: incrementing catalogueAttempt deliberately retries the request
+  useEffect(() => {
+    if (!config) return
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort('timeout'), 10_000)
+    const catalogueUrl = config.catalogueUrl
+    const load = async () => {
+      try {
+        const catalogueResponse = await fetch(catalogueUrl, {
+          cache: catalogueAttempt === 0 ? 'force-cache' : 'reload',
+          credentials: 'same-origin',
+          signal: controller.signal
+        })
+        if (catalogueResponse.status === 401) {
+          notifyAuthenticationRequired()
+          return
+        }
+        if (catalogueResponse.status === 403) {
+          notifyAccessForbidden()
+          return
+        }
+        if (!catalogueResponse.ok) throw new Error(`${catalogueUrl} returned ${catalogueResponse.status}`)
+        const catalogue = LiveMapCatalogueSchema.parse(await catalogueResponse.json())
+        setConfig((current) => {
+          if (!current || current.catalogueUrl !== catalogueUrl) return current
+          const locations = Array.from(
+            new Map(
+              [...(current.landmarks || []), ...(catalogue.locations || [])].map((location) => [location.id, location])
+            ).values()
+          )
+          return {
+            ...current,
+            landmarks: locations,
+            landmarkCatalogue: {
+              gameVersion: catalogue.gameVersion,
+              generator: catalogue.generator,
+              decoder: catalogue.decoder
+            }
+          }
+        })
+        setCatalogueError(false)
+      } catch {
+        if (!controller.signal.aborted || controller.signal.reason === 'timeout') setCatalogueError(true)
+      }
+    }
+    void load()
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [catalogueAttempt, config?.catalogueUrl])
 
   if (accessForbidden) {
     return (
@@ -188,10 +226,30 @@ export function App({ onObservatoryNavigate }: AppProps = {}) {
     )
   }
 
-  return <LiveMap config={config} onObservatoryNavigate={onObservatoryNavigate} />
+  return (
+    <LiveMap
+      config={config}
+      catalogueError={catalogueError}
+      onRetryCatalogue={() => {
+        setCatalogueError(false)
+        setCatalogueAttempt((attempt) => attempt + 1)
+      }}
+      onObservatoryNavigate={onObservatoryNavigate}
+    />
+  )
 }
 
-function LiveMap({ config, onObservatoryNavigate }: { config: PublicConfig; onObservatoryNavigate?: () => void }) {
+function LiveMap({
+  config,
+  catalogueError,
+  onRetryCatalogue,
+  onObservatoryNavigate
+}: {
+  config: PublicConfig
+  catalogueError: boolean
+  onRetryCatalogue: () => void
+  onObservatoryNavigate?: () => void
+}) {
   const players = usePolling<PlayerState>(`${API_BASE}/players`, config.pollIntervalMs, LiveMapPlayersSchema)
   const objects = usePolling<ObjectState>(
     `${API_BASE}/objects`,
@@ -332,7 +390,8 @@ function LiveMap({ config, onObservatoryNavigate }: { config: PublicConfig; onOb
 
   const showGuild = (guildId: string, focus: HTMLElement) => {
     pendingFocusRef.current = null
-    setSearch('')
+    const query = search.trim().toLowerCase()
+    if (query && !buildGuildDetails(guildId, items).name.toLowerCase().includes(query)) setSearch('')
     setReturnFocus(focus)
     mapRef.current?.clearSelection()
     setDetail({ kind: 'guild', guildId })
@@ -513,6 +572,13 @@ function LiveMap({ config, onObservatoryNavigate }: { config: PublicConfig; onOb
     })
   }
 
+  const checkAll = () => {
+    setEnabledKinds(new Set(FILTERABLE_KINDS))
+    setEnabledPlayerStatuses(new Set(DEFAULT_ENABLED_PLAYER_STATUSES))
+    setHiddenIds(new Set())
+    setSeenKinds(new Set(FILTERABLE_KINDS))
+  }
+
   const toggleSetValue = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) => {
     setter((current) => {
       const next = new Set(current)
@@ -587,7 +653,14 @@ function LiveMap({ config, onObservatoryNavigate }: { config: PublicConfig; onOb
     expandedGuilds,
     expandedBases,
     dataNotices,
+    catalogueRetry: catalogueError
+      ? {
+          message: 'Additional static map locations are temporarily unavailable.',
+          onRetry: onRetryCatalogue
+        }
+      : undefined,
     onSearchChange: setSearch,
+    onCheckAll: checkAll,
     onUncheckAll: uncheckAll,
     onToggleKinds: toggleKinds,
     onTogglePlayerStatus: togglePlayerStatus,
@@ -653,7 +726,8 @@ function LiveMap({ config, onObservatoryNavigate }: { config: PublicConfig; onOb
               returnFocus={returnFocus}
               fallbackFocus={leaderboardButtonRef.current}
               onSelectItem={(item, focus) => {
-                setSearch('')
+                const query = search.trim().toLowerCase()
+                if (query && !itemSearchText(item).includes(query)) setSearch('')
                 focusItem(item, returnFocus?.isConnected ? returnFocus : leaderboardButtonRef.current || focus)
               }}
               onSelectGuild={(guildId, focus) => {

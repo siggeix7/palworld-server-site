@@ -1250,12 +1250,23 @@
       },
       "MapLayer": {
         "type": "object",
-        "required": ["id", "name", "imageUrl", "bounds"],
+        "required": ["id", "name", "imageUrl", "bounds", "tilePyramid"],
         "properties": {
           "id": {"type": "string"},
           "name": {"type": "string"},
           "imageUrl": {"type": "string"},
-          "bounds": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}}
+          "bounds": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+          "tilePyramid": {"$ref": "#/components/schemas/MapTilePyramid"}
+        },
+        "additionalProperties": false
+      },
+      "MapTilePyramid": {
+        "type": "object",
+        "required": ["tileSize", "levels", "urlTemplate"],
+        "properties": {
+          "tileSize": {"type": "integer"},
+          "levels": {"type": "array", "items": {"type": "integer"}},
+          "urlTemplate": {"type": "string"}
         },
         "additionalProperties": false
       },

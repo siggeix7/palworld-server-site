@@ -19,7 +19,7 @@ from .models import GuildSnapshot, LatestDataset, Player, PositionSample
 from .services import WORLD_MAP_BOUNDS
 
 
-UPSTREAM_REVISION = "711ededa62e6fbf9301a68e1d9e093af4c4210f6"
+UPSTREAM_REVISION = "8ad00dbba656bdb404bc52e11a361004406c5f92"
 CATALOGUE_PATH = Path(settings.BASE_DIR) / "dashboard/data/live-map-catalogue.json"
 CATALOGUE_METADATA = {
     "gameVersion": "1.0.3.101283",
@@ -136,12 +136,32 @@ def config(request):
                     "name": "Palpagos",
                     "imageUrl": static("dashboard/live-map/maps/palpagos.jpg"),
                     "bounds": [349400, 724400, -1099400, -724400],
+                    "tilePyramid": {
+                        "tileSize": 512,
+                        "levels": [1024, 2048, 4096, 8192],
+                        "urlTemplate": (
+                            f"{settings.STATIC_URL.rstrip('/')}"
+                            "/dashboard/live-map/maps/"
+                            "palpagos-z{size}-x{x}-y{y}.webp"
+                            "?v=285f5c5ee96d11375ecee388c92653ae439bdcc6961ab45f9a3deef476630c7f"
+                        ),
+                    },
                 },
                 {
                     "id": "world-tree",
                     "name": "World Tree",
                     "imageUrl": static("dashboard/live-map/maps/world-tree.jpg"),
                     "bounds": [689148.5, -476400, 347351.5, -818197],
+                    "tilePyramid": {
+                        "tileSize": 512,
+                        "levels": [1024, 2048, 4096, 8192],
+                        "urlTemplate": (
+                            f"{settings.STATIC_URL.rstrip('/')}"
+                            "/dashboard/live-map/maps/"
+                            "world-tree-z{size}-x{x}-y{y}.webp"
+                            "?v=0e3639685f37200f54b30e235a05a2dd13889ddacc7de719fcf5f05e165b001f"
+                        ),
+                    },
                 },
             ],
             "catalogueUrl": (
@@ -396,7 +416,7 @@ def objects(request):
     if dataset:
         source_clock = dataset.source_clock
         response_payload["updatedAt"] = _iso(source_clock)
-        etag = f'"{source_clock.isoformat()}"'
+        etag = f'"{source_clock.isoformat()}:{int(stale)}"'
     else:
         response_payload["lastError"] = "refresh-failed"
         etag = None

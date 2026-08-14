@@ -45,7 +45,7 @@ https://github.com/LukeHollandDev/palworld-live-map
 
 Pinned upstream revision:
 
-`711ededa62e6fbf9301a68e1d9e093af4c4210f6`
+`8ad00dbba656bdb404bc52e11a361004406c5f92` (`v1.1.0`)
 
 Pinned map-asset version: `1.0.3.101283` (image content unchanged since
 `1.0.1.100619`).
@@ -61,6 +61,16 @@ Current catalogue game-data version: `1.0.3.101283`.
   hashes are respectively
   `9961632d5c38a0a67fd18713fa63af0ac6f192e71fadeb5ba53ae696b8914dd1`
   and `77fee7b2bb90fa62f26eeb862396d54dbc8c7d2f0f5b12339c12585474f7c521`.
+- The container build uses the upstream `v1.1.0` tile generator, retained as
+  `docker/generate-map-tiles.py` with SHA-256
+  `70cf076bdb943f00f132afa0157f6e2e5a6cb7f5de8c23c37312940167097a14`,
+  Pillow `11.3.0` and libwebp `1.5.0`. It deterministically creates 680
+  512x512 WebP tiles across 1024, 2048, 4096 and 8192 levels. The Palpagos
+  and World Tree tile aggregate hashes are respectively
+  `285f5c5ee96d11375ecee388c92653ae439bdcc6961ab45f9a3deef476630c7f`
+  and `0e3639685f37200f54b30e235a05a2dd13889ddacc7de719fcf5f05e165b001f`.
+  The complete generated manifest SHA-256 is
+  `b1454293f3258c2db74fc51f984e864452554df9527d9146dea6992872afc261`.
 - `web/dashboard/data/live-map-catalogue.json` is the Django API projection of
   the landmark datasets. It contains 1,146 locations across 11
   categories, with internal game IDs, object paths, instance IDs, state keys,
@@ -72,6 +82,14 @@ Current catalogue game-data version: `1.0.3.101283`.
   `1.0.2.101103`; only the `Zenara & Astralym` detail changed from
   `Within the Seal` to `Sealed Sanctum`. Output SHA-256:
   `be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8`.
+- The `v1.1.0` frontend performance work is adapted selectively: the map loads
+  only visible WebP tiles at the required display density, indexes projected
+  markers spatially, enforces an adaptive 300-marker render budget and loads
+  the static catalogue independently from live configuration and polling. The
+  Explorer lazily builds collapsed categories and fairly caps broad searches
+  at 200 results.
+  Django authentication, Zod contracts, local routing, multi-pointer gestures
+  and the live Wild Pal/NPC layers remain local implementations.
 - `web/dashboard/live_map.py` adapts only already-sanitized Django snapshots to
   the upstream `PublicConfig`, `PlayerState`, `ObjectState` and
   `WorldCatalogue` contracts. The browser never receives raw Palworld player,

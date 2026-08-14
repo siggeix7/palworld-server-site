@@ -843,6 +843,12 @@ export interface components {
       name: string
       imageUrl: string
       bounds: number[]
+      tilePyramid: components['schemas']['MapTilePyramid']
+    }
+    MapTilePyramid: {
+      tileSize: number
+      levels: number[]
+      urlTemplate: string
     }
     CatalogueMetadata: {
       gameVersion: string

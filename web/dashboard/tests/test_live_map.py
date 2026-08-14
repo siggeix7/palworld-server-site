@@ -1,7 +1,9 @@
 import json
 from collections import Counter
 from datetime import timedelta
+from unittest.mock import patch
 
+from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -45,13 +47,37 @@ class LiveMapTests(TestCase):
         self.assertIn("palpagos.jpg", payload["layers"][0]["imageUrl"])
         self.assertIn("world-tree.jpg", payload["layers"][1]["imageUrl"])
         self.assertEqual(
+            payload["layers"][0]["tilePyramid"],
+            {
+                "tileSize": 512,
+                "levels": [1024, 2048, 4096, 8192],
+                "urlTemplate": (
+                    "/static/dashboard/live-map/maps/"
+                    "palpagos-z{size}-x{x}-y{y}.webp"
+                    "?v=285f5c5ee96d11375ecee388c92653ae439bdcc6961ab45f9a3deef476630c7f"
+                ),
+            },
+        )
+        self.assertEqual(
+            payload["layers"][1]["tilePyramid"],
+            {
+                "tileSize": 512,
+                "levels": [1024, 2048, 4096, 8192],
+                "urlTemplate": (
+                    "/static/dashboard/live-map/maps/"
+                    "world-tree-z{size}-x{x}-y{y}.webp"
+                    "?v=0e3639685f37200f54b30e235a05a2dd13889ddacc7de719fcf5f05e165b001f"
+                ),
+            },
+        )
+        self.assertEqual(
             payload["catalogueUrl"],
             f"{reverse('live-map-catalogue')}?v="
             "be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8",
         )
         self.assertEqual(
             payload["upstreamRevision"],
-            "711ededa62e6fbf9301a68e1d9e093af4c4210f6",
+            "8ad00dbba656bdb404bc52e11a361004406c5f92",
         )
         self.assertEqual(payload["landmarkCatalogue"]["gameVersion"], "1.0.3.101283")
         self.assertEqual(
@@ -60,6 +86,26 @@ class LiveMapTests(TestCase):
         )
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
+
+    def test_generated_map_tiles_receive_immutable_cache_headers(self):
+        headers = {}
+        settings.WHITENOISE_ADD_HEADERS_FUNCTION(
+            headers,
+            "/app/staticfiles/dashboard/live-map/maps/palpagos-z1024-x0-y0.webp",
+            "/static/dashboard/live-map/maps/palpagos-z1024-x0-y0.webp",
+        )
+        self.assertEqual(
+            headers["Cache-Control"],
+            "max-age=315360000, public, immutable",
+        )
+
+        source_headers = {}
+        settings.WHITENOISE_ADD_HEADERS_FUNCTION(
+            source_headers,
+            "/app/staticfiles/dashboard/live-map/maps/palpagos.jpg",
+            "/static/dashboard/live-map/maps/palpagos.jpg",
+        )
+        self.assertNotIn("Cache-Control", source_headers)
 
     def test_catalogue_is_complete_minimized_and_immutable_when_versioned(self):
         config = self.client.get(reverse("live-map-config")).json()
@@ -384,6 +430,30 @@ class LiveMapTests(TestCase):
         self.assertEqual(worker["guildKey"], "c" * 24)
         self.assertNotIn("base_id", worker)
         self.assertNotIn("guild_key", worker)
+
+    @override_settings(WORLD_DATA_STALE_SECONDS=60)
+    def test_object_etag_changes_when_the_snapshot_becomes_stale(self):
+        LatestDataset.objects.create(
+            key="game_data",
+            payload={"objects": []},
+            source_clock=self.now,
+        )
+        with patch("dashboard.live_map.timezone.now", return_value=self.now):
+            fresh = self.client.get(reverse("live-map-objects"))
+
+        with patch(
+            "dashboard.live_map.timezone.now",
+            return_value=self.now + timedelta(seconds=61),
+        ):
+            stale = self.client.get(
+                reverse("live-map-objects"),
+                HTTP_IF_NONE_MATCH=fresh.headers["ETag"],
+            )
+
+        self.assertFalse(fresh.json()["stale"])
+        self.assertEqual(stale.status_code, 200)
+        self.assertTrue(stale.json()["stale"])
+        self.assertNotEqual(stale.headers["ETag"], fresh.headers["ETag"])
 
     def test_companion_adapter_selects_the_owner_candidate_known_to_django(self):
         Player.objects.create(

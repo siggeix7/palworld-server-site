@@ -23,6 +23,11 @@ export interface MapLayer {
   name: string
   imageUrl?: string
   bounds: [number, number, number, number]
+  tilePyramid?: {
+    tileSize: number
+    levels: number[]
+    urlTemplate: string
+  }
 }
 
 export interface PublicConfig {

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -122,6 +123,17 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = os.getenv("STATIC_ROOT", str(BASE_DIR.parent / "staticfiles"))
+
+
+def add_static_headers(headers, _path, url):
+    if re.fullmatch(
+        r"/static/dashboard/live-map/maps/(?:palpagos|world-tree)-z\d+-x\d+-y\d+\.webp",
+        url,
+    ):
+        headers["Cache-Control"] = "max-age=315360000, public, immutable"
+
+
+WHITENOISE_ADD_HEADERS_FUNCTION = add_static_headers
 STORAGES = {
     "staticfiles": {
         "BACKEND": (
