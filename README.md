@@ -75,8 +75,10 @@ ogni scrittura nel database:
   `PLAYER_HASH_SECRET`;
 - password, indirizzi e impostazioni non in allowlist vengono scartati;
 - da `game-data` restano solo oggetti mappa minimizzati e diagnostica aggregata;
-- dallo script save arrivano solo identificativi opachi, aggregati e campi
-  espressamente validati.
+- dallo script save arrivano snapshot pubblici minimizzati e, separatamente,
+  materiale privato per la verifica del proprietario del personaggio;
+- inventario, party e progressi privati non entrano nello snapshot pubblico e
+  sono usati solo dagli endpoint di verifica/progresso senza cache.
 
 Usare secret distinti per `DJANGO_SECRET_KEY`, `PLAYER_HASH_SECRET` e
 `PRIVATE_API_TOKEN`. Il file di produzione `.env` deve avere permessi `0600` e
@@ -215,8 +217,9 @@ curl -fsS -H "Authorization: Bearer $PRIVATE_API_TOKEN" \
 
 ## Sincronizzazione Save
 
-`ops/PalworldGuildSync` contiene il job separato che legge `Level.sav`. Sul
-server Palworld configurare almeno:
+`ops/PalworldGuildSync` contiene il job separato che legge `Level.sav` e i file
+`Players/*.sav` nella stessa directory del mondo. Sul server Palworld
+configurare almeno:
 
 ```dotenv
 SITE_URL=https://<endpoint-privato>
@@ -231,6 +234,10 @@ porta privata su Internet: il bearer token e lo snapshot non sarebbero cifrati.
 
 La procedura di installazione e il cron sono in
 [`ops/PalworldGuildSync/README.md`](ops/PalworldGuildSync/README.md).
+
+Il payload di schema 4 contiene le prove private in `claim.players`. Il listener
+privato le salva separatamente dallo snapshot pubblico; gli identificativi raw
+dei personaggi non vengono restituiti al browser.
 
 ## API
 
@@ -255,7 +262,17 @@ GET /api/v1/live-map/objects
 GET /api/v1/telemetry/stats
 GET /api/v1/world/diff
 GET /api/v1/guild/data
+POST /api/v1/live-map/player-claims
+POST /api/v1/live-map/player-claims/questions/cycle
+POST /api/v1/live-map/player-claims/verify
+GET /api/v1/live-map/me
+GET /api/v1/live-map/me/progress
+POST /api/v1/live-map/logout
 ```
+
+Gli endpoint `live-map` per la verifica del personaggio sono disponibili solo
+quando `PLAYER_CLAIMS_ENABLED=true`; usano token bearer temporanei e risposte
+`private, no-store`.
 
 Endpoint riservati agli utenti in `SITE_ADMIN_USERS` (sessione autenticata e
 CSRF obbligatorio per i POST):

@@ -55,6 +55,8 @@ const WorldObjectSchema = z.object({
   level: z.number().optional(),
   x: z.number(),
   y: z.number(),
+  z: z.number().optional(),
+  rewards: z.array(z.object({ name: z.string(), count: z.number().int().nonnegative() })).optional(),
   map: z.string()
 }) satisfies z.ZodType<WorldObject>
 
@@ -62,6 +64,7 @@ export const LiveMapConfigSchema = z.object({
   pollIntervalMs: z.number().positive(),
   worldPollIntervalMs: z.number().positive(),
   worldDataEnabled: z.boolean(),
+  playerClaimsEnabled: z.boolean(),
   layers: z
     .array(
       z.object({
@@ -100,6 +103,11 @@ const LiveMapPlayerSchema = z.object({
   captureTotal: z.number().optional(),
   uniquePalsCaptured: z.number().optional(),
   paldeckUnlocked: z.number().optional(),
+  arenaRankPoints: z.number().optional(),
+  fastTravelUnlocked: z.number().optional(),
+  areasDiscovered: z.number().optional(),
+  bossDefeats: z.number().optional(),
+  towerDefeats: z.number().optional(),
   x: z.number(),
   y: z.number(),
   map: z.string()

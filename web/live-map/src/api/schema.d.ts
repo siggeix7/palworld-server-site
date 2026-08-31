@@ -245,6 +245,120 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/live-map/player-claims': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start a player character ownership check
+     * @description Starts a short-lived inventory knowledge challenge for the selected public player. Authenticated site access and same-origin Django CSRF validation are required.
+     */
+    post: operations['startPlayerClaim']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/live-map/player-claims/questions/cycle': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Replace the current ownership-check question
+     * @description Consumes the current question and returns one alternate question from the same private save snapshot.
+     */
+    post: operations['cyclePlayerClaimQuestion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/live-map/player-claims/verify': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Verify a player character ownership check
+     * @description Verifies the one submitted answer and returns a short-lived bearer session. A failed answer consumes the challenge.
+     */
+    post: operations['verifyPlayerClaim']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/live-map/me': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Return the current private player claim session */
+    get: operations['getPlayerClaimSession']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/live-map/me/progress': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Return private save-backed progress for the claimed player */
+    get: operations['getPlayerClaimProgress']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/live-map/logout': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * End the current private player claim session
+     * @description Invalidates the bearer session when one is supplied. The response and endpoint are private and never cacheable.
+     */
+    post: operations['logoutPlayerClaimSession']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/telemetry/stats': {
     parameters: {
       query?: never
@@ -942,6 +1056,85 @@ export interface components {
       level?: number
       ownerId?: string
     }
+    ClaimStartRequest: {
+      playerId: string
+    }
+    ClaimCycleRequest: {
+      challengeToken: string
+      questionId: string
+    }
+    ClaimAnswer: {
+      questionId: string
+      option: number
+    }
+    ClaimVerifyRequest: {
+      challengeToken: string
+      answers: components['schemas']['ClaimAnswer'][]
+    }
+    ClaimLogoutRequest: Record<string, never>
+    ClaimQuestion: {
+      id: string
+      prompt: string
+      options: string[]
+      canCycle: boolean
+    }
+    ClaimInstructions: {
+      /** @constant */
+      kind: 'inventory_quiz'
+      questions: components['schemas']['ClaimQuestion'][]
+      /** Format: date-time */
+      snapshotAt: string
+    }
+    ClaimReady: {
+      challengeToken: string
+      /** @constant */
+      status: 'ready'
+      instructions: components['schemas']['ClaimInstructions']
+      /** Format: date-time */
+      expiresAt: string
+    }
+    ClaimCycled: {
+      /** @constant */
+      status: 'ready'
+      instructions: components['schemas']['ClaimInstructions']
+      /** Format: date-time */
+      expiresAt: string
+    }
+    ClaimVerified: {
+      /** @constant */
+      status: 'verified'
+      sessionToken: string
+      /** Format: date-time */
+      idleExpiresAt: string
+      /** Format: date-time */
+      absoluteExpiresAt: string
+    }
+    ClaimSession: {
+      /** @constant */
+      authenticated: true
+      playerId: string
+      /** Format: date-time */
+      idleExpiresAt: string
+      /** Format: date-time */
+      absoluteExpiresAt: string
+    }
+    ClaimProgressDomain: {
+      id: string
+      /** @constant */
+      coverage: 'complete'
+      completedIds: string[]
+      total: number
+    }
+    ClaimProgressResponse: {
+      /** Format: date-time */
+      snapshotAt: string
+      catalogueVersion: string
+      domains: components['schemas']['ClaimProgressDomain'][]
+    }
+    ClaimLogoutResponse: {
+      /** @constant */
+      authenticated: false
+    }
     TelemetryStats: {
       /** Format: date-time */
       generated_at: string
@@ -1068,13 +1261,14 @@ export interface components {
     }
     GuildIngest: {
       /** @enum {integer} */
-      schema_version: 2 | 3
+      schema_version: 2 | 3 | 4
       guilds: components['schemas']['Guild'][]
       bases: components['schemas']['GuildBase'][]
       players?: components['schemas']['SavedPlayer'][]
       world: components['schemas']['GuildWorld']
       diagnostics: components['schemas']['GuildDiagnostics']
-    } & unknown
+      claim?: components['schemas']['GuildClaim']
+    } & (unknown & unknown)
     Guild: {
       group_id: string
       guild_name: string
@@ -1125,6 +1319,46 @@ export interface components {
         work_speed?: number
       }
     }
+    GuildClaim: {
+      players: components['schemas']['ClaimPlayer'][]
+    }
+    ClaimPlayer: {
+      player_uid: string
+      player_name: string
+      inventory: components['schemas']['ClaimInventory']
+      party: components['schemas']['ClaimPartyEntry'][]
+      progress: components['schemas']['ClaimProgress']
+    }
+    ClaimInventory: {
+      common: components['schemas']['ClaimStacks']
+      weapons: components['schemas']['ClaimStacks']
+      armor: components['schemas']['ClaimStacks']
+      food: components['schemas']['ClaimStacks']
+      drop_slot: components['schemas']['ClaimStacks']
+      essential: components['schemas']['ClaimStacks']
+    }
+    ClaimStacks: components['schemas']['ClaimStack'][]
+    ClaimStack: {
+      slot: number
+      item_id: string
+      count: number
+      dynamic_item_id?: string
+    }
+    ClaimPartyEntry: {
+      slot: number
+      species: string
+      instance_id?: string
+    }
+    ClaimProgress: {
+      fast_travel: components['schemas']['ProgressKeys']
+      areas: components['schemas']['ProgressKeys']
+      notes: components['schemas']['ProgressKeys']
+      relics: components['schemas']['ProgressKeys']
+      item_pickups: components['schemas']['ProgressKeys']
+      normal_bosses: components['schemas']['ProgressKeys']
+      tower_bosses: components['schemas']['ProgressKeys']
+    }
+    ProgressKeys: string[]
     GuildWorld: {
       active_raid_count?: number
       oil_rig_count?: number
@@ -1226,6 +1460,43 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['Error']
+      }
+    }
+    /** @description The requested claim operation cannot be completed in the current challenge state */
+    Conflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['Error']
+      }
+    }
+    /** @description The claim endpoint rate limit was exceeded */
+    TooManyRequests: {
+      headers: {
+        'Retry-After'?: number
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['Error']
+      }
+    }
+    /** @description A new player claim challenge */
+    ClaimReady: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ClaimReady']
+      }
+    }
+    /** @description An alternate player claim challenge question */
+    ClaimCycled: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ClaimCycled']
       }
     }
   }
@@ -1594,6 +1865,156 @@ export interface operations {
       }
       401: components['responses']['Unauthorized']
       403: components['responses']['Forbidden']
+    }
+  }
+  startPlayerClaim: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClaimStartRequest']
+      }
+    }
+    responses: {
+      201: components['responses']['ClaimReady']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['ServiceUnavailable']
+    }
+  }
+  cyclePlayerClaimQuestion: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClaimCycleRequest']
+      }
+    }
+    responses: {
+      200: components['responses']['ClaimCycled']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['ServiceUnavailable']
+    }
+  }
+  verifyPlayerClaim: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClaimVerifyRequest']
+      }
+    }
+    responses: {
+      /** @description Ownership check verified */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClaimVerified']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+      415: components['responses']['UnsupportedMediaType']
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['ServiceUnavailable']
+    }
+  }
+  getPlayerClaimSession: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Authenticated player claim session */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClaimSession']
+        }
+      }
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+    }
+  }
+  getPlayerClaimProgress: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Private save progress */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClaimProgressResponse']
+        }
+      }
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['ServiceUnavailable']
+    }
+  }
+  logoutPlayerClaimSession: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClaimLogoutRequest']
+      }
+    }
+    responses: {
+      /** @description Claim session ended */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClaimLogoutResponse']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      403: components['responses']['Forbidden']
+      415: components['responses']['UnsupportedMediaType']
     }
   }
   getTelemetryStats: {

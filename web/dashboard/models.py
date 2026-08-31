@@ -131,6 +131,51 @@ class AuthThrottle(models.Model):
     attempts = models.PositiveIntegerField(default=0)
 
 
+class ClaimThrottle(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    window_started_at = models.DateTimeField(db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+
+
+class ClaimChallenge(models.Model):
+    CHALLENGE_TTL_MINUTES = 10
+
+    bearer_hash = models.CharField(max_length=64, primary_key=True)
+    subject = models.CharField(max_length=64)
+    public_player_id = models.CharField(max_length=32)
+    question = models.JSONField()
+    correct_answer = models.PositiveSmallIntegerField()
+    remaining_questions = models.JSONField(default=list)
+    expires_at = models.DateTimeField(db_index=True)
+    verifying = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ClaimSession(models.Model):
+    SESSION_IDLE_HOURS = 24
+    SESSION_ABSOLUTE_DAYS = 7
+
+    bearer_hash = models.CharField(max_length=64, primary_key=True)
+    subject = models.CharField(max_length=64)
+    public_player_id = models.CharField(max_length=32)
+    idle_expires_at = models.DateTimeField(db_index=True)
+    absolute_expires_at = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PlayerClaimData(models.Model):
+    public_id = models.CharField(max_length=32, primary_key=True)
+    payload = models.JSONField()
+    snapshot_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class GuildSnapshot(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
     payload = models.JSONField(default=dict)

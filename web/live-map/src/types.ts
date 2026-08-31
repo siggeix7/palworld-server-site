@@ -30,10 +30,18 @@ export interface MapLayer {
   }
 }
 
+export interface MapCameraPosition {
+  region: string
+  x: number
+  y: number
+  zoom: number
+}
+
 export interface PublicConfig {
   pollIntervalMs: number
   worldPollIntervalMs: number
   worldDataEnabled: boolean
+  playerClaimsEnabled: boolean
   layers: MapLayer[]
   catalogueUrl: string
   landmarks: WorldObject[]
@@ -77,9 +85,19 @@ export interface Player {
   captureTotal?: number
   uniquePalsCaptured?: number
   paldeckUnlocked?: number
+  arenaRankPoints?: number
+  fastTravelUnlocked?: number
+  areasDiscovered?: number
+  bossDefeats?: number
+  towerDefeats?: number
   x: number
   y: number
   map: string
+}
+
+export interface LandmarkReward {
+  name: string
+  count: number
 }
 
 export interface WorldObject {
@@ -94,7 +112,9 @@ export interface WorldObject {
   level?: number
   x: number
   y: number
+  z?: number
   map: string
+  rewards?: LandmarkReward[]
 }
 
 export interface MapItem {
@@ -112,9 +132,16 @@ export interface MapItem {
   captureTotal?: number
   uniquePalsCaptured?: number
   paldeckUnlocked?: number
+  arenaRankPoints?: number
+  fastTravelUnlocked?: number
+  areasDiscovered?: number
+  bossDefeats?: number
+  towerDefeats?: number
   x: number
   y: number
+  z?: number
   map: string
+  rewards?: LandmarkReward[]
 }
 
 export interface PlayerState {

@@ -329,6 +329,169 @@
         }
       }
     },
+    "/api/v1/live-map/player-claims": {
+      "post": {
+        "operationId": "startPlayerClaim",
+        "tags": ["Live map"],
+        "summary": "Start a player character ownership check",
+        "description": "Starts a short-lived inventory knowledge challenge for the selected public player. Authenticated site access and same-origin Django CSRF validation are required.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ClaimStartRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {"$ref": "#/components/responses/ClaimReady"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/live-map/player-claims/questions/cycle": {
+      "post": {
+        "operationId": "cyclePlayerClaimQuestion",
+        "tags": ["Live map"],
+        "summary": "Replace the current ownership-check question",
+        "description": "Consumes the current question and returns one alternate question from the same private save snapshot.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ClaimCycleRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/ClaimCycled"},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/live-map/player-claims/verify": {
+      "post": {
+        "operationId": "verifyPlayerClaim",
+        "tags": ["Live map"],
+        "summary": "Verify a player character ownership check",
+        "description": "Verifies the one submitted answer and returns a short-lived bearer session. A failed answer consumes the challenge.",
+        "security": [{"cookieAuth": [], "csrfToken": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ClaimVerifyRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ownership check verified",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ClaimVerified"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/live-map/me": {
+      "get": {
+        "operationId": "getPlayerClaimSession",
+        "tags": ["Live map"],
+        "summary": "Return the current private player claim session",
+        "security": [{"cookieAuth": [], "claimBearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Authenticated player claim session",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ClaimSession"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/live-map/me/progress": {
+      "get": {
+        "operationId": "getPlayerClaimProgress",
+        "tags": ["Live map"],
+        "summary": "Return private save-backed progress for the claimed player",
+        "security": [{"cookieAuth": [], "claimBearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Private save progress",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ClaimProgressResponse"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/live-map/logout": {
+      "post": {
+        "operationId": "logoutPlayerClaimSession",
+        "tags": ["Live map"],
+        "summary": "End the current private player claim session",
+        "description": "Invalidates the bearer session when one is supplied. The response and endpoint are private and never cacheable.",
+        "security": [
+          {"cookieAuth": [], "claimBearerAuth": [], "csrfToken": []},
+          {"cookieAuth": [], "csrfToken": []}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ClaimLogoutRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Claim session ended",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ClaimLogoutResponse"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"}
+        }
+      }
+    },
     "/api/v1/telemetry/stats": {
       "get": {
         "operationId": "getTelemetryStats",
@@ -691,6 +854,11 @@
         "type": "http",
         "scheme": "bearer",
         "description": "Private API token configured on the isolated ingest listener."
+      },
+      "claimBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Short-lived bearer token issued after a player character ownership check."
       }
     },
     "parameters": {
@@ -818,6 +986,43 @@
         "content": {
           "application/json": {
             "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The requested claim operation cannot be completed in the current challenge state",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "The claim endpoint rate limit was exceeded",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "schema": {"type": "integer", "minimum": 1}
+          }
+        }
+      },
+      "ClaimReady": {
+        "description": "A new player claim challenge",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ClaimReady"}
+          }
+        }
+      },
+      "ClaimCycled": {
+        "description": "An alternate player claim challenge question",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ClaimCycled"}
           }
         }
       }
@@ -1401,6 +1606,158 @@
         },
         "additionalProperties": false
       },
+      "ClaimStartRequest": {
+        "type": "object",
+        "required": ["playerId"],
+        "properties": {
+          "playerId": {"type": "string", "pattern": "^[0-9a-f]{24}$"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimCycleRequest": {
+        "type": "object",
+        "required": ["challengeToken", "questionId"],
+        "properties": {
+          "challengeToken": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"},
+          "questionId": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "additionalProperties": false
+      },
+      "ClaimAnswer": {
+        "type": "object",
+        "required": ["questionId", "option"],
+        "properties": {
+          "questionId": {"type": "string", "minLength": 1, "maxLength": 64},
+          "option": {"type": "integer", "minimum": 0, "maximum": 7}
+        },
+        "additionalProperties": false
+      },
+      "ClaimVerifyRequest": {
+        "type": "object",
+        "required": ["challengeToken", "answers"],
+        "properties": {
+          "challengeToken": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"},
+          "answers": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {"$ref": "#/components/schemas/ClaimAnswer"}
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClaimLogoutRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ClaimQuestion": {
+        "type": "object",
+        "required": ["id", "prompt", "options", "canCycle"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "maxLength": 64},
+          "prompt": {"type": "string", "minLength": 1, "maxLength": 512},
+          "options": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 8,
+            "items": {"type": "string", "minLength": 1, "maxLength": 256}
+          },
+          "canCycle": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimInstructions": {
+        "type": "object",
+        "required": ["kind", "questions", "snapshotAt"],
+        "properties": {
+          "kind": {"type": "string", "const": "inventory_quiz"},
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {"$ref": "#/components/schemas/ClaimQuestion"}
+          },
+          "snapshotAt": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimReady": {
+        "type": "object",
+        "required": ["challengeToken", "status", "instructions", "expiresAt"],
+        "properties": {
+          "challengeToken": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"},
+          "status": {"type": "string", "const": "ready"},
+          "instructions": {"$ref": "#/components/schemas/ClaimInstructions"},
+          "expiresAt": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimCycled": {
+        "type": "object",
+        "required": ["status", "instructions", "expiresAt"],
+        "properties": {
+          "status": {"type": "string", "const": "ready"},
+          "instructions": {"$ref": "#/components/schemas/ClaimInstructions"},
+          "expiresAt": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimVerified": {
+        "type": "object",
+        "required": ["status", "sessionToken", "idleExpiresAt", "absoluteExpiresAt"],
+        "properties": {
+          "status": {"type": "string", "const": "verified"},
+          "sessionToken": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"},
+          "idleExpiresAt": {"type": "string", "format": "date-time"},
+          "absoluteExpiresAt": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimSession": {
+        "type": "object",
+        "required": ["authenticated", "playerId", "idleExpiresAt", "absoluteExpiresAt"],
+        "properties": {
+          "authenticated": {"type": "boolean", "const": true},
+          "playerId": {"type": "string", "pattern": "^[0-9a-f]{24}$"},
+          "idleExpiresAt": {"type": "string", "format": "date-time"},
+          "absoluteExpiresAt": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimProgressDomain": {
+        "type": "object",
+        "required": ["id", "coverage", "completedIds", "total"],
+        "properties": {
+          "id": {"type": "string"},
+          "coverage": {"type": "string", "const": "complete"},
+          "completedIds": {"type": "array", "items": {"type": "string"}},
+          "total": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      },
+      "ClaimProgressResponse": {
+        "type": "object",
+        "required": ["snapshotAt", "catalogueVersion", "domains"],
+        "properties": {
+          "snapshotAt": {"type": "string", "format": "date-time"},
+          "catalogueVersion": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "domains": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "items": {"$ref": "#/components/schemas/ClaimProgressDomain"}
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClaimLogoutResponse": {
+        "type": "object",
+        "required": ["authenticated"],
+        "properties": {
+          "authenticated": {"type": "boolean", "const": false}
+        },
+        "additionalProperties": false
+      },
       "TelemetryStats": {
         "type": "object",
         "required": ["generated_at", "uptime", "fps", "players", "world", "data_age_threshold_seconds"],
@@ -1605,12 +1962,13 @@
         "type": "object",
         "required": ["schema_version", "guilds", "bases", "world", "diagnostics"],
         "properties": {
-          "schema_version": {"type": "integer", "enum": [2, 3]},
+          "schema_version": {"type": "integer", "enum": [2, 3, 4]},
           "guilds": {"type": "array", "maxItems": 256, "items": {"$ref": "#/components/schemas/Guild"}},
           "bases": {"type": "array", "maxItems": 512, "items": {"$ref": "#/components/schemas/GuildBase"}},
           "players": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/components/schemas/SavedPlayer"}},
           "world": {"$ref": "#/components/schemas/GuildWorld"},
-          "diagnostics": {"$ref": "#/components/schemas/GuildDiagnostics"}
+          "diagnostics": {"$ref": "#/components/schemas/GuildDiagnostics"},
+          "claim": {"$ref": "#/components/schemas/GuildClaim"}
         },
         "allOf": [
           {
@@ -1619,6 +1977,13 @@
               "properties": {"schema_version": {"const": 3}}
             },
             "then": {"required": ["players"]}
+          },
+          {
+            "if": {
+              "required": ["schema_version"],
+              "properties": {"schema_version": {"const": 4}}
+            },
+            "then": {"required": ["players", "claim"]}
           }
         ],
         "additionalProperties": false
@@ -1709,6 +2074,92 @@
           }
         },
         "additionalProperties": false
+      },
+      "GuildClaim": {
+        "type": "object",
+        "required": ["players"],
+        "properties": {
+          "players": {
+            "type": "array",
+            "maxItems": 4096,
+            "items": {"$ref": "#/components/schemas/ClaimPlayer"}
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClaimPlayer": {
+        "type": "object",
+        "required": ["player_uid", "player_name", "inventory", "party", "progress"],
+        "properties": {
+          "player_uid": {"type": "string", "pattern": "^[0-9a-fA-F]{32}$"},
+          "player_name": {"type": "string", "minLength": 1, "maxLength": 128},
+          "inventory": {"$ref": "#/components/schemas/ClaimInventory"},
+          "party": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {"$ref": "#/components/schemas/ClaimPartyEntry"}
+          },
+          "progress": {"$ref": "#/components/schemas/ClaimProgress"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimInventory": {
+        "type": "object",
+        "required": ["common", "weapons", "armor", "food", "drop_slot", "essential"],
+        "properties": {
+          "common": {"$ref": "#/components/schemas/ClaimStacks"},
+          "weapons": {"$ref": "#/components/schemas/ClaimStacks"},
+          "armor": {"$ref": "#/components/schemas/ClaimStacks"},
+          "food": {"$ref": "#/components/schemas/ClaimStacks"},
+          "drop_slot": {"$ref": "#/components/schemas/ClaimStacks"},
+          "essential": {"$ref": "#/components/schemas/ClaimStacks"}
+        },
+        "additionalProperties": false
+      },
+      "ClaimStacks": {
+        "type": "array",
+        "maxItems": 1024,
+        "items": {"$ref": "#/components/schemas/ClaimStack"}
+      },
+      "ClaimStack": {
+        "type": "object",
+        "required": ["slot", "item_id", "count"],
+        "properties": {
+          "slot": {"type": "integer", "minimum": 0, "maximum": 1023},
+          "item_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "count": {"type": "integer", "minimum": 1, "maximum": 4294967295},
+          "dynamic_item_id": {"type": "string", "maxLength": 256}
+        },
+        "additionalProperties": false
+      },
+      "ClaimPartyEntry": {
+        "type": "object",
+        "required": ["slot", "species"],
+        "properties": {
+          "slot": {"type": "integer", "minimum": 0, "maximum": 63},
+          "species": {"type": "string", "minLength": 1, "maxLength": 256},
+          "instance_id": {"type": "string", "maxLength": 256}
+        },
+        "additionalProperties": false
+      },
+      "ClaimProgress": {
+        "type": "object",
+        "required": ["fast_travel", "areas", "notes", "relics", "item_pickups", "normal_bosses", "tower_bosses"],
+        "properties": {
+          "fast_travel": {"$ref": "#/components/schemas/ProgressKeys"},
+          "areas": {"$ref": "#/components/schemas/ProgressKeys"},
+          "notes": {"$ref": "#/components/schemas/ProgressKeys"},
+          "relics": {"$ref": "#/components/schemas/ProgressKeys"},
+          "item_pickups": {"$ref": "#/components/schemas/ProgressKeys"},
+          "normal_bosses": {"$ref": "#/components/schemas/ProgressKeys"},
+          "tower_bosses": {"$ref": "#/components/schemas/ProgressKeys"}
+        },
+        "additionalProperties": false
+      },
+      "ProgressKeys": {
+        "type": "array",
+        "maxItems": 8192,
+        "items": {"type": "string", "minLength": 1, "maxLength": 500}
       },
       "GuildWorld": {
         "type": "object",

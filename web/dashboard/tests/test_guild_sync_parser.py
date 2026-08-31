@@ -2,6 +2,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from django.test import SimpleTestCase
 
@@ -124,6 +125,7 @@ class GuildSyncParserTests(SimpleTestCase):
                     }),
                 },
             }]),
+            "ItemContainerSaveData": prop([]),
             "BaseCampSaveData": prop([{
                 "key": self.base_id,
                 "value": {
@@ -159,6 +161,22 @@ class GuildSyncParserTests(SimpleTestCase):
             }),
             "GameTimeSaveData": prop({"GameDateTimeTicks": prop(123)}),
         }
+
+    def test_custom_properties_include_item_container_slots(self):
+        selected = guild_sync.select_custom_properties({
+            ".worldSaveData.ItemContainerSaveData.Value.RawData": "items",
+            ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData": "slots",
+            ".worldSaveData.BaseCampSaveData.Value.ModuleMap": "excluded",
+            ".worldSaveData.OtherSaveData.Value.RawData": "other",
+        })
+
+        self.assertEqual(
+            selected,
+            {
+                ".worldSaveData.ItemContainerSaveData.Value.RawData": "items",
+                ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData": "slots",
+            },
+        )
 
     def test_builds_compact_health_and_world_aggregates(self):
         guild_sync.validate_world_data(self.world)
@@ -250,12 +268,18 @@ class GuildSyncParserTests(SimpleTestCase):
             "Slots"
         ] = prop({"values": [{"RawData": prop({"values": [1, 2, 3]})}]})
 
+        undecoded_item_containers = copy.deepcopy(self.world)
+        undecoded_item_containers["ItemContainerSaveData"] = prop([{
+            "value": {"Slots": prop({"values": [{"RawData": prop({"values": [1, 2, 3]})}]})}
+        }])
+
         cases = (
             ("GroupSaveDataMap", empty_groups),
             ("GroupSaveDataMap", undecoded_groups),
             ("CharacterSaveParameterMap", undecoded_characters),
             ("BaseCampSaveData", undecoded_bases),
             ("CharacterContainerSaveData", undecoded_containers),
+            ("ItemContainerSaveData", undecoded_item_containers),
         )
         for dataset, world in cases:
             with self.subTest(dataset=dataset):
@@ -272,3 +296,209 @@ class GuildSyncParserTests(SimpleTestCase):
 
         self.assertEqual(public_guilds[0]["guild_name"], "")
         self.assertNotIn(self.player_id, json.dumps(public_guilds))
+
+    def test_extracts_private_inventory_party_and_progress_from_player_save(self):
+        player_uid = "aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"
+        party_id = "cccccccc-1111-2222-3333-dddddddddddd"
+        dynamic_id = "eeeeeeee-1111-2222-3333-ffffffffffff"
+        item_container_ids = {
+            "common": "10000000-0000-0000-0000-000000000001",
+            "weapons": "10000000-0000-0000-0000-000000000002",
+            "armor": "10000000-0000-0000-0000-000000000003",
+            "food": "10000000-0000-0000-0000-000000000004",
+            "drop_slot": "10000000-0000-0000-0000-000000000005",
+            "essential": "10000000-0000-0000-0000-000000000006",
+        }
+        party_container_id = "20000000-0000-0000-0000-000000000001"
+
+        def item_container(identifier, slots):
+            return {
+                "key": {"ID": prop(identifier)},
+                "value": {"Slots": prop({"values": slots})},
+            }
+
+        def item_slot(slot, item_id, count=1, local_id=None):
+            dynamic = {
+                "created_world_id": "11111111-1111-1111-1111-111111111111",
+                "local_id_in_created_world": local_id or guild_sync.ZERO_UUID,
+            }
+            return {
+                "SlotIndex": prop(slot),
+                "RawData": prop({
+                    "slot_index": slot,
+                    "count": count,
+                    "item": {"static_id": item_id, "dynamic_id": dynamic},
+                }),
+            }
+
+        self.world["ItemContainerSaveData"] = prop([
+            item_container(
+                item_container_ids["common"],
+                [
+                    item_slot(2, "Berry", 3),
+                    item_slot(0, "Stone", 1, dynamic_id),
+                ],
+            ),
+            *[
+                item_container(item_container_ids[name], [])
+                for name in ("weapons", "armor", "food", "drop_slot", "essential")
+            ],
+        ])
+        self.world["CharacterContainerSaveData"]["value"].append({
+            "key": {"ID": prop(party_container_id)},
+            "value": {
+                "Slots": prop({
+                    "values": [{
+                        "SlotIndex": prop(2),
+                        "RawData": prop({
+                            "player_uid": guild_sync.ZERO_UUID,
+                            "instance_id": party_id,
+                            "permission_tribe_id": 0,
+                        }),
+                    }],
+                }),
+            },
+        })
+        self.world["CharacterSaveParameterMap"]["value"].append(
+            character(party_id, CharacterID="Lamball")
+        )
+
+        inventory_info = {
+            f"{name.title().replace('_', '')}ContainerId": prop({
+                "ID": prop(identifier),
+            })
+            for name, identifier in item_container_ids.items()
+        }
+        inventory_info["WeaponLoadOutContainerId"] = inventory_info.pop(
+            "WeaponsContainerId"
+        )
+        inventory_info["PlayerEquipArmorContainerId"] = inventory_info.pop(
+            "ArmorContainerId"
+        )
+        inventory_info["FoodEquipContainerId"] = inventory_info.pop("FoodContainerId")
+        player_save = {
+            "SaveData": prop({
+                "PlayerUId": prop(player_uid),
+                "InventoryInfo": prop(inventory_info),
+                "OtomoCharacterContainerId": prop({"ID": prop(party_container_id)}),
+                "RecordData": prop({
+                    "FastTravelPointUnlockFlag": prop([
+                        {"key": "Waypoint-B", "value": True},
+                        {"key": "Waypoint-A", "value": False},
+                    ]),
+                    "FindAreaFlagMap": prop([{"key": "Area-1", "value": True}]),
+                    "NoteObtainForInstanceFlag": prop([{"key": "Day2", "value": True}]),
+                    "RelicObtainForInstanceFlag": prop([{"key": "relic-1", "value": True}]),
+                    "ItemPickupObtainForInstanceFlag": prop([{"key": "pickup-1", "value": True}]),
+                    "NormalBossDefeatFlag": prop([{"key": "boss-1", "value": True}]),
+                    "TowerBossDefeatFlag": prop([{"key": "tower-1", "value": True}]),
+                }),
+            }),
+        }
+
+        with TemporaryDirectory() as directory:
+            save_path = Path(directory) / "Level.sav"
+            save_path.write_bytes(b"level")
+            players_directory = Path(directory) / "Players"
+            players_directory.mkdir()
+            (players_directory / "player.sav").write_bytes(b"player")
+            (players_directory / "player_dps.sav").write_bytes(b"dps")
+            claims = guild_sync.parse_claim_players(
+                save_path,
+                self.world,
+                [{"player_uid": player_uid, "player_name": "Leader"}],
+                lambda path: player_save,
+            )
+
+        self.assertEqual(len(claims), 1)
+        claim = claims[0]
+        self.assertEqual(claim["player_uid"], player_uid.replace("-", ""))
+        self.assertEqual(claim["player_name"], "Leader")
+        self.assertEqual(
+            claim["inventory"]["common"],
+            [
+                {
+                    "slot": 0,
+                    "item_id": "Stone",
+                    "count": 1,
+                    "dynamic_item_id": dynamic_id.replace("-", ""),
+                },
+                {"slot": 2, "item_id": "Berry", "count": 3},
+            ],
+        )
+        self.assertEqual(claim["party"], [{
+            "slot": 2,
+            "species": "Lamball",
+            "instance_id": party_id.replace("-", ""),
+        }])
+        self.assertEqual(claim["progress"]["fast_travel"], ["waypoint-b"])
+        self.assertEqual(claim["progress"]["areas"], ["area-1"])
+        self.assertEqual(claim["progress"]["notes"], ["day2"])
+        self.assertEqual(claim["progress"]["tower_bosses"], ["tower-1"])
+
+    def test_private_parser_rejects_ambiguous_inventory_slots(self):
+        container = {
+            "Slots": prop({
+                "values": [
+                    {
+                        "RawData": prop({
+                            "slot_index": 0,
+                            "count": 1,
+                            "item": {"static_id": "Stone"},
+                        }),
+                    },
+                    {
+                        "RawData": prop({
+                            "slot_index": 0,
+                            "count": 1,
+                            "item": {"static_id": "Wood"},
+                        }),
+                    },
+                ],
+            }),
+        }
+
+        with self.assertRaisesRegex(ValueError, "repeats a slot"):
+            guild_sync.parse_claim_inventory(container)
+
+    def test_private_parser_rejects_symlinked_or_mutating_player_saves(self):
+        player_uid = "a" * 32
+        player_save = {
+            "SaveData": prop({
+                "PlayerUId": prop(player_uid),
+                "InventoryInfo": prop({}),
+                "RecordData": prop({}),
+            }),
+        }
+
+        with TemporaryDirectory() as directory:
+            save_path = Path(directory) / "Level.sav"
+            save_path.write_bytes(b"level")
+            players_directory = Path(directory) / "Players"
+            players_directory.mkdir()
+            target = players_directory / "target.sav"
+            target.write_bytes(b"player")
+            (players_directory / "player.sav").symlink_to(target)
+
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                guild_sync.parse_claim_players(
+                    save_path,
+                    self.world,
+                    [{"player_uid": player_uid, "player_name": "Leader"}],
+                    lambda path: player_save,
+                )
+
+            (players_directory / "player.sav").unlink()
+            (players_directory / "player.sav").write_bytes(b"player")
+
+            def mutating_loader(path):
+                Path(path).write_bytes(b"changed")
+                return player_save
+
+            with self.assertRaisesRegex(ValueError, "changed during parsing"):
+                guild_sync.parse_claim_players(
+                    save_path,
+                    self.world,
+                    [{"player_uid": player_uid, "player_name": "Leader"}],
+                    mutating_loader,
+                )

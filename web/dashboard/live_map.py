@@ -130,6 +130,7 @@ def config(request):
             "pollIntervalMs": settings.PALWORLD_API_INTERVALS["players"] * 1000,
             "worldPollIntervalMs": settings.PALWORLD_API_INTERVALS["game_data"] * 1000,
             "worldDataEnabled": True,
+            "playerClaimsEnabled": bool(getattr(settings, "PLAYER_CLAIMS_ENABLED", False)),
             "layers": [
                 {
                     "id": "palpagos",

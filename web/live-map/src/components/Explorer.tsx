@@ -1,8 +1,9 @@
-import { IconChevronRight, IconSearch, IconX } from '@tabler/icons-react'
+import { IconCheck, IconChevronRight, IconSearch, IconX } from '@tabler/icons-react'
 import { type ReactNode, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { guildIdForBase } from '../lib/guilds'
 import { itemSearchText, markerText } from '../lib/map'
 import { DEFAULT_ENABLED_PLAYER_STATUSES, FILTERABLE_KINDS } from '../lib/preferences'
+import { type CompletionSource, completionSource, completionSourceLabel } from '../lib/saveProgress'
 import type { ItemKind, MapItem, MapLayer, PlayerStatus } from '../types'
 import { MapPanelHeader, MapPanelShell } from './MapPanel'
 import { MarkerGlyph } from './MarkerGlyph'
@@ -20,8 +21,12 @@ interface ExplorerProps {
   hiddenIds: Set<string>
   expandedGuilds: Set<string>
   expandedBases: Set<string>
+  manualChecklist: CompletionChecklistView
   dataNotices: string[]
-  catalogueRetry?: { message: string; onRetry: () => void }
+  catalogueRetry?: {
+    message: string
+    onRetry: () => void
+  }
   onSearchChange: (value: string) => void
   onCheckAll: () => void
   onUncheckAll: () => void
@@ -36,6 +41,10 @@ interface ExplorerProps {
   onLayerChange: (layer: MapLayer) => void
 }
 
+interface CompletionChecklistView {
+  manualCompletedIds: ReadonlySet<string>
+  saveCompletedIds: ReadonlySet<string>
+}
 interface CheckState {
   checked: boolean
   indeterminate: boolean
@@ -351,24 +360,41 @@ function ItemButton({
   item,
   meta,
   label,
+  completion = null,
   onFocus
 }: {
   item: MapItem
   meta?: string
   label?: string
+  completion?: CompletionSource | null
   onFocus: ExplorerProps['onFocusItem']
 }) {
+  const sourceLabel = completionSourceLabel(completion)
+  const completionDescription = sourceLabel ? `, ${sourceLabel.toLowerCase()} completion` : ''
   return (
     <button
       type="button"
       className="pal-interactive grid min-h-7 w-full min-w-0 flex-1 cursor-pointer grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-1.5 border border-transparent bg-transparent px-1.5 py-1 text-left text-xs text-[#e3edef] focus-visible:outline-none"
-      aria-label={`View ${markerText(item)}`}
+      aria-label={`View ${markerText(item)}${completionDescription}`}
       title={item.detail}
       onClick={(event) => onFocus(item, event.currentTarget)}
     >
       <MarkerGlyph kind={item.kind} online={item.online} />
       <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{label || item.name}</span>
-      {meta && <span className="ml-auto shrink-0 text-[11px] text-[#899398]">{meta}</span>}
+      {meta || sourceLabel ? (
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-[#899398]">
+          {meta ? <span>{meta}</span> : null}
+          {sourceLabel ? (
+            <span
+              className={`flex items-center gap-0.5 text-[10px] ${completion === 'save' ? 'text-[#8ed7f2]' : completion === 'combined' ? 'text-[#b7e8a2]' : 'text-[#8fe0c2]'}`}
+              title={`${sourceLabel} completion`}
+            >
+              <IconCheck className="size-3" aria-hidden="true" />
+              {sourceLabel}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -405,10 +431,14 @@ function ObjectRow({
   enabledKinds,
   enabledPlayerStatuses,
   hiddenIds,
+  manualChecklist,
   onToggleItems,
   onFocusItem,
   className = ''
-}: Pick<ExplorerProps, 'enabledKinds' | 'enabledPlayerStatuses' | 'hiddenIds' | 'onToggleItems' | 'onFocusItem'> & {
+}: Pick<
+  ExplorerProps,
+  'enabledKinds' | 'enabledPlayerStatuses' | 'hiddenIds' | 'manualChecklist' | 'onToggleItems' | 'onFocusItem'
+> & {
   item: MapItem
   meta?: string
   label?: string
@@ -423,7 +453,13 @@ function ObjectRow({
           onChange={(checked) => onToggleItems([item.id], checked)}
         />
       </span>
-      <ItemButton item={item} meta={meta} label={label} onFocus={onFocusItem} />
+      <ItemButton
+        item={item}
+        meta={meta}
+        label={label}
+        completion={completionSource(item.id, manualChecklist.manualCompletedIds, manualChecklist.saveCompletedIds)}
+        onFocus={onFocusItem}
+      />
     </div>
   )
 }
@@ -539,6 +575,13 @@ export function Explorer(props: ExplorerProps) {
     FILTERABLE_KINDS.every((kind) => props.enabledKinds.has(kind)) &&
     DEFAULT_ENABLED_PLAYER_STATUSES.every((status) => props.enabledPlayerStatuses.has(status)) &&
     props.hiddenIds.size === 0
+  const visibleMapItemCount = props.items.filter((item) => {
+    if (item.map !== props.activeLayer.id || item.kind === 'companions') return false
+    if (!props.enabledKinds.has(item.kind) || props.hiddenIds.has(item.id)) return false
+    if (item.kind === 'players' && !props.enabledPlayerStatuses.has(item.online === false ? 'offline' : 'online'))
+      return false
+    return !query || matches(item)
+  }).length
 
   return (
     // biome-ignore lint/complexity/noUselessFragments: the stable wrapper keeps this large panel's markup isolated from its external header trigger
@@ -635,23 +678,36 @@ export function Explorer(props: ExplorerProps) {
                 )
               })}
             </fieldset>
-            <div className="mx-3.5 mb-2 flex shrink-0 justify-end gap-1.5">
-              <button
-                type="button"
-                className="pal-interactive min-h-7 cursor-pointer border border-[#8bb7bd]/25 bg-[#26363b]/55 px-2.5 text-[11px] text-[#b7cdd1] transition-colors enabled:hover:border-[#7fd7e3]/50 enabled:hover:text-[#e5f8fa] disabled:cursor-default disabled:opacity-40"
-                disabled={allFiltersChecked}
-                onClick={props.onCheckAll}
+            <div className="mx-3.5 mb-2 flex shrink-0 items-center justify-between gap-2">
+              <span
+                aria-live="polite"
+                aria-atomic="true"
+                className="min-w-0 overflow-hidden text-[11px] text-ellipsis whitespace-nowrap text-[#789097]"
               >
-                Check all
-              </button>
-              <button
-                type="button"
-                className="pal-interactive min-h-7 cursor-pointer border border-[#8bb7bd]/25 bg-[#26363b]/55 px-2.5 text-[11px] text-[#b7cdd1] transition-colors enabled:hover:border-[#7fd7e3]/50 enabled:hover:text-[#e5f8fa] disabled:cursor-default disabled:opacity-40"
-                disabled={props.enabledKinds.size === 0 && props.enabledPlayerStatuses.size === 0}
-                onClick={props.onUncheckAll}
-              >
-                Uncheck all
-              </button>
+                {visibleMapItemCount.toLocaleString()} map {visibleMapItemCount === 1 ? 'item' : 'items'} shown
+              </span>
+              <div className="flex shrink-0 gap-1.5">
+                <button
+                  type="button"
+                  className="pal-interactive min-h-7 cursor-pointer border border-[#8bb7bd]/25 bg-[#26363b]/55 px-2.5 text-[11px] text-[#b7cdd1] transition-colors enabled:hover:border-[#7fd7e3]/50 enabled:hover:text-[#e5f8fa] disabled:cursor-default disabled:opacity-40"
+                  aria-label="Check all"
+                  title="Show every map category; My Progress still controls completed landmarks"
+                  disabled={allFiltersChecked}
+                  onClick={props.onCheckAll}
+                >
+                  Check all
+                </button>
+                <button
+                  type="button"
+                  className="pal-interactive min-h-7 cursor-pointer border border-[#8bb7bd]/25 bg-[#26363b]/55 px-2.5 text-[11px] text-[#b7cdd1] transition-colors enabled:hover:border-[#7fd7e3]/50 enabled:hover:text-[#e5f8fa] disabled:cursor-default disabled:opacity-40"
+                  aria-label="Uncheck all"
+                  title="Hide every map category"
+                  disabled={props.enabledKinds.size === 0 && props.enabledPlayerStatuses.size === 0}
+                  onClick={props.onUncheckAll}
+                >
+                  Uncheck all
+                </button>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-[#caeaef]/20 px-3.5 pt-1.5 pb-3.5">
@@ -825,17 +881,6 @@ export function Explorer(props: ExplorerProps) {
               />
               <SimpleCategory
                 {...props}
-                group="npc-locations"
-                title="NPC Locations"
-                items={index.byKind['npc-locations']}
-                matches={matches}
-                searchResultKeys={searchPlan?.allowedKeys}
-                empty="No static NPC locations are loaded for this region."
-                expanded={searching || !collapsedGroups.has('npc-locations')}
-                onToggleExpanded={() => toggleCategory('npc-locations')}
-              />
-              <SimpleCategory
-                {...props}
                 group="npcs"
                 title="Live NPCs"
                 items={index.byKind.npcs}
@@ -844,6 +889,17 @@ export function Explorer(props: ExplorerProps) {
                 empty="No live NPCs are loaded for this region."
                 expanded={searching || !collapsedGroups.has('npcs')}
                 onToggleExpanded={() => toggleCategory('npcs')}
+              />
+              <SimpleCategory
+                {...props}
+                group="npc-locations"
+                title="NPC Locations"
+                items={index.byKind['npc-locations']}
+                matches={matches}
+                searchResultKeys={searchPlan?.allowedKeys}
+                empty="No static NPC locations are loaded for this region."
+                expanded={searching || !collapsedGroups.has('npc-locations')}
+                onToggleExpanded={() => toggleCategory('npc-locations')}
               />
             </div>
 
@@ -858,13 +914,14 @@ export function Explorer(props: ExplorerProps) {
             ))}
             {props.catalogueRetry ? (
               <div
-                className="m-3 mt-1 grid gap-2 rounded-md border border-[#554b37] bg-[#302b22] px-2.5 py-2 text-[11px] leading-4 text-[#d2b980]"
                 role="status"
+                aria-live="polite"
+                className="m-3 mt-1 flex items-center gap-2 rounded-md border border-[#554b37] bg-[#302b22] px-2.5 py-2 text-[11px] leading-4 text-[#d2b980]"
               >
-                <span>{props.catalogueRetry.message}</span>
+                <span className="min-w-0 flex-1">{props.catalogueRetry.message}</span>
                 <button
                   type="button"
-                  className="pal-glass-control min-h-9 cursor-pointer justify-self-start px-3 text-[11px] text-[#e5f7f8]"
+                  className="pal-interactive min-h-8 shrink-0 cursor-pointer border border-[#8f7b50]/50 bg-[#3b3428] px-2 text-[11px] text-[#ead5a2]"
                   onClick={props.catalogueRetry.onRetry}
                 >
                   Retry catalogue
@@ -1217,7 +1274,7 @@ function GuildCategoryBody({
     <>
       {guilds.map((guild) => {
         const displayName = guild.displayName
-        const guildMatches = displayName.toLowerCase().includes(props.search.trim().toLowerCase())
+        const guildMatches = displayName.toLowerCase().includes(searchQuery)
         const matchingOutsideWorkers = guildMatches ? guild.outsideWorkers : guild.outsideWorkers.filter(matches)
         const requestedOutsideWorkers = props.search.trim() ? matchingOutsideWorkers : guild.outsideWorkers
         const selectedOutsideWorkers = searchResultKeys

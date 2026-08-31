@@ -9,11 +9,12 @@ from dashboard.models import (
     LatestDataset,
     MetricSample,
     Player,
+    PlayerClaimData,
     PlayerSession,
     PositionSample,
     ServerEvent,
 )
-from dashboard.services import IngestError, store_dataset
+from dashboard.services import IngestError, _player_id, store_dataset
 
 
 @override_settings(
@@ -86,6 +87,57 @@ class GuildIngestTests(TestCase):
             HTTP_AUTHORIZATION="bearer test-private-token",
         )
         self.assertEqual(response.status_code, 200)
+
+    def test_v4_claim_data_is_stored_separately_from_the_public_snapshot(self):
+        player_uid = "d" * 32
+        payload = {
+            "schema_version": 4,
+            "guilds": [],
+            "bases": [],
+            "players": [],
+            "world": {},
+            "diagnostics": {},
+            "claim": {
+                "players": [{
+                    "player_uid": player_uid,
+                    "player_name": "Private Explorer",
+                    "inventory": {
+                        "common": [
+                            {"slot": 0, "item_id": "Stone", "count": 1},
+                            {"slot": 1, "item_id": "Wood", "count": 2},
+                            {"slot": 2, "item_id": "Berry", "count": 3},
+                        ],
+                        "weapons": [],
+                        "armor": [],
+                        "food": [],
+                        "drop_slot": [],
+                        "essential": [],
+                    },
+                    "party": [],
+                    "progress": {
+                        "fast_travel": [],
+                        "areas": [],
+                        "notes": [],
+                        "relics": [],
+                        "item_pickups": [],
+                        "normal_bosses": [],
+                        "tower_bosses": [],
+                    },
+                }],
+            },
+        }
+        response = self.post(payload)
+        self.assertEqual(response.status_code, 200)
+        snapshot = GuildSnapshot.objects.get(pk=1)
+        self.assertEqual(snapshot.payload["claim"], {"players": []})
+        self.assertNotIn(player_uid, json.dumps(snapshot.payload))
+        claim = PlayerClaimData.objects.get(public_id=_player_id({"userId": player_uid}))
+        self.assertNotIn(player_uid, json.dumps(claim.payload))
+        self.assertTrue(
+            PlayerClaimData.objects.filter(
+                public_id=_player_id({"playerId": player_uid})
+            ).exists()
+        )
 
     def test_rejects_raw_ids_malformed_payloads_and_bad_auth(self):
         raw_payload = {

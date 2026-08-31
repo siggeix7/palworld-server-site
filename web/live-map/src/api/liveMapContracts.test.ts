@@ -5,6 +5,7 @@ const config = {
   pollIntervalMs: 20_000,
   worldPollIntervalMs: 15_000,
   worldDataEnabled: true,
+  playerClaimsEnabled: false,
   layers: [
     {
       id: 'palpagos',

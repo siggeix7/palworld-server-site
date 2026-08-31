@@ -25,9 +25,11 @@ from .models import (
     GuildSnapshot,
     LatestDataset,
     Player,
+    PlayerClaimData,
     PlayerSession,
     WeeklyReportSchedule,
 )
+from .services import _player_id
 from .weekly_scheduler import ensure_next_run
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ ADMIN_COMMAND_TIMEOUT = 10
 SCHEDULE_TIME_PATTERN = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]\Z")
 SNAPSHOT_NAME_MAX_LENGTH = 128
 SNAPSHOT_KEY_MAX_LENGTH = 64
+CLAIM_GUID_PATTERN = re.compile(r"^[0-9a-fA-F]{32}\Z")
 GUILD_FIELDS = {
     "group_id", "guild_name", "players", "base_count", "pal_count",
     "worker_count", "working_count", "problem_worker_count",
@@ -72,6 +75,23 @@ PLAYER_STATUS_FIELDS = {
     "max_hp", "stamina", "attack", "carry_weight", "capture_rate",
     "work_speed",
 }
+CLAIM_PLAYER_FIELDS = {
+    "player_uid", "player_name", "inventory", "party", "progress",
+}
+CLAIM_INVENTORY_FIELDS = {
+    "common", "weapons", "armor", "food", "drop_slot", "essential",
+}
+CLAIM_STACK_FIELDS = {
+    "slot", "item_id", "count", "dynamic_item_id",
+}
+CLAIM_PARTY_FIELDS = {
+    "slot", "species", "instance_id",
+}
+CLAIM_PROGRESS_FIELDS = {
+    "fast_travel", "areas", "notes", "relics",
+    "item_pickups", "normal_bosses", "tower_bosses",
+}
+CLAIM_ZERO_GUID = "0" * 32
 
 
 def _admin_required(request):
@@ -124,13 +144,15 @@ def _validate_guild_payload(payload):
     if not isinstance(payload, dict):
         return "payload must be an object"
     schema_version = payload.get("schema_version")
-    if schema_version not in {2, 3}:
+    if schema_version not in {2, 3, 4}:
         return "unsupported schema_version"
     supported_fields = {
         "schema_version", "guilds", "bases", "world", "diagnostics",
     }
-    if schema_version == 3:
+    if schema_version >= 3:
         supported_fields.add("players")
+    if schema_version == 4:
+        supported_fields.add("claim")
     if set(payload) - supported_fields:
         return "payload contains unsupported fields"
     for key in ("guilds", "bases"):
@@ -140,11 +162,11 @@ def _validate_guild_payload(payload):
         return "world must be an object"
     if not isinstance(payload.get("diagnostics"), dict):
         return "diagnostics must be an object"
-    if schema_version == 3 and not isinstance(payload.get("players"), list):
+    if schema_version >= 3 and not isinstance(payload.get("players"), list):
         return "players must be an array"
     if len(payload["guilds"]) > 256 or len(payload["bases"]) > 512:
         return "payload contains too many guilds or bases"
-    if schema_version == 3 and len(payload["players"]) > 4096:
+    if schema_version >= 3 and len(payload["players"]) > 4096:
         return "payload contains too many players"
 
     for guild in payload["guilds"]:
@@ -252,6 +274,96 @@ def _validate_guild_payload(payload):
             or any(not _is_nonnegative_int(value) for value in status_points.values())
         ):
             return "saved player status points are invalid"
+
+    if schema_version == 4:
+        claim = payload.get("claim")
+        if not isinstance(claim, dict):
+            return "claim must be an object"
+        claim_players = claim.get("players")
+        if not isinstance(claim_players, list):
+            return "claim.players must be an array"
+        if len(claim_players) > 4096:
+            return "claim.players contains too many entries"
+        claim_uids = set()
+        for cp in claim_players:
+            if not isinstance(cp, dict) or set(cp) != CLAIM_PLAYER_FIELDS:
+                return "each claim player must contain only supported fields"
+            if (
+                not isinstance(cp.get("player_uid"), str)
+                or not CLAIM_GUID_PATTERN.fullmatch(cp["player_uid"])
+                or cp["player_uid"].casefold() == CLAIM_ZERO_GUID
+            ):
+                return "claim player must have a player_uid"
+            player_uid = cp["player_uid"].casefold()
+            if player_uid in claim_uids:
+                return "claim players must have unique player_uids"
+            claim_uids.add(player_uid)
+            if not _valid_snapshot_text(
+                cp.get("player_name"), SNAPSHOT_NAME_MAX_LENGTH, allow_empty=False
+            ):
+                return "claim player name must be a non-empty string"
+            inventory = cp.get("inventory")
+            if not isinstance(inventory, dict) or set(inventory) != CLAIM_INVENTORY_FIELDS:
+                return "claim player inventory must contain only supported fields"
+            for inv_key, stacks in inventory.items():
+                if not isinstance(stacks, list) or len(stacks) > 1024:
+                    return f"claim player inventory.{inv_key} must be an array"
+                for stack in stacks:
+                    if not isinstance(stack, dict) or set(stack) - CLAIM_STACK_FIELDS:
+                        return "claim inventory stack must contain only supported fields"
+                    if (
+                        not isinstance(stack.get("slot"), int)
+                        or isinstance(stack.get("slot"), bool)
+                        or stack.get("slot") < 0
+                        or stack.get("slot") > 1023
+                    ):
+                        return "claim inventory stack slot must be integer 0-1023"
+                    if (
+                        not isinstance(stack.get("item_id"), str)
+                        or not stack.get("item_id").strip()
+                        or len(stack["item_id"]) > 256
+                    ):
+                        return "claim inventory stack must have item_id"
+                    if not _is_nonnegative_int(stack.get("count")) or stack.get("count") == 0:
+                        return "claim inventory stack count must be positive integer"
+                    dynamic_id = stack.get("dynamic_item_id")
+                    if dynamic_id is not None and (not isinstance(dynamic_id, str) or len(dynamic_id) > 256):
+                        return "claim inventory stack dynamic_item_id must be empty string or non-empty string"
+            party = cp.get("party")
+            if not isinstance(party, list) or len(party) > 64:
+                return "claim player party must be an array"
+            for pal in party:
+                if not isinstance(pal, dict) or set(pal) - CLAIM_PARTY_FIELDS:
+                    return "claim party entry must contain only supported fields"
+                if (
+                    not isinstance(pal.get("slot"), int)
+                    or isinstance(pal.get("slot"), bool)
+                    or pal.get("slot") < 0
+                    or pal.get("slot") > 63
+                ):
+                    return "claim party slot must be integer 0-63"
+                if (
+                    not isinstance(pal.get("species"), str)
+                    or not pal.get("species").strip()
+                    or len(pal["species"]) > 256
+                ):
+                    return "claim party entry must have species"
+                instance_id = pal.get("instance_id")
+                if instance_id is not None and (not isinstance(instance_id, str) or len(instance_id) > 256):
+                    return "claim party entry instance_id must be empty string or non-empty string"
+            progress = cp.get("progress")
+            if not isinstance(progress, dict) or set(progress) != CLAIM_PROGRESS_FIELDS:
+                return "claim player progress must contain only supported fields"
+            for prog_key, keys in progress.items():
+                if not isinstance(keys, list):
+                    return f"claim player progress.{prog_key} must be an array"
+                if len(keys) > 8192:
+                    return f"claim player progress.{prog_key} contains too many entries"
+                for key in keys:
+                    if not isinstance(key, str) or not key or len(key) > 500 or not all(
+                        character.isprintable() for character in key
+                    ):
+                        return "progress key must be non-empty string"
 
     if set(payload["world"]) - WORLD_FIELDS or any(
         not _is_nonnegative_int(value) for value in payload["world"].values()
@@ -842,13 +954,51 @@ def guild_ingest(request):
         validation_error = _validate_guild_payload(body)
         if validation_error:
             return JsonResponse({"error": validation_error}, status=422)
-        GuildSnapshot.objects.update_or_create(
-            id=1,
-            defaults={
-                "payload": body,
-                "updated_at": timezone.now(),
-            },
-        )
+        received_at = timezone.now()
+        stored_body = dict(body)
+        claim_players = []
+        if body.get("schema_version") == 4:
+            claim = body.get("claim") or {}
+            claim_players = claim.get("players", [])
+            # Keep raw save identifiers out of the general snapshot. They are
+            # used once to derive the site's opaque player key below.
+            stored_body["claim"] = {"players": []}
+        with transaction.atomic():
+            GuildSnapshot.objects.update_or_create(
+                id=1,
+                defaults={
+                    "payload": stored_body,
+                    "updated_at": received_at,
+                },
+            )
+            if body.get("schema_version") == 4:
+                public_ids = []
+                for claim_player in claim_players:
+                    player_uid = claim_player["player_uid"].casefold()
+                    claim_payload = {
+                        key: claim_player[key]
+                        for key in ("player_name", "inventory", "party", "progress")
+                    }
+                    for public_id in {
+                        _player_id({"userId": player_uid}),
+                        _player_id({"playerId": player_uid}),
+                    }:
+                        public_ids.append(public_id)
+                        PlayerClaimData.objects.update_or_create(
+                            public_id=public_id,
+                            defaults={
+                                "payload": claim_payload,
+                                "snapshot_at": received_at,
+                            },
+                        )
+                if public_ids:
+                    PlayerClaimData.objects.exclude(public_id__in=public_ids).delete()
+                else:
+                    PlayerClaimData.objects.all().delete()
+            else:
+                # A legacy sync cannot provide the proof material, so old data
+                # must not remain claimable after a downgrade or partial deploy.
+                PlayerClaimData.objects.all().delete()
         return JsonResponse({"ok": True})
     except (ValueError, UnicodeDecodeError):
         return JsonResponse({"error": "invalid JSON"}, status=400)

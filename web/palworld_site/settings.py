@@ -245,6 +245,7 @@ WEEKLY_REPORT_SCHEDULER_LOCK_PATH = os.getenv(
     "WEEKLY_REPORT_SCHEDULER_LOCK_PATH", "/data/palworld-weekly-scheduler.lock"
 )
 SITE_AUTH_REQUIRED = True
+PLAYER_CLAIMS_ENABLED = os.getenv("PLAYER_CLAIMS_ENABLED", "false").lower() == "true"
 AUTH_TRUSTED_PROXY_ADDRESSES = {
     value.strip()
     for value in os.getenv("AUTH_TRUSTED_PROXY_ADDRESSES", "127.0.0.1,::1").split(",")

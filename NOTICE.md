@@ -82,7 +82,7 @@ Current catalogue game-data version: `1.0.3.101283`.
   Its four catalogue datasets and all map images are unchanged from
   `1.0.2.101103`; only the `Zenara & Astralym` detail changed from
   `Within the Seal` to `Sealed Sanctum`. Output SHA-256:
-  `be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8`.
+  `66fc7c1008062208ee8e49a4e3e0a01e0b2eaa57c78b41ba8d00e18deb0e1fe4`.
 - The `v1.1.0` frontend performance work is adapted selectively: the map loads
   only visible WebP tiles at the required display density, indexes projected
   markers spatially, enforces an adaptive 300-marker render budget and loads
@@ -93,9 +93,9 @@ Current catalogue game-data version: `1.0.3.101283`.
   and the live Wild Pal/NPC layers remain local implementations.
 - Upstream `v1.1.1` only upgrades its bundled `palworld-save-reader` to `v0.2.0`
   for legacy Mermaid Huffman streams. This site does not bundle that Go/GPL
-  decoder or its resolve-v3 leaderboard patch. Save snapshots are parsed on the
-  Palworld VM by the independent `ops/PalworldGuildSync` pipeline using the
-  separately pinned PalworldSaveTools/palsav implementation.
+  decoder or its resolve-v4 leaderboard/claim patch. Save snapshots are parsed
+  on the Palworld VM by the independent `ops/PalworldGuildSync` pipeline using
+  the separately pinned PalworldSaveTools/palsav implementation.
 - `web/dashboard/live_map.py` adapts only already-sanitized Django snapshots to
   the upstream `PublicConfig`, `PlayerState`, `ObjectState` and
   `WorldCatalogue` contracts. The browser never receives raw Palworld player,

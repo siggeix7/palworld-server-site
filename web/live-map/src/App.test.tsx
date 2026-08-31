@@ -8,6 +8,7 @@ const responses: Record<string, unknown> = {
     pollIntervalMs: 60_000,
     worldPollIntervalMs: 60_000,
     worldDataEnabled: true,
+    playerClaimsEnabled: false,
     layers: [{ id: 'palpagos', name: 'Palpagos Islands', bounds: [100, 100, -100, -100] }],
     catalogueUrl: '/assets/test-world-catalogue.json',
     landmarks: [],
@@ -231,14 +232,14 @@ describe('App', () => {
     const serverSurface = serverTitle.parentElement?.parentElement
     if (!commandbarLayout || !serverSurface) throw new Error('Expected the responsive command bar layout')
     expect(commandbarLayout).toHaveClass(
-      'grid-cols-[54px_minmax(0,1fr)_54px]',
-      'max-sm:grid-cols-2',
+      'grid-cols-[54px_minmax(0,1fr)_54px_54px]',
+      'max-sm:grid-cols-3',
       'max-sm:grid-rows-[70px_44px]'
     )
     expect(serverSurface).toHaveClass(
       'pal-glass-surface',
       'h-[54px]',
-      'max-sm:col-span-2',
+      'max-sm:col-span-3',
       'max-sm:col-start-1',
       'row-start-1'
     )
@@ -262,7 +263,7 @@ describe('App', () => {
     expect(filterControl).toHaveAttribute('aria-expanded', 'true')
     expect(filterControl.querySelector('svg')).toHaveClass('tabler-icon-filter')
     expect(leaderboardControl).not.toHaveClass('pal-selected')
-    expect(leaderboardControl).toHaveClass('col-start-3', 'max-sm:col-start-2', 'max-sm:row-start-2')
+    expect(leaderboardControl).toHaveClass('col-start-4', 'max-sm:col-start-3', 'max-sm:row-start-2')
     expect(leaderboardControl).toHaveAttribute('aria-expanded', 'false')
     expect(leaderboardControl.querySelector('svg')).toHaveClass('tabler-icon-trophy')
     expect(filterControl.compareDocumentPosition(serverSurface) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
@@ -306,7 +307,7 @@ describe('App', () => {
     const detailsTitle = screen.getByRole('heading', { name: 'Luke' })
     expect(detailsTitle).toBeInTheDocument()
     await waitFor(() => expect(detailsTitle).toHaveFocus())
-    expect(screen.getByText(/X 10\s+Y 20/)).toBeInTheDocument()
+    expect(screen.getByText(/X -344\s+Y 270/)).toBeInTheDocument()
     expect(screen.getByText('No guild membership is known for this player.')).toBeVisible()
   })
 
@@ -1961,7 +1962,7 @@ describe('App', () => {
       }
       return {
         ...state,
-        players: state.players.map((player) => ({ ...player, x: moved ? 80 : 10, y: moved ? 70 : 20 }))
+        players: state.players.map((player) => ({ ...player, x: moved ? 1000 : 10, y: moved ? 1000 : 20 }))
       }
     })
 
@@ -1969,12 +1970,12 @@ describe('App', () => {
     render(<App />)
     await screen.findByRole('heading', { name: 'Test Realm' })
     await user.click(screen.getByRole('button', { name: 'View Luke · Lv 55' }))
-    expect(screen.getByText(/X 10\s+Y 20/)).toBeInTheDocument()
+    expect(screen.getByText(/X -344\s+Y 270/)).toBeInTheDocument()
 
     const pollsBeforeMove = playerPolls
     moved = true
     await waitFor(() => expect(playerPolls).toBeGreaterThan(pollsBeforeMove))
-    expect(await screen.findByText(/X 80\s+Y 70/)).toBeInTheDocument()
+    expect(await screen.findByText(/X -342\s+Y 272/)).toBeInTheDocument()
   })
 
   it('keeps a hidden player hidden after their coordinates change', async () => {

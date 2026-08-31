@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import admin_views, api_views, live_map, views
+from . import admin_views, api_views, claims, live_map, views
 
 
 urlpatterns = [
@@ -22,6 +22,20 @@ urlpatterns = [
     ),
     path("api/v1/live-map/players", live_map.players, name="live-map-players"),
     path("api/v1/live-map/objects", live_map.objects, name="live-map-objects"),
+    path("api/v1/live-map/player-claims", claims.start_player_claim, name="live-map-player-claims"),
+    path(
+        "api/v1/live-map/player-claims/questions/cycle",
+        claims.cycle_player_claim_question,
+        name="live-map-player-claims-cycle",
+    ),
+    path(
+        "api/v1/live-map/player-claims/verify",
+        claims.verify_player_claim,
+        name="live-map-player-claims-verify",
+    ),
+    path("api/v1/live-map/me", claims.claim_session, name="live-map-claim-session"),
+    path("api/v1/live-map/me/progress", claims.claim_progress, name="live-map-claim-progress"),
+    path("api/v1/live-map/logout", claims.logout_claim_session, name="live-map-claim-logout"),
     path("api/v1/telemetry/stats", views.telemetry_stats, name="telemetry-stats"),
     path("api/v1/world/diff", views.world_diff, name="world-diff"),
     path("api/v1/palworld/players", admin_views.palworld_players, name="palworld-players"),

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Send compact guild, base camp, and world data to the site."""
+"""Send compact guild, base camp, world, and private claim data to the site."""
 
 from collections import Counter, defaultdict
 import hashlib
 import os
+import re
+import stat
 import sys
 from urllib.parse import urlsplit
 
@@ -20,7 +22,20 @@ SITE_TOKEN = os.getenv("SITE_TOKEN", "")
 VERIFY_SSL = os.getenv("VERIFY_SSL", "true").lower() == "true"
 ALLOW_INSECURE_HTTP = os.getenv("ALLOW_INSECURE_HTTP", "false").lower() == "true"
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
+ZERO_GUID = ZERO_UUID.replace("-", "")
 LOW_SANITY_THRESHOLD = 30
+MAX_PLAYER_FILES = 4096
+MAX_CLAIM_STACKS = 256
+MAX_CLAIM_PARTY_PALS = 64
+MAX_CLAIM_PROGRESS_KEYS = 8192
+GUID_PATTERN = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+CUSTOM_PROPERTY_DATASETS = (
+    "GroupSaveDataMap",
+    "BaseCampSaveData",
+    "CharacterSaveParameterMap",
+    "CharacterContainerSaveData",
+    "ItemContainerSaveData",
+)
 PLAYER_STATUS_NAMES = {
     "最大HP": "max_hp",
     "最大SP": "stamina",
@@ -29,6 +44,10 @@ PLAYER_STATUS_NAMES = {
     "捕獲率": "capture_rate",
     "作業速度": "work_speed",
 }
+
+
+class SaveChangedError(ValueError):
+    pass
 
 
 def to_str(value):
@@ -41,6 +60,67 @@ def property_value(value, default=None):
     while isinstance(value, dict) and "value" in value:
         value = value["value"]
     return default if value is None else value
+
+
+def normalized_identifier(value):
+    text = to_str(property_value(value, "")).strip()
+    compact = text.replace("-", "")
+    return compact.casefold() if GUID_PATTERN.fullmatch(compact) else text.casefold()
+
+
+def canonical_guid(value):
+    identifier = normalized_identifier(value)
+    return identifier if GUID_PATTERN.fullmatch(identifier) and identifier != ZERO_GUID else ""
+
+
+def canonical_player_uid(value):
+    return canonical_guid(value)
+
+
+def dataset_values(world_data, name):
+    value = property_value(world_data.get(name), [])
+    return value if isinstance(value, list) else []
+
+
+def claim_integer(value, maximum):
+    value = property_value(value)
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if 0 <= value <= maximum else None
+
+
+def claim_text(value, maximum):
+    value = property_value(value, "")
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    if not value or len(value) > maximum or not all(character.isprintable() for character in value):
+        return ""
+    return value
+
+
+def select_custom_properties(custom_properties):
+    return {
+        key: value
+        for key, value in custom_properties.items()
+        if any(dataset in key for dataset in CUSTOM_PROPERTY_DATASETS)
+        and "BaseCampSaveData.Value.ModuleMap" not in key
+        and "BaseCampSaveData.Value.WorkCollection" not in key
+    }
+
+
+def regular_file_signature(path):
+    info = os.stat(path, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError("save artifact is not a regular file")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+def directory_signature(path):
+    info = os.stat(path, follow_symlinks=False)
+    if not stat.S_ISDIR(info.st_mode):
+        raise ValueError("save directory is not a real directory")
+    return info.st_dev, info.st_ino, info.st_mtime_ns
 
 
 def property_number(properties, name):
@@ -206,6 +286,345 @@ def parse_players(world_data, guilds):
     for player_uid, player in players.items():
         player["owned_pal_count"] = pal_counts[player_uid]
     return sorted(players.values(), key=lambda player: player["player_name"].casefold())
+
+
+def true_flag_keys(record_data, name):
+    if name not in record_data:
+        return []
+    entries = property_value(record_data.get(name))
+    if not isinstance(entries, list):
+        raise ValueError(f"{name} is not a map")
+
+    keys = []
+    seen = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError(f"{name} contains an invalid entry")
+        key = claim_text(entry.get("key"), 256)
+        if not key:
+            raise ValueError(f"{name} contains an empty key")
+        key = key.casefold()
+        if key in seen:
+            raise ValueError(f"{name} repeats a key")
+        seen.add(key)
+        flag = property_value(entry.get("value"))
+        if not isinstance(flag, bool):
+            raise ValueError(f"{name} contains a non-boolean value")
+        if flag:
+            keys.append(key)
+    if len(keys) > MAX_CLAIM_PROGRESS_KEYS:
+        raise ValueError(f"{name} contains too many entries")
+    return sorted(keys)
+
+
+def parse_claim_progress(save_data):
+    record_data = property_value(save_data.get("RecordData"), {})
+    if record_data is None:
+        record_data = {}
+    if not isinstance(record_data, dict):
+        raise ValueError("RecordData is not an object")
+    return {
+        "fast_travel": true_flag_keys(
+            record_data, "FastTravelPointUnlockFlag"
+        ),
+        "areas": true_flag_keys(record_data, "FindAreaFlagMap"),
+        "notes": true_flag_keys(record_data, "NoteObtainForInstanceFlag"),
+        "relics": true_flag_keys(record_data, "RelicObtainForInstanceFlag"),
+        "item_pickups": true_flag_keys(
+            record_data, "ItemPickupObtainForInstanceFlag"
+        ),
+        "normal_bosses": true_flag_keys(
+            record_data, "NormalBossDefeatFlag"
+        ),
+        "tower_bosses": true_flag_keys(record_data, "TowerBossDefeatFlag"),
+    }
+
+
+def container_id(value):
+    value = property_value(value)
+    if not isinstance(value, dict):
+        return canonical_guid(value)
+    return canonical_guid(value.get("ID"))
+
+
+def index_claim_item_containers(world_data):
+    containers = {}
+    for item in dataset_values(world_data, "ItemContainerSaveData"):
+        if not isinstance(item, dict):
+            continue
+        key = item.get("key", {})
+        key_value = key.get("ID") if isinstance(key, dict) else key
+        identifier = canonical_guid(key_value)
+        value = property_value(item.get("value"), {})
+        if identifier and isinstance(value, dict):
+            if identifier in containers:
+                raise ValueError("ItemContainerSaveData repeats a container")
+            containers[identifier] = value
+    return containers
+
+
+def index_claim_character_containers(world_data):
+    containers = {}
+    for item in dataset_values(world_data, "CharacterContainerSaveData"):
+        if not isinstance(item, dict):
+            continue
+        key = item.get("key", {})
+        key_value = key.get("ID") if isinstance(key, dict) else key
+        identifier = canonical_guid(key_value)
+        value = property_value(item.get("value"), {})
+        if identifier and isinstance(value, dict):
+            if identifier in containers:
+                raise ValueError("CharacterContainerSaveData repeats a container")
+            containers[identifier] = value
+    return containers
+
+
+def index_claim_characters(world_data):
+    characters = {}
+    for item in dataset_values(world_data, "CharacterSaveParameterMap"):
+        if not isinstance(item, dict):
+            continue
+        key = item.get("key", {})
+        instance_value = key.get("InstanceId") if isinstance(key, dict) else ""
+        instance_id = canonical_guid(instance_value)
+        value = property_value(item.get("value"), {})
+        raw_data = property_value(value.get("RawData"), {}) if isinstance(value, dict) else {}
+        raw_object = raw_data.get("object") if isinstance(raw_data, dict) else {}
+        save_parameters = (
+            property_value(raw_object.get("SaveParameter"), {})
+            if isinstance(raw_object, dict)
+            else {}
+        )
+        if instance_id and isinstance(save_parameters, dict):
+            species = claim_text(save_parameters.get("CharacterID"), 256)
+            if species:
+                if instance_id in characters:
+                    raise ValueError("CharacterSaveParameterMap repeats a character")
+                characters[instance_id] = species
+    return characters
+
+
+def claim_slot_data(slot):
+    if not isinstance(slot, dict):
+        return None
+    value = property_value(slot.get("RawData"))
+    return value if isinstance(value, dict) else None
+
+
+def parse_claim_inventory(container):
+    slots_value = property_value(container.get("Slots"), {})
+    slots = slots_value.get("values") if isinstance(slots_value, dict) else None
+    if not isinstance(slots, list):
+        return []
+
+    stacks = []
+    seen_slots = set()
+    for slot in slots:
+        data = claim_slot_data(slot)
+        if data is None:
+            continue
+        slot_index = claim_integer(data.get("slot_index"), 1023)
+        count = claim_integer(data.get("count"), 2**32 - 1)
+        item = data.get("item")
+        item_id = claim_text(item.get("static_id"), 256) if isinstance(item, dict) else ""
+        if slot_index is None or count is None or count == 0 or not item_id:
+            continue
+        if slot_index in seen_slots:
+            raise ValueError("inventory repeats a slot")
+        seen_slots.add(slot_index)
+        stack = {"slot": slot_index, "item_id": item_id, "count": count}
+        dynamic = item.get("dynamic_id") if isinstance(item, dict) else None
+        if isinstance(dynamic, dict):
+            identifier = canonical_guid(dynamic.get("local_id_in_created_world"))
+            if identifier:
+                stack["dynamic_item_id"] = identifier
+        stacks.append(stack)
+
+    if len(stacks) > MAX_CLAIM_STACKS:
+        raise ValueError("inventory contains too many stacks")
+    return sorted(stacks, key=lambda stack: stack["slot"])
+
+
+def parse_claim_party(container, characters):
+    slots_value = property_value(container.get("Slots"), {})
+    slots = slots_value.get("values") if isinstance(slots_value, dict) else None
+    if not isinstance(slots, list):
+        return []
+
+    party = []
+    seen_slots = set()
+    seen_instances = set()
+    for slot in slots:
+        data = claim_slot_data(slot)
+        if data is None:
+            continue
+        instance_id = canonical_guid(data.get("instance_id"))
+        species = characters.get(instance_id, "")
+        slot_index = claim_integer(slot.get("SlotIndex"), 63)
+        if not instance_id or instance_id == ZERO_GUID or not species or slot_index is None:
+            continue
+        if slot_index in seen_slots or instance_id in seen_instances:
+            raise ValueError("party repeats a slot or Pal")
+        seen_slots.add(slot_index)
+        seen_instances.add(instance_id)
+        party.append({
+            "slot": slot_index,
+            "species": species,
+            "instance_id": instance_id,
+        })
+
+    if len(party) > MAX_CLAIM_PARTY_PALS:
+        raise ValueError("party contains too many Pals")
+    return sorted(party, key=lambda pal: pal["slot"])
+
+
+def parse_claim_player(
+    properties,
+    player_name,
+    item_containers,
+    character_containers,
+    characters,
+):
+    save_data = property_value(properties.get("SaveData"), {})
+    if not isinstance(save_data, dict):
+        raise ValueError("SaveData is missing or has an unsupported format")
+    player_uid = canonical_player_uid(save_data.get("PlayerUId"))
+    if not player_uid:
+        raise ValueError("player save has no valid PlayerUId")
+    player_name = claim_text(player_name, 128)
+    if not player_name:
+        raise ValueError("player save has no matching player name")
+
+    inventory_info = property_value(save_data.get("InventoryInfo"), {})
+    if not isinstance(inventory_info, dict):
+        raise ValueError("player save has no InventoryInfo")
+    inventory = {}
+    for output_name, source_name in (
+        ("common", "CommonContainerId"),
+        ("weapons", "WeaponLoadOutContainerId"),
+        ("armor", "PlayerEquipArmorContainerId"),
+        ("food", "FoodEquipContainerId"),
+        ("drop_slot", "DropSlotContainerId"),
+        ("essential", "EssentialContainerId"),
+    ):
+        identifier = container_id(inventory_info.get(source_name))
+        container = item_containers.get(identifier)
+        inventory[output_name] = parse_claim_inventory(container) if container else []
+
+    party_identifier = container_id(save_data.get("OtomoCharacterContainerId"))
+    party_container = character_containers.get(party_identifier)
+    return {
+        "player_uid": player_uid,
+        "player_name": player_name,
+        "inventory": inventory,
+        "party": parse_claim_party(party_container, characters)
+        if party_container
+        else [],
+        "progress": parse_claim_progress(save_data),
+    }
+
+
+def save_properties(save):
+    properties = getattr(save, "properties", save)
+    if isinstance(properties, dict) and isinstance(properties.get("properties"), dict):
+        properties = properties["properties"]
+    if not isinstance(properties, dict):
+        raise ValueError("player save has an unsupported format")
+    return properties
+
+
+def parse_claim_players(
+    save_path,
+    world_data,
+    players,
+    load_player_save,
+    expected_level_signature=None,
+):
+    player_names = {}
+    duplicate_names = set()
+    for player in players:
+        player_uid = canonical_player_uid(player.get("player_uid"))
+        player_name = claim_text(player.get("player_name"), 128)
+        if not player_uid or not player_name:
+            continue
+        if player_uid in player_names and player_names[player_uid] != player_name:
+            duplicate_names.add(player_uid)
+        else:
+            player_names[player_uid] = player_name
+    for player_uid in duplicate_names:
+        player_names.pop(player_uid, None)
+
+    level_signature = regular_file_signature(save_path)
+    if expected_level_signature is not None and level_signature != expected_level_signature:
+        raise SaveChangedError("Level.sav changed before player parsing")
+    players_directory = os.path.join(os.path.dirname(os.path.abspath(save_path)), "Players")
+    try:
+        players_directory_signature = directory_signature(players_directory)
+    except FileNotFoundError:
+        if player_names:
+            raise ValueError("Players directory is missing")
+        return []
+
+    player_files = []
+    with os.scandir(players_directory) as entries:
+        for entry in entries:
+            lower_name = entry.name.casefold()
+            entry_info = entry.stat(follow_symlinks=False)
+            if stat.S_ISLNK(entry_info.st_mode):
+                if lower_name.endswith(".sav") and not lower_name.endswith("_dps.sav"):
+                    raise ValueError("player save is a symlink")
+                continue
+            if (
+                stat.S_ISREG(entry_info.st_mode)
+                and lower_name.endswith(".sav")
+                and not lower_name.endswith("_dps.sav")
+            ):
+                player_files.append(entry.path)
+    if len(player_files) > MAX_PLAYER_FILES:
+        raise ValueError("Players directory contains too many save files")
+
+    item_containers = index_claim_item_containers(world_data)
+    character_containers = index_claim_character_containers(world_data)
+    characters = index_claim_characters(world_data)
+    claims = {}
+    for player_file in sorted(player_files, key=lambda path: os.path.basename(path).casefold()):
+        try:
+            player_signature = regular_file_signature(player_file)
+            properties = save_properties(load_player_save(player_file))
+            if regular_file_signature(player_file) != player_signature:
+                raise SaveChangedError("player save changed during parsing")
+            save_data = property_value(properties.get("SaveData"), {})
+            player_uid = (
+                canonical_player_uid(save_data.get("PlayerUId"))
+                if isinstance(save_data, dict)
+                else ""
+            )
+            claim = parse_claim_player(
+                properties,
+                player_names.get(player_uid, ""),
+                item_containers,
+                character_containers,
+                characters,
+            )
+        except SaveChangedError:
+            raise
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+        player_uid = claim["player_uid"]
+        if player_uid not in player_names:
+            continue
+        claim["player_name"] = player_names[player_uid]
+        if player_uid in claims:
+            raise ValueError("Players directory contains duplicate player identities")
+        claims[player_uid] = claim
+
+    if regular_file_signature(save_path) != level_signature:
+        raise SaveChangedError("Level.sav changed during player parsing")
+    if directory_signature(players_directory) != players_directory_signature:
+        raise SaveChangedError("Players directory changed during parsing")
+    if player_names and not claims:
+        raise ValueError("Unable to parse any player saves")
+    return sorted(claims.values(), key=lambda claim: claim["player_uid"])
 
 
 def index_characters(world_data, guilds):
@@ -513,6 +932,7 @@ def validate_world_data(world_data):
         "BaseCampSaveData",
         "CharacterSaveParameterMap",
         "CharacterContainerSaveData",
+        "ItemContainerSaveData",
     )
     datasets = {}
     for name in required_lists:
@@ -650,6 +1070,30 @@ def validate_world_data(world_data):
                     f"CharacterContainerSaveData[{index}].RawData is not decoded"
                 )
 
+    for index, item in enumerate(datasets["ItemContainerSaveData"]):
+        item_value = item.get("value") if isinstance(item, dict) else None
+        slots_property = (
+            item_value.get("Slots") if isinstance(item_value, dict) else None
+        )
+        slots_value = property_value(slots_property, {})
+        slots = slots_value.get("values") if isinstance(slots_value, dict) else None
+        if not isinstance(slots, list):
+            raise ValueError(f"ItemContainerSaveData[{index}] is not decoded")
+        for slot in slots:
+            raw_property = slot.get("RawData") if isinstance(slot, dict) else None
+            if not isinstance(raw_property, dict) or "value" not in raw_property:
+                raise ValueError(
+                    f"ItemContainerSaveData[{index}] has an invalid slot"
+                )
+            slot_data = property_value(raw_property)
+            if slot_data is not None and (
+                not isinstance(slot_data, dict)
+                or not {"slot_index", "count", "item"}.issubset(slot_data)
+            ):
+                raise ValueError(
+                    f"ItemContainerSaveData[{index}].RawData is not decoded"
+                )
+
 
 def main():
     site = urlsplit(SITE_URL)
@@ -666,20 +1110,15 @@ def main():
     from palsav.io import load_sav
     from palsav.paltypes import PALWORLD_CUSTOM_PROPERTIES
 
-    datasets = (
-        "GroupSaveDataMap",
-        "BaseCampSaveData",
-        "CharacterSaveParameterMap",
-        "CharacterContainerSaveData",
-    )
-    custom_properties = {
-        key: value
-        for key, value in PALWORLD_CUSTOM_PROPERTIES.items()
-        if any(dataset in key for dataset in datasets)
-        and "BaseCampSaveData.Value.ModuleMap" not in key
-        and "BaseCampSaveData.Value.WorkCollection" not in key
-    }
-    save = load_sav(SAVE_PATH, custom_properties=custom_properties)
+    custom_properties = select_custom_properties(PALWORLD_CUSTOM_PROPERTIES)
+    try:
+        level_signature = regular_file_signature(SAVE_PATH)
+        save = load_sav(SAVE_PATH, custom_properties=custom_properties)
+        if regular_file_signature(SAVE_PATH) != level_signature:
+            raise SaveChangedError("Level.sav changed during parsing")
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        print(f"Unable to parse save: {exc}", file=sys.stderr)
+        return 1
     world_data = save.properties.get("worldSaveData", {}).get("value", {})
     try:
         validate_world_data(world_data)
@@ -688,6 +1127,17 @@ def main():
         return 1
     guilds = parse_guilds(world_data)
     players = parse_players(world_data, guilds)
+    try:
+        claim_players = parse_claim_players(
+            SAVE_PATH,
+            world_data,
+            players,
+            lambda path: load_sav(path, custom_properties=custom_properties),
+            expected_level_signature=level_signature,
+        )
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        print(f"Unable to parse player saves: {exc}", file=sys.stderr)
+        return 1
     characters, guild_pal_ids = index_characters(world_data, guilds)
     containers = index_character_containers(world_data)
     world, active_raid_base_ids = parse_world(world_data)
@@ -722,12 +1172,13 @@ def main():
         response = session.post(
             f"{SITE_URL}/api/v1/guild/ingest",
             json={
-                "schema_version": 3,
+                "schema_version": 4,
                 "guilds": public_guilds,
                 "bases": public_bases,
                 "players": public_players,
                 "world": world,
                 "diagnostics": diagnostics,
+                "claim": {"players": claim_players},
             },
             headers={"Authorization": f"Bearer {SITE_TOKEN}"},
             verify=VERIFY_SSL,

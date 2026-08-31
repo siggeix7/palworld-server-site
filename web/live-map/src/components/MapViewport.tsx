@@ -1,4 +1,4 @@
-import { IconCrosshair, IconMinus, IconPlus } from '@tabler/icons-react'
+import { IconCheck, IconCrosshair, IconMinus, IconPlus } from '@tabler/icons-react'
 import {
   forwardRef,
   useCallback,
@@ -13,6 +13,7 @@ import {
   buildSpatialGrid,
   clampView,
   coverScale,
+  formatGameCoordinates,
   itemSearchText,
   MAX_ZOOM_RATIO,
   type MapTilePyramid,
@@ -29,17 +30,22 @@ import {
   type View
 } from '../lib/map'
 import { loadZoomRatio, saveZoomRatio } from '../lib/preferences'
-import type { ItemKind, MapItem, MapLayer, PlayerStatus } from '../types'
+import { completionSource, completionSourceLabel } from '../lib/saveProgress'
+import type { ItemKind, MapCameraPosition, MapItem, MapLayer, PlayerStatus } from '../types'
 import { MarkerGlyph } from './MarkerGlyph'
 
 export interface MapViewportHandle {
   focusItem: (item: MapItem, returnFocus: HTMLElement) => void
+  focusPosition: (position: MapCameraPosition) => void
+  getZoomRatio: () => number
   clearSelection: () => void
 }
 
 interface MapViewportProps {
   activeLayer: MapLayer
   items: MapItem[]
+  manualCompletedIds?: ReadonlySet<string>
+  saveCompletedIds?: ReadonlySet<string>
   enabledKinds: Set<ItemKind>
   enabledPlayerStatuses: Set<PlayerStatus>
   hiddenIds: Set<string>
@@ -113,6 +119,7 @@ const RESIZE_RENDER_SYNC_DELAY_MS = 120
 const MAP_FIT_PADDING_PX = 64
 const ZOOM_SAVE_DELAY_MS = 120
 const SELECTED_MARKER_STACK = 120
+const EMPTY_COMPLETION_IDS: ReadonlySet<string> = new Set()
 
 function mapTilePyramid(layer: MapLayer): MapTilePyramid | null {
   const candidate = layer.tilePyramid
@@ -273,7 +280,19 @@ function sampleImageBackground(
 }
 
 export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(function MapViewport(
-  { activeLayer, items, enabledKinds, enabledPlayerStatuses, hiddenIds, search, onShowItem, inspectorOpen, children },
+  {
+    activeLayer,
+    items,
+    manualCompletedIds = EMPTY_COMPLETION_IDS,
+    saveCompletedIds = EMPTY_COMPLETION_IDS,
+    enabledKinds,
+    enabledPlayerStatuses,
+    hiddenIds,
+    search,
+    onShowItem,
+    inspectorOpen,
+    children
+  },
   ref
 ) {
   const viewportRef = useRef<HTMLElement>(null)
@@ -657,7 +676,45 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
     onShowItem(item, returnFocus)
   }
 
-  useImperativeHandle(ref, () => ({ focusItem, clearSelection: () => setSelectedId(null) }))
+  const getZoomRatio = () => {
+    const rect = viewportRef.current?.getBoundingClientRect()
+    if (!rect?.width || !rect.height) return 1
+    return Math.max(1, viewRef.current.scale / fitScale(rect.width, rect.height, size))
+  }
+
+  const focusPosition = (position: MapCameraPosition) => {
+    const viewport = viewportRef.current
+    if (!viewport || position.region !== activeLayer.id) return
+    const scenePosition = toScene(position, activeLayer, size)
+    if (!scenePosition) return
+    const rect = viewport.getBoundingClientRect()
+    const minimum = fitScale(rect.width, rect.height, size)
+    const maximum = coverScale(rect.width, rect.height, size) * MAX_ZOOM_RATIO
+    const scale = Math.min(maximum, Math.max(minimum, minimum * position.zoom))
+    cancelViewAnimation()
+    cancelResizeRenderSync()
+    setSelectedId(null)
+    applyView(
+      clampView(
+        {
+          scale,
+          x: rect.width / 2 - scenePosition.x * scale,
+          y: rect.height / 2 - scenePosition.y * scale
+        },
+        rect.width,
+        rect.height,
+        size
+      )
+    )
+    syncRenderViewport()
+  }
+
+  useImperativeHandle(ref, () => ({
+    focusItem,
+    focusPosition,
+    getZoomRatio,
+    clearSelection: () => setSelectedId(null)
+  }))
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: changing maps must reset the selection and fitted view
   useEffect(() => {
@@ -765,8 +822,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
       activeLayer,
       size
     )
-    if (coordinatesRef.current)
-      coordinatesRef.current.textContent = `X ${Math.round(world.x)}\u00a0\u00a0Y ${Math.round(world.y)}`
+    if (coordinatesRef.current) coordinatesRef.current.textContent = formatGameCoordinates(world)
 
     if (!pointersRef.current.has(event.pointerId)) return
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
@@ -1016,6 +1072,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
                 )
               }
               const selected = selectedId === item.id
+              const source = completionSource(item.id, manualCompletedIds, saveCompletedIds)
+              const sourceLabel = completionSourceLabel(source)
               return (
                 <button
                   key={key}
@@ -1028,7 +1086,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
                       '--marker-stack': selected ? SELECTED_MARKER_STACK : markerStackOrder(item.kind)
                     } as React.CSSProperties
                   }
-                  aria-label={markerText(item)}
+                  aria-label={`${markerText(item)}${sourceLabel ? ` · ${sourceLabel} completion` : ''}`}
+                  data-completion-source={source || undefined}
                   tabIndex={-1}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
@@ -1038,7 +1097,18 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
                   }}
                 >
                   <MarkerGlyph kind={item.kind} online={item.online} />
-                  <span className="marker-label">{markerText(item)}</span>
+                  {sourceLabel ? (
+                    <span
+                      className={`pointer-events-none absolute right-1 bottom-1 grid size-3.5 place-items-center rounded-full border border-[#d9fff0] text-white shadow-[0_0_0_2px_rgb(8_18_24/70%)] ${source === 'save' ? 'bg-[#176083]' : source === 'combined' ? 'bg-[#4e7a2a]' : 'bg-[#176a4a]'}`}
+                      aria-hidden="true"
+                    >
+                      <IconCheck className="size-2.5" stroke={2.5} />
+                    </span>
+                  ) : null}
+                  <span className="marker-label">
+                    {markerText(item)}
+                    {sourceLabel ? ` · ${sourceLabel}` : ''}
+                  </span>
                 </button>
               )
             })}

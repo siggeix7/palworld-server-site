@@ -73,7 +73,7 @@ class LiveMapTests(TestCase):
         self.assertEqual(
             payload["catalogueUrl"],
             f"{reverse('live-map-catalogue')}?v="
-            "be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8",
+            "66fc7c1008062208ee8e49a4e3e0a01e0b2eaa57c78b41ba8d00e18deb0e1fe4",
         )
         self.assertEqual(
             payload["upstreamRevision"],
@@ -136,7 +136,10 @@ class LiveMapTests(TestCase):
                 "npc-locations": 90,
             },
         )
-        allowed = {"id", "kind", "name", "detail", "level", "x", "y", "map"}
+        allowed = {
+            "id", "kind", "name", "detail", "level", "x", "y", "z", "map",
+            "rewards",
+        }
         self.assertTrue(
             all(set(location) <= allowed for location in payload["locations"])
         )
@@ -164,7 +167,7 @@ class LiveMapTests(TestCase):
         self.assertIn("immutable", response.headers["Cache-Control"])
         self.assertEqual(
             response.headers["ETag"],
-            '"be868d37d96bdfc133f4e8a2a59e973002d51c0c3d48661dfaaf6e71be7d31f8"',
+            '"66fc7c1008062208ee8e49a4e3e0a01e0b2eaa57c78b41ba8d00e18deb0e1fe4"',
         )
         not_modified = self.client.get(
             config["catalogueUrl"],

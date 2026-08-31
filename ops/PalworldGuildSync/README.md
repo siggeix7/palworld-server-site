@@ -1,8 +1,10 @@
 # Palworld Guild Sync
 
 This directory is the repository source for `/opt/PalworldGuildSync` on
-`VM-PALWORLD`. The scheduled job parses `Level.sav` and sends compact guild,
-base camp, historical player, and world-status data to the site's ingest service.
+`VM-PALWORLD`. The scheduled job parses `Level.sav` and the adjacent
+`Players/*.sav` files, then sends compact public guild, base camp, historical
+player, and world-status data plus separately stored private claim material to
+the site's ingest service.
 
 ## Install
 
@@ -20,7 +22,9 @@ base camp, historical player, and world-status data to the site's ingest service
    Prefer an HTTPS endpoint with `VERIFY_SSL=true`. HTTP requires
    `ALLOW_INSECURE_HTTP=true` and must remain confined to a trusted LAN or VPN.
 5. Make `guild_sync.py` and `guild_sync_cron.sh` executable.
-6. Add this crontab entry:
+6. Confirm that `SAVE_PATH` points to `Level.sav`; the collector discovers the
+   sibling `Players` directory automatically and excludes `*_dps.sav` files.
+7. Add this crontab entry:
 
 ```cron
 */5 * * * * /opt/PalworldGuildSync/guild_sync_cron.sh
@@ -40,9 +44,11 @@ old inspection/conversion experiments and are not called by cron. One-off
 save mutation scripts are intentionally not tracked because they contained
 live player/base UUIDs and were specific to a completed migration.
 
-The scheduled job uploads compact aggregates for guilds, bases, workers,
-player progression, active invasions, and oil-rig state. Historical players
-come from `Level.sav`, independently of website registration. Raw save UUIDs
-are replaced with opaque join keys. Individual Pal records, inventories,
-structures, health values, and technical save references remain on the
-Palworld VM and are not exposed by the site.
+The scheduled job uploads compact aggregates for guilds, bases, workers, player
+progression, active invasions, and oil-rig state. Historical players come from
+`Level.sav`, independently of website registration. Schema 4 additionally sends
+validated inventory stacks, party references, and seven private progress maps;
+the private listener stores those claim fields separately from the public
+snapshot. Raw save UUIDs are replaced with opaque public join keys and are never
+returned in public map or roster responses. Claim data is available only through
+the no-store verification/progress flow.
