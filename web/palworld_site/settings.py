@@ -236,11 +236,17 @@ PALWORLD_API_MAX_BYTES = {
     "game_data": 32 * 1024 * 1024,
 }
 COLLECTOR_LOCK_PATH = os.getenv("COLLECTOR_LOCK_PATH", "/data/palworld-collector.lock")
+RETENTION_CLEANUP_LOCK_PATH = os.getenv(
+    "RETENTION_CLEANUP_LOCK_PATH", "/data/palworld-retention-cleanup.lock"
+)
 DATA_STALE_SECONDS = int(os.getenv("DATA_STALE_SECONDS", "90"))
 WORLD_DATA_STALE_SECONDS = int(os.getenv("WORLD_DATA_STALE_SECONDS", "90"))
 POSITION_RETENTION_DAYS = int(os.getenv("POSITION_RETENTION_DAYS", "7"))
 METRIC_RETENTION_DAYS = int(os.getenv("METRIC_RETENTION_DAYS", "90"))
 SESSION_RETENTION_DAYS = int(os.getenv("SESSION_RETENTION_DAYS", "365"))
+PLAYER_RETENTION_DAYS = int(os.getenv("PLAYER_RETENTION_DAYS", "365"))
+SAVE_RETENTION_DAYS = int(os.getenv("SAVE_RETENTION_DAYS", "30"))
+PLAYER_IP_RETENTION_DAYS = int(os.getenv("PLAYER_IP_RETENTION_DAYS", "30"))
 WEEKLY_REPORT_SCHEDULER_LOCK_PATH = os.getenv(
     "WEEKLY_REPORT_SCHEDULER_LOCK_PATH", "/data/palworld-weekly-scheduler.lock"
 )
@@ -258,17 +264,27 @@ SITE_ADMIN_USERS = {
 }
 if not SITE_ADMIN_USERS:
     raise ImproperlyConfigured("SITE_ADMIN_USERS must contain at least one identifier")
-CURRENT_TERMS_VERSION = os.getenv("CURRENT_TERMS_VERSION", "2026-08-03")
+CURRENT_TERMS_VERSION = os.getenv("CURRENT_TERMS_VERSION", "2026-09-14")
 CURRENT_TERMS_EFFECTIVE_DATE = os.getenv(
-    "CURRENT_TERMS_EFFECTIVE_DATE", "3 agosto 2026"
+    "CURRENT_TERMS_EFFECTIVE_DATE", "14 settembre 2026"
 )
-PRIVACY_CONTROLLER_NAME = os.getenv(
-    "PRIVACY_CONTROLLER_NAME", "Gestore di Palworld Server Observatory"
-).strip()
-PRIVACY_CONTACT_EMAIL = os.getenv(
-    "PRIVACY_CONTACT_EMAIL",
-    os.getenv("DEFAULT_FROM_EMAIL", os.getenv("EMAIL_HOST_USER", "privacy@example.invalid")),
-).strip()
+
+
+def _required_legal_setting(name):
+    value = os.getenv(name, "").strip()
+    lowered = value.casefold()
+    if (
+        not value
+        or lowered.startswith("replace-with-")
+        or "example." in lowered
+        or lowered.endswith("@invalid")
+    ):
+        raise ImproperlyConfigured(f"{name} must contain a real deployment value")
+    return value
+
+
+PRIVACY_CONTROLLER_NAME = _required_legal_setting("PRIVACY_CONTROLLER_NAME")
+PRIVACY_CONTACT_EMAIL = _required_legal_setting("PRIVACY_CONTACT_EMAIL")
 PALWORLD_PUBLIC_HOST = os.getenv("PALWORLD_PUBLIC_HOST", "").strip()
 PALWORLD_PUBLIC_PORT = os.getenv("PALWORLD_PUBLIC_PORT", "8211").strip()
 PALWORLD_PUBLIC_PASSWORD = os.getenv("PALWORLD_PUBLIC_PASSWORD", "")

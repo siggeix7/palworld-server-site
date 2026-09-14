@@ -11,6 +11,10 @@
   </p>
   <div class="terms-scroll">
     {% include "dashboard/_terms_content.html" %}
+    <p class="legal-reading-links">
+      Leggi anche l'<a href="{% url 'privacy' %}" target="_blank" rel="noopener">informativa privacy<span class="sr-only"> (si apre in una nuova scheda)</span></a>
+      e la <a href="{% url 'cookies' %}" target="_blank" rel="noopener">policy cookie<span class="sr-only"> (si apre in una nuova scheda)</span></a>.
+    </p>
   </div>
   <form method="post" class="auth-form terms-form">
     {% csrf_token %}
@@ -19,9 +23,9 @@
     {% if form.terms_version.errors %}{{ form.terms_version.errors }}{% endif %}
     <label class="terms-check">
       {{ form.accept_terms }}
-      <span>Dichiaro di aver letto integralmente l'informativa privacy e accetto le condizioni d'uso.</span>
+      <span>Dichiaro di aver letto l'informativa privacy e accetto le condizioni d'uso.</span>
     </label>
-    {% if form.accept_terms.errors %}{{ form.accept_terms.errors }}{% endif %}
+    {% if form.accept_terms.errors %}<ul id="id_accept_terms_error" class="errorlist" role="alert"><li>{{ form.accept_terms.errors|join:" " }}</li></ul>{% endif %}
     <button type="submit">Accetta e prosegui</button>
   </form>
   <form method="post" action="{% url 'logout' %}" class="auth-form compact-form">

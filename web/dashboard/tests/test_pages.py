@@ -86,8 +86,25 @@ class SectionPageTests(TestCase):
         response = self.client.get(reverse("terms"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "dashboard/terms.html")
-        self.assertContains(response, "Condizioni d'uso e informativa privacy")
+        self.assertContains(response, "Condizioni d'uso")
+        self.assertContains(response, reverse("privacy"))
         self.assertNotContains(response, "dashboard/live-map/live-map.js")
+
+    def test_all_legal_pages_are_public_server_rendered_documents(self):
+        self.client.logout()
+        for name, heading in (
+            ("terms", "Condizioni d'uso"),
+            ("privacy", "Informativa privacy"),
+            ("cookies", "Cookie e memorizzazione locale"),
+            ("refunds", "Rimborsi"),
+        ):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, "dashboard/terms.html")
+                self.assertContains(response, heading)
+                self.assertIn("no-store", response.headers["Cache-Control"])
+                self.assertNotContains(response, "dashboard/live-map/live-map.js")
 
     def test_players_page_no_longer_renders_legacy_content(self):
         response = self.client.get(reverse("players"))

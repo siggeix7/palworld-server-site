@@ -46,11 +46,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SITE_INTERNAL_PORT=8000 \
     PRIVATE_INTERNAL_PORT=8001 \
     TIME_ZONE=Europe/Rome \
+    COLLECTOR_LOCK_PATH=/data/palworld-collector.lock \
+    RETENTION_CLEANUP_LOCK_PATH=/data/palworld-retention-cleanup.lock \
+    WEEKLY_REPORT_SCHEDULER_LOCK_PATH=/data/palworld-weekly-scheduler.lock \
     PATH=/app:$PATH
 
 WORKDIR /app
 
-RUN dnf -y upgrade --security \
+RUN sed -i \
+      -e 's|^mirrorlist=|#mirrorlist=|' \
+      -e 's|^#baseurl=http://dl.rockylinux.org/|baseurl=https://dl.rockylinux.org/|' \
+      /etc/yum.repos.d/rocky.repo \
+    && dnf -y upgrade --security \
     && dnf -y install python3-pip shadow-utils \
     && dnf clean all \
     && ln -sf python3 /usr/bin/python
@@ -72,6 +79,8 @@ RUN chmod +x /app/docker/entrypoint.sh \
     && DJANGO_SECRET_KEY=build-collectstatic-key \
        PUBLIC_SITE_URL=https://build.invalid \
        SITE_ADMIN_USERS=build-admin@example.invalid \
+       PRIVACY_CONTROLLER_NAME=build-artifact-controller \
+       PRIVACY_CONTACT_EMAIL=build@local \
        python3 web/manage.py collectstatic --noinput
 COPY --from=map-assets /build/maps/*.webp ./staticfiles/dashboard/live-map/maps/
 

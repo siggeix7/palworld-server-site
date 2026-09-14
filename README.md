@@ -31,11 +31,13 @@ Level.sav -> PalworldGuildSync -> API privata :8001 -> PostgreSQL
 ```
 
 Il progetto Compose avvia PostgreSQL e il container applicativo. Quest'ultimo
-avvia quattro processi:
+avvia cinque processi:
 
 - Gunicorn pubblico su `8000` per pagine e API consultabili dagli utenti;
 - Gunicorn privato su `8001` per health, stato collector e upload save;
 - `manage.py runcollector` per interrogare direttamente Palworld.
+- `manage.py run_retention_cleanup` per applicare le finestre di conservazione
+  anche quando il collector non sta raccogliendo dati.
 - `manage.py run_weekly_scheduler` per inviare i report settimanali secondo la
   pianificazione salvata nel database.
 
@@ -79,6 +81,8 @@ ogni scrittura nel database:
   materiale privato per la verifica del proprietario del personaggio;
 - inventario, party e progressi privati non entrano nello snapshot pubblico e
   sono usati solo dagli endpoint di verifica/progresso senza cache.
+- i profili inattivi, gli snapshot obsoleti e i record temporanei dei claims
+  vengono eliminati secondo le finestre di retention configurate.
 
 Usare secret distinti per `DJANGO_SECRET_KEY`, `PLAYER_HASH_SECRET` e
 `PRIVATE_API_TOKEN`. Il file di produzione `.env` deve avere permessi `0600` e
@@ -112,6 +116,7 @@ PALWORLD_API_VERIFY_TLS=true
 PALWORLD_API_ALLOW_INSECURE_HTTP=false
 PALWORLD_API_CONNECT_TIMEOUT=3
 COLLECTOR_LOCK_PATH=/data/palworld-collector.lock
+RETENTION_CLEANUP_LOCK_PATH=/data/palworld-retention-cleanup.lock
 AUTH_TRUSTED_PROXY_ADDRESSES=127.0.0.1,::1
 ```
 

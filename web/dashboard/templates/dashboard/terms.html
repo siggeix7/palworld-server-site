@@ -1,14 +1,20 @@
 {% extends "dashboard/accounts/base.html" %}
-{% block title %}Condizioni d'uso e informativa privacy{% endblock %}
-{% block meta_description %}Condizioni d'uso e informativa sulla protezione dei dati personali (GDPR){% endblock %}
+{% block title %}{{ legal_title }}{% endblock %}
+{% block meta_description %}{{ legal_description }}{% endblock %}
 {% block body_class %}terms-accept-page{% endblock %}
 {% block content %}
   <div class="terms-page">
     <header class="section-head">
       <p class="eyebrow">Area legale</p>
-      <h1>Condizioni d'uso e informativa privacy</h1>
+      <h1>{{ legal_title }}</h1>
     </header>
-    {% include "dashboard/_terms_content.html" %}
+    <nav class="legal-nav" aria-label="Documenti legali">
+      <a href="{% url 'terms' %}"{% if legal_title == "Condizioni d'uso" %} aria-current="page"{% endif %}>Condizioni d'uso</a>
+      <a href="{% url 'privacy' %}"{% if legal_title == "Informativa privacy" %} aria-current="page"{% endif %}>Privacy</a>
+      <a href="{% url 'cookies' %}"{% if legal_title == "Cookie e memorizzazione locale" %} aria-current="page"{% endif %}>Cookie</a>
+      <a href="{% url 'refunds' %}"{% if legal_title == "Rimborsi" %} aria-current="page"{% endif %}>Rimborsi</a>
+    </nav>
+    {% include legal_content_template %}
     <div class="terms-actions">
       <a href="{% url 'home' %}" class="btn">Torna alla home</a>
     </div>

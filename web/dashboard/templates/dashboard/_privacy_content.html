@@ -1,0 +1,99 @@
+<section class="terms-body">
+  <p class="terms-updated">Versione {{ terms_version }} · in vigore dal {{ terms_effective_date }}</p>
+
+  <h2>1. Titolare e contatto</h2>
+  <p>
+    Il titolare del trattamento è <strong>{{ privacy_controller_name }}</strong>. Per informazioni sul trattamento,
+    per chiedere accesso o cancellazione dei dati o per esercitare gli altri diritti applicabili, scrivi a
+    <a href="mailto:{{ privacy_contact_email }}">{{ privacy_contact_email }}</a>.
+  </p>
+
+  <h2>2. Dati trattati</h2>
+  <ul>
+    <li><strong>Account:</strong> username, email, hash della password, verifica email, approvazione e versione delle condizioni accettata.</li>
+    <li><strong>Telemetria di gioco:</strong> nome mostrato, identificatore pubblico opaco, presenza, sessioni, posizione, ping, livello, edifici, eventi e aggregati di attività.</li>
+    <li><strong>Sicurezza:</strong> ultimo indirizzo IP di gioco osservato, dati di rate-limiting e dati tecnici necessari a prevenire abusi. L'IP di gioco è limitato agli amministratori autorizzati.</li>
+    <li><strong>Salvataggi:</strong> snapshot minimizzati per le funzioni della community; inventario, party e progressi dettagliati sono mostrati solo dopo autenticazione e verifica della titolarità del personaggio, quando la funzione claims è abilitata.</li>
+    <li><strong>Uso del sito:</strong> indirizzo di rete, data e ora, metodo, esito, dimensione e durata delle richieste, oltre ai dati tecnici necessari per diagnosticare errori e sicurezza.</li>
+  </ul>
+  <p>
+    I dati arrivano dall'account che crei, dal server di gioco e dai relativi snapshot sanitizzati, oppure dalle
+    richieste tecniche effettuate al sito. Le password non vengono salvate in chiaro. Gli identificatori grezzi
+    del gioco non sono esposti al browser pubblico.
+  </p>
+
+  <h2>3. Finalità e basi</h2>
+  <ul>
+    <li>creare e proteggere l'account, verificare l'email e fornire le funzioni riservate;</li>
+    <li>raccogliere e mostrare dashboard, telemetria e dati di progresso richiesti dalla community;</li>
+    <li>prevenire accessi abusivi, frodi, sovraccarichi e incidenti di sicurezza;</li>
+    <li>adempiere a obblighi di legge o rispondere a richieste valide delle autorità.</li>
+  </ul>
+  <p>
+    Le basi giuridiche applicabili sono, secondo la finalità, l'esecuzione del servizio richiesto, il legittimo
+    interesse alla sicurezza e alla gestione tecnica, oppure un obbligo di legge. La registrazione richiede
+    l'accettazione delle condizioni d'uso e la dichiarazione di lettura di questa informativa; non viene richiesto
+    un consenso separato per pubblicità o profilazione perché tali attività non sono attive.
+  </p>
+
+  <h2>4. Conferimento</h2>
+  <p>
+    Username, email e password sono necessari per creare un account. Senza verifica e approvazione non puoi usare
+    l'area riservata. I dati del server e della telemetria sono necessari per le funzioni che li mostrano; puoi
+    evitare di usare le funzioni claims senza impedire l'uso delle altre funzioni disponibili.
+  </p>
+
+  <h2>5. Conservazione</h2>
+  <ul>
+    <li>Le posizioni sono normalmente mantenute per una finestra mobile di {{ position_retention_days }} giorni.</li>
+    <li>Metriche ed eventi di attività sono normalmente mantenuti per una finestra mobile di {{ metric_retention_days }} giorni.</li>
+    <li>Le sessioni concluse sono normalmente mantenute per {{ session_retention_days }} giorni dalla conclusione.</li>
+    <li>I profili telemetrici senza nuove osservazioni e gli snapshot tecnici obsoleti vengono eliminati dopo {{ player_retention_days }} giorni.</li>
+    <li>Gli snapshot del salvataggio e i dati usati per i claims vengono eliminati dopo {{ save_retention_days }} giorni dall'ultimo aggiornamento.</li>
+    <li>Le challenge claims scadono dopo 10 minuti e le sessioni claims dopo un massimo di 7 giorni.</li>
+    <li>I dati temporanei di rate-limiting vengono eliminati dopo un'ora per i claims e dopo un giorno per l'autenticazione.</li>
+    <li>L'ultimo IP di gioco osservato viene eliminato automaticamente dopo {{ player_ip_retention_days }} giorni senza una nuova osservazione.</li>
+    <li>I log tecnici sono sottoposti a rotazione per dimensione; nella configurazione Compose standard sono mantenuti fino a tre file da 10 MB per container. Il periodo effettivo dipende dal traffico e dal log driver configurato.</li>
+  </ul>
+  <p>
+    Le finestre operative sono configurate nel deployment e possono essere ridotte senza modificare questa
+    informativa. Le richieste di cancellazione vengono valutate anche per gli eventuali dati che devono essere
+    conservati per sicurezza o obbligo di legge.
+  </p>
+
+  <h2>6. Destinatari e trasferimenti</h2>
+  <p>
+    I dati possono essere accessibili agli amministratori autorizzati e ai fornitori tecnici incaricati per
+    hosting, database e posta elettronica, oltre che alle autorità quando previsto dalla legge. Non sono venduti,
+    usati per pubblicità o condivisi per profilazione commerciale. I trasferimenti internazionali, se presenti,
+    devono essere gestiti con le garanzie richieste dalla normativa applicabile.
+  </p>
+
+  <h2>7. Cookie, memoria locale e terze parti</h2>
+  <p>
+    Il sito usa cookie tecnici per sessione e protezione CSRF e memoria locale del browser per preferenze e stato
+    dell'interfaccia. Non usa analytics, pubblicità comportamentale o cookie di marketing. I dettagli sono nella
+    <a href="{% url 'cookies' %}">policy cookie</a>.
+  </p>
+
+  <h2>8. Diritti</h2>
+  <p>
+    Puoi chiedere, nei limiti previsti dalla legge, accesso, rettifica, cancellazione, limitazione, portabilità e
+    opposizione. Scrivi a <a href="mailto:{{ privacy_contact_email }}">{{ privacy_contact_email }}</a> indicando
+    l'account interessato. Puoi inoltre presentare reclamo all'autorità di controllo competente.
+  </p>
+
+  <h2>9. Sicurezza e decisioni automatizzate</h2>
+  <p>
+    Sono applicate misure proporzionate, tra cui HTTPS, hashing delle password, controllo degli accessi, verifica
+    email, approvazione amministrativa, rate-limiting, minimizzazione degli identificatori e redazione dei link
+    sensibili nei log. Il collegamento tra username e telemetria serve al funzionamento del servizio; non viene
+    usato per profilazione commerciale né per decisioni automatizzate con effetti giuridici o analoghi significativi.
+  </p>
+
+  <h2>10. Aggiornamenti</h2>
+  <p>
+    Le modifiche sostanziali generano una nuova versione. Gli utenti con account devono visualizzare e accettare
+    la nuova versione prima di continuare a usare l'area riservata.
+  </p>
+</section>

@@ -37,7 +37,7 @@ if [[ "${DATABASE_ENGINE:-sqlite}" == "sqlite" ]]; then
     "from django.db import connection; c=connection.cursor(); c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA synchronous=NORMAL')" \
     >/dev/null
 fi
-for private_path in "${DATABASE_PATH:-}" "${DATABASE_PATH:-}-wal" "${DATABASE_PATH:-}-shm" "${COLLECTOR_LOCK_PATH}" "${WEEKLY_REPORT_SCHEDULER_LOCK_PATH}"; do
+for private_path in "${DATABASE_PATH:-}" "${DATABASE_PATH:-}-wal" "${DATABASE_PATH:-}-shm" "${COLLECTOR_LOCK_PATH}" "${RETENTION_CLEANUP_LOCK_PATH}" "${WEEKLY_REPORT_SCHEDULER_LOCK_PATH}"; do
   [[ -n "${private_path}" ]] || continue
   [[ ! -e "${private_path}" ]] || chmod 0600 "${private_path}"
 done
@@ -45,12 +45,13 @@ done
 public_pid=""
 private_pid=""
 collector_pid=""
+retention_pid=""
 scheduler_pid=""
 
 shutdown() {
   trap - TERM INT EXIT
   local pid running
-  local pids=("${public_pid}" "${private_pid}" "${collector_pid}" "${scheduler_pid}")
+  local pids=("${public_pid}" "${private_pid}" "${collector_pid}" "${retention_pid}" "${scheduler_pid}")
   for pid in "${pids[@]}"; do
     [[ -n "${pid}" ]] && kill -TERM "${pid}" 2>/dev/null || true
   done
@@ -69,7 +70,7 @@ shutdown() {
       kill -KILL "${pid}" 2>/dev/null || true
     fi
   done
-  wait "${public_pid}" "${private_pid}" "${collector_pid}" "${scheduler_pid}" 2>/dev/null || true
+  wait "${public_pid}" "${private_pid}" "${collector_pid}" "${retention_pid}" "${scheduler_pid}" 2>/dev/null || true
 }
 trap shutdown TERM INT EXIT
 
@@ -87,6 +88,9 @@ private_pid=$!
 python3 web/manage.py runcollector &
 collector_pid=$!
 
+python3 web/manage.py run_retention_cleanup &
+retention_pid=$!
+
 python3 web/manage.py run_weekly_scheduler &
 scheduler_pid=$!
 
@@ -101,4 +105,4 @@ gunicorn palworld_site.wsgi:application \
   --error-logfile - &
 public_pid=$!
 
-wait -n "${public_pid}" "${private_pid}" "${collector_pid}" "${scheduler_pid}"
+wait -n "${public_pid}" "${private_pid}" "${collector_pid}" "${retention_pid}" "${scheduler_pid}"

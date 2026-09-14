@@ -247,7 +247,10 @@ def players(request):
     )
     name_counts = Counter(player.name.strip().casefold() for player in player_rows)
 
-    save_snapshot, save_payload = _snapshot_payload()
+    public_save_overlay = not bool(getattr(settings, "PLAYER_CLAIMS_ENABLED", False))
+    save_snapshot, save_payload = (
+        _snapshot_payload() if public_save_overlay else (None, {})
+    )
     game_payload = datasets.get("game_data").payload if datasets.get("game_data") else {}
     guild_names, saved_by_name, live_keys_by_name = _guild_data(
         save_payload, game_payload or {}
@@ -327,11 +330,14 @@ def players(request):
         "metricsStale": metrics_stale,
         "connected": connected,
         "stale": players_stale or not reachable,
-        "saveEnabled": True,
+        "saveEnabled": public_save_overlay,
         "saveAvailable": bool(save_snapshot),
         "saveStale": (
-            not save_snapshot
-            or timezone.now() - save_snapshot.updated_at > SAVE_STALE_AFTER
+            public_save_overlay
+            and (
+                not save_snapshot
+                or timezone.now() - save_snapshot.updated_at > SAVE_STALE_AFTER
+            )
         ),
         "players": public_players,
     }

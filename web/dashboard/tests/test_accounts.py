@@ -83,6 +83,9 @@ class AccountAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("health")).status_code, 200)
         self.assertEqual(self.client.get(reverse("login")).status_code, 200)
         self.assertEqual(self.client.get(reverse("register")).status_code, 200)
+        for name in ("terms", "privacy", "cookies", "refunds"):
+            with self.subTest(name=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
     def test_unapproved_account_cannot_open_dashboard_or_api(self):
         user = self.create_user(verified=True)
@@ -602,7 +605,8 @@ class AccountAccessTests(TestCase):
     def test_terms_page_is_public_and_includes_version_and_date(self):
         response = self.client.get(reverse("terms"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Condizioni d'uso e informativa privacy")
+        self.assertContains(response, "Condizioni d'uso")
+        self.assertContains(response, reverse("privacy"))
         self.assertContains(response, settings.CURRENT_TERMS_VERSION)
         self.assertContains(response, settings.CURRENT_TERMS_EFFECTIVE_DATE)
         response = self.create_user(verified=True, approved=True)
@@ -610,6 +614,18 @@ class AccountAccessTests(TestCase):
         authed_response = self.client.get(reverse("terms"))
         self.assertEqual(authed_response.status_code, 200)
         self.assertIn("no-store", authed_response.headers["Cache-Control"])
+
+    def test_legal_pages_are_public_and_linked(self):
+        for name, heading in (
+            ("privacy", "Informativa privacy"),
+            ("cookies", "Cookie e memorizzazione locale"),
+            ("refunds", "Rimborsi"),
+        ):
+            with self.subTest(name=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, heading)
+                self.assertContains(response, settings.CURRENT_TERMS_VERSION)
 
     def test_register_rejects_missing_terms_acceptance(self):
         response = self.client.post(

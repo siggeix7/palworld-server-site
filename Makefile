@@ -9,6 +9,7 @@ VCS_REF ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf unknown)
 TEST_ENV := DJANGO_SECRET_KEY=test-key PLAYER_HASH_SECRET=test-player-key \
 	PUBLIC_SITE_URL=https://testserver SITE_ADMIN_USERS=admin@example.com \
 	PRIVATE_API_TOKEN=test-private-token \
+	PRIVACY_CONTROLLER_NAME=test-controller PRIVACY_CONTACT_EMAIL=privacy@testserver \
 	DATABASE_PATH=/tmp/palworld-server-site-test.sqlite3
 
 .PHONY: all build save run shell test test-frontend lint test-all clean
@@ -31,8 +32,14 @@ run: build
 		-e PRIVATE_API_TOKEN=local-private-token \
 		-e PALWORLD_API_URL=http://host.docker.internal:8212 \
 		-e PALWORLD_API_PASSWORD=local-admin-password \
+		-e PALWORLD_API_ALLOW_INSECURE_HTTP=true \
 		-e PUBLIC_SITE_URL=https://localhost \
 		-e SITE_ADMIN_USERS=admin@example.com \
+		-e PRIVACY_CONTROLLER_NAME=local-development-controller \
+		-e PRIVACY_CONTACT_EMAIL=privacy@localhost \
+		-e COLLECTOR_LOCK_PATH=/data/palworld-collector.lock \
+		-e RETENTION_CLEANUP_LOCK_PATH=/data/palworld-retention-cleanup.lock \
+		-e WEEKLY_REPORT_SCHEDULER_LOCK_PATH=/data/palworld-weekly-scheduler.lock \
 		-v palworld-site-data:/data \
 		$(IMAGE):$(TAG)
 
@@ -42,6 +49,8 @@ shell: build
 		-e PRIVATE_API_TOKEN=local-private-token \
 		-e PUBLIC_SITE_URL=https://localhost \
 		-e SITE_ADMIN_USERS=admin@example.com \
+		-e PRIVACY_CONTROLLER_NAME=local-development-controller \
+		-e PRIVACY_CONTACT_EMAIL=privacy@localhost \
 		-v palworld-site-data:/data \
 		--entrypoint python3 \
 		$(IMAGE):$(TAG) web/manage.py shell

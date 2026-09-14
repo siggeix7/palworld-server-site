@@ -495,7 +495,7 @@ describe('MapViewport zoom controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
     advanceFrame(220)
     const zoomedAgain = readTransform(scene)
-    fireEvent.click(screen.getByRole('button', { name: 'Fit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fit the active region' }))
     expect(readTransform(scene)).toEqual(zoomedAgain)
     advanceFrame(220)
     expect(readTransform(scene)).toEqual(fitted)

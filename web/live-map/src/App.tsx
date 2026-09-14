@@ -231,6 +231,7 @@ export function App({ onObservatoryNavigate }: AppProps = {}) {
               <button
                 type="button"
                 className="pal-glass-control min-h-11 cursor-pointer px-4 text-xs text-[#e5f7f8]"
+                aria-label="Retry loading the map"
                 onClick={() => {
                   setConfigError(false)
                   setConfigAttempt((attempt) => attempt + 1)

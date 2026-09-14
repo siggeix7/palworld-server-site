@@ -566,6 +566,11 @@ footer a { color: var(--teal); }
 .terms-page .terms-body ul { margin: .3rem 0 .9rem; padding-left: 1.2rem; }
 .terms-page .terms-body ul li { margin: .2rem 0; }
 .terms-page .terms-updated { color: var(--paper-dim); font-size: .72rem; margin-bottom: 1rem; border-left: 2px solid var(--teal); padding: .35rem .7rem; background: rgba(76,224,193,.08); }
+.legal-nav { display: flex; gap: .45rem; flex-wrap: wrap; margin: 1.25rem 0 1.5rem; }
+.legal-nav a { padding: .45rem .65rem; border: 1px solid var(--line); color: var(--paper-dim); text-decoration: none; font-size: .72rem; }
+.legal-nav a:hover, .legal-nav a:focus-visible, .legal-nav a[aria-current="page"] { border-color: var(--teal); color: var(--teal); }
+.legal-reading-links { margin-top: 1rem !important; padding-top: .75rem; border-top: 1px solid var(--line); }
+.legal-reading-links a { color: var(--teal); }
 .terms-actions { margin-top: 2rem; }
 .terms-actions .btn { display: inline-block; padding: .65rem 1rem; border: 1px solid var(--teal); color: var(--ink); background: var(--teal); text-decoration: none; font-weight: 700; }
 

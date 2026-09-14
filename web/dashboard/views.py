@@ -258,13 +258,37 @@ def _session_stats(public_ids, now):
     return result
 
 
-@require_GET
-@never_cache
-def terms_page(request):
+def _legal_page(request, page):
+    pages = {
+        "terms": {
+            "title": "Condizioni d'uso",
+            "description": "Condizioni d'uso del servizio Palworld Server Observatory.",
+            "content": "dashboard/_terms_content.html",
+        },
+        "privacy": {
+            "title": "Informativa privacy",
+            "description": "Informativa sul trattamento dei dati personali di Palworld Server Observatory.",
+            "content": "dashboard/_privacy_content.html",
+        },
+        "cookies": {
+            "title": "Cookie e memorizzazione locale",
+            "description": "Cookie tecnici e memorizzazione locale usati da Palworld Server Observatory.",
+            "content": "dashboard/_cookie_content.html",
+        },
+        "refunds": {
+            "title": "Rimborsi",
+            "description": "Informazioni sui rimborsi per il servizio gratuito Palworld Server Observatory.",
+            "content": "dashboard/_refund_content.html",
+        },
+    }
+    document = pages[page]
     return render(
         request,
         "dashboard/terms.html",
         {
+            "legal_title": document["title"],
+            "legal_description": document["description"],
+            "legal_content_template": document["content"],
             "canonical_url": (
                 f"{settings.PUBLIC_SITE_URL}{request.path}"
                 if settings.PUBLIC_SITE_URL
@@ -274,8 +298,38 @@ def terms_page(request):
             "terms_effective_date": settings.CURRENT_TERMS_EFFECTIVE_DATE,
             "privacy_controller_name": settings.PRIVACY_CONTROLLER_NAME,
             "privacy_contact_email": settings.PRIVACY_CONTACT_EMAIL,
+            "position_retention_days": settings.POSITION_RETENTION_DAYS,
+            "metric_retention_days": settings.METRIC_RETENTION_DAYS,
+            "session_retention_days": settings.SESSION_RETENTION_DAYS,
+            "player_retention_days": settings.PLAYER_RETENTION_DAYS,
+            "save_retention_days": settings.SAVE_RETENTION_DAYS,
+            "player_ip_retention_days": settings.PLAYER_IP_RETENTION_DAYS,
         },
     )
+
+
+@require_GET
+@never_cache
+def terms_page(request):
+    return _legal_page(request, "terms")
+
+
+@require_GET
+@never_cache
+def privacy_page(request):
+    return _legal_page(request, "privacy")
+
+
+@require_GET
+@never_cache
+def cookies_page(request):
+    return _legal_page(request, "cookies")
+
+
+@require_GET
+@never_cache
+def refunds_page(request):
+    return _legal_page(request, "refunds")
 
 
 @require_GET
@@ -463,7 +517,14 @@ def _compute_players_archive():
     ).order_by("-last_seen", "name")
     archive = []
 
-    snapshot = GuildSnapshot.objects.first()
+    # Save-derived fields are available in the general archive only while the
+    # ownership-claim feature is disabled. Once claims are enabled, the claim
+    # bearer endpoint is the sole path to save-backed progress.
+    snapshot = (
+        GuildSnapshot.objects.first()
+        if not getattr(settings, "PLAYER_CLAIMS_ENABLED", False)
+        else None
+    )
     save_payload = (
         snapshot.payload
         if snapshot and isinstance(snapshot.payload, dict)

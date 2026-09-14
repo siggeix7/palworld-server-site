@@ -28,7 +28,10 @@
       {% block content %}{% endblock %}
     </section>
     <p class="auth-credit">
-      <a href="{% url 'terms' %}">Condizioni d'uso e privacy</a>
+      <a href="{% url 'terms' %}">Condizioni d'uso</a>
+      · <a href="{% url 'privacy' %}">Privacy</a>
+      · <a href="{% url 'cookies' %}">Cookie</a>
+      · <a href="{% url 'refunds' %}">Rimborsi</a>
       · <a href="{% static 'dashboard/THIRD_PARTY_NOTICES.txt' %}">Licenze e crediti</a>
     </p>
   </main>

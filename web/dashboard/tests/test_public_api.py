@@ -341,6 +341,36 @@ class PublicApiTests(TestCase):
         self.assertEqual(historical["session_count"], 0)
         self.assertEqual(historical["status_points"], {"work_speed": 4})
 
+    @override_settings(PLAYER_CLAIMS_ENABLED=True)
+    def test_player_archive_hides_save_progression_when_claims_are_enabled(self):
+        GuildSnapshot.objects.create(
+            payload={
+                "schema_version": 3,
+                "guilds": [],
+                "bases": [],
+                "players": [{
+                    "player_id": "b" * 20,
+                    "player_name": "Explorer",
+                    "level": 99,
+                    "exp": 1234567,
+                    "owned_pal_count": 24,
+                    "unused_status_points": 3,
+                    "status_points": {"attack": 2},
+                }],
+            }
+        )
+
+        payload = self.client.get("/api/v1/players").json()
+
+        self.assertIsNone(payload["save_updated_at"])
+        self.assertEqual(len(payload["players"]), 1)
+        player = payload["players"][0]
+        self.assertEqual(player["level"], 50)
+        self.assertFalse(player["save_available"])
+        self.assertFalse(player["save_only"])
+        self.assertIsNone(player["exp"])
+        self.assertEqual(player["status_points"], {})
+
     def test_player_archive_does_not_guess_ambiguous_name_matches(self):
         Player.objects.create(
             public_id="duplicate-player-id",

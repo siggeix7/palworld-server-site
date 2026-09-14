@@ -1159,6 +1159,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(funct
           <button
             type="button"
             className="pal-interactive grid h-full min-w-[58px] cursor-pointer place-items-center border-x border-y-0 border-[#cdeef3]/35 bg-transparent text-[11px] font-bold tracking-[.06em] text-[#eefeff] uppercase focus-visible:outline-none"
+            aria-label="Fit the active region"
             title="Fit the active region"
             onClick={animateFit}
           >

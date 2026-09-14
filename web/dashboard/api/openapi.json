@@ -138,7 +138,7 @@
         "summary": "Return the player archive",
         "responses": {
           "200": {
-            "description": "Player archive with telemetry and save progression",
+            "description": "Player archive with telemetry and a configured save summary; detailed save progress requires a player claim when enabled",
             "content": {
               "application/json": {
                 "schema": {"$ref": "#/components/schemas/PlayerArchive"}

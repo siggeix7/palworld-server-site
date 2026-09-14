@@ -27,7 +27,11 @@ class RegistrationForm(UserCreationForm):
     )
     accept_terms = forms.BooleanField(
         required=True,
-        label="Ho letto e accetto le condizioni d'uso e l'informativa sulla privacy",
+        label=(
+            "Dichiaro di aver letto l'informativa sulla privacy e "
+            "accetto le condizioni d'uso"
+        ),
+        widget=forms.CheckboxInput(attrs={"aria-describedby": "id_accept_terms_error"}),
     )
     terms_version = forms.CharField(widget=forms.HiddenInput)
 
@@ -93,9 +97,10 @@ class TermsAcceptanceForm(forms.Form):
     accept_terms = forms.BooleanField(
         required=True,
         label=(
-            "Dichiaro di aver letto integralmente l'informativa privacy e "
+            "Dichiaro di aver letto l'informativa privacy e "
             "accetto le condizioni d'uso"
         ),
+        widget=forms.CheckboxInput(attrs={"aria-describedby": "id_accept_terms_error"}),
     )
 
     def __init__(self, *args, current_version, **kwargs):

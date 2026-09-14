@@ -10,9 +10,15 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import (
+    AuthThrottle,
+    ClaimChallenge,
+    ClaimSession,
+    ClaimThrottle,
+    GuildSnapshot,
     LatestDataset,
     MetricSample,
     Player,
+    PlayerClaimData,
     PlayerSession,
     PositionSample,
     RuntimeState,
@@ -857,8 +863,41 @@ def cleanup_if_due():
         source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
     ).delete()
     PlayerSession.objects.filter(
-        started_at__lt=now - timedelta(days=settings.SESSION_RETENTION_DAYS),
+        ended_at__lt=now - timedelta(days=settings.SESSION_RETENTION_DAYS),
         ended_at__isnull=False,
+    ).delete()
+    Player.objects.filter(
+        ip_observed_at__lt=now - timedelta(days=settings.PLAYER_IP_RETENTION_DAYS),
+    ).update(ip_address=None, ip_observed_at=None)
+    Player.objects.filter(
+        last_seen__lt=now - timedelta(days=settings.PLAYER_RETENTION_DAYS)
+    ).delete()
+    for key, retention_days in {
+        "game_data": settings.POSITION_RETENTION_DAYS,
+        "metrics": settings.METRIC_RETENTION_DAYS,
+        "players": settings.PLAYER_RETENTION_DAYS,
+        "info": settings.PLAYER_RETENTION_DAYS,
+        "settings": settings.PLAYER_RETENTION_DAYS,
+        "status": settings.PLAYER_RETENTION_DAYS,
+    }.items():
+        LatestDataset.objects.filter(
+            key=key,
+            received_at__lt=now - timedelta(days=retention_days),
+        ).delete()
+    GuildSnapshot.objects.filter(
+        updated_at__lt=now - timedelta(days=settings.SAVE_RETENTION_DAYS)
+    ).delete()
+    PlayerClaimData.objects.filter(
+        updated_at__lt=now - timedelta(days=settings.SAVE_RETENTION_DAYS)
+    ).delete()
+    ClaimChallenge.objects.filter(expires_at__lte=now).delete()
+    ClaimSession.objects.filter(idle_expires_at__lte=now).delete()
+    ClaimSession.objects.filter(absolute_expires_at__lte=now).delete()
+    ClaimThrottle.objects.filter(
+        window_started_at__lt=now - timedelta(hours=1)
+    ).delete()
+    AuthThrottle.objects.filter(
+        window_started_at__lt=now - timedelta(days=1)
     ).delete()
     state.value = {"last": int(now.timestamp())}
     state.save(update_fields=["value", "updated_at"])
@@ -920,7 +959,6 @@ def store_dataset(dataset, value, source_clock=None):
 
 def run_maintenance():
     _close_stale_sessions(timezone.now())
-    cleanup_if_due()
 
 
 def recompute_lifetime_rollups(player):

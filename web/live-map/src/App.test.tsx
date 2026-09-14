@@ -102,7 +102,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(await screen.findByRole('button', { name: 'Retry' }))
+    await user.click(await screen.findByRole('button', { name: 'Retry loading the map' }))
     expect(await screen.findByRole('heading', { name: 'Test Realm' })).toBeVisible()
   })
 
@@ -188,7 +188,7 @@ describe('App', () => {
     await act(async () => vi.advanceTimersByTimeAsync(10_001))
     vi.useRealTimers()
     expect(screen.getByRole('main')).toHaveTextContent('Map unavailable')
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Retry loading the map' })).toBeVisible()
   })
 
   it('clears private map data when authentication expires', async () => {

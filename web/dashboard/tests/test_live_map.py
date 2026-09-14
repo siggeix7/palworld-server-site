@@ -291,6 +291,72 @@ class LiveMapTests(TestCase):
         self.assertNotIn("player_id", serialized)
         self.assertNotIn("group_id", serialized)
 
+    @override_settings(PLAYER_CLAIMS_ENABLED=True)
+    def test_players_adapter_hides_save_overlay_when_claims_are_enabled(self):
+        LatestDataset.objects.create(
+            key="status", payload={"reachable": True}, source_clock=self.now
+        )
+        LatestDataset.objects.create(
+            key="metrics",
+            payload={
+                "currentplayernum": 1,
+                "maxplayernum": 8,
+                "serverfps": 59,
+                "serverframetime": 16.9,
+                "uptime": 3600,
+                "basecampnum": 1,
+                "days": 42,
+            },
+            source_clock=self.now,
+        )
+        LatestDataset.objects.create(
+            key="players",
+            payload={
+                "players": [{
+                    "id": "public-player-id",
+                    "name": "Explorer",
+                    "level": 50,
+                    "location_x": -100,
+                    "location_y": 200,
+                }]
+            },
+            source_clock=self.now,
+        )
+        Player.objects.create(
+            public_id="public-player-id",
+            name="Explorer",
+            first_seen=self.now,
+            last_seen=self.now,
+            level=50,
+        )
+        GuildSnapshot.objects.create(
+            payload={
+                "schema_version": 3,
+                "guilds": [{
+                    "group_id": "a" * 20,
+                    "guild_name": "Private Guild",
+                    "players": [],
+                }],
+                "players": [{
+                    "player_id": "b" * 20,
+                    "player_name": "Explorer",
+                    "guild_id": "a" * 20,
+                    "level": 99,
+                }],
+            }
+        )
+
+        payload = self.client.get(reverse("live-map-players")).json()
+
+        self.assertFalse(payload["saveEnabled"])
+        self.assertFalse(payload["saveAvailable"])
+        self.assertFalse(payload["saveStale"])
+        self.assertNotIn("saveUpdatedAt", payload)
+        public_player = payload["players"][0]
+        self.assertEqual(public_player["level"], 50)
+        self.assertNotIn("guildKey", public_player)
+        self.assertNotIn("guildName", public_player)
+
     def test_stale_player_data_keeps_last_position_but_marks_player_offline(self):
         stale_time = self.now - timedelta(minutes=10)
         LatestDataset.objects.create(

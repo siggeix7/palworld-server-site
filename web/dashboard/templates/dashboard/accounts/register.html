@@ -18,10 +18,10 @@
     {{ form.password1.as_field_group }}
     {{ form.password2.as_field_group }}
     <label class="terms-check">
-      <input type="checkbox" name="accept_terms" value="1"{% if form.accept_terms.value %} checked{% endif %} required>
-      Ho letto e accetto le <a href="{% url 'terms' %}" target="_blank" rel="noopener">condizioni d'uso e l'informativa sulla privacy</a>.
+      <input id="id_accept_terms" type="checkbox" name="accept_terms" value="1"{% if form.accept_terms.value %} checked{% endif %} required aria-describedby="id_accept_terms_error">
+      Dichiaro di aver letto l'<a href="{% url 'privacy' %}" target="_blank" rel="noopener">informativa sulla privacy<span class="sr-only"> (si apre in una nuova scheda)</span></a> e accetto le <a href="{% url 'terms' %}" target="_blank" rel="noopener">condizioni d'uso<span class="sr-only"> (si apre in una nuova scheda)</span></a>.
     </label>
-    {% if form.accept_terms.errors %}<ul class="errorlist"><li>{{ form.accept_terms.errors|join:" " }}</li></ul>{% endif %}
+    {% if form.accept_terms.errors %}<ul id="id_accept_terms_error" class="errorlist" role="alert"><li>{{ form.accept_terms.errors|join:" " }}</li></ul>{% endif %}
     <button type="submit">Registrati</button>
   </form>
   <div class="auth-links"><a href="{% url 'login' %}">Hai già un account? Accedi</a></div>

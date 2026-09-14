@@ -226,7 +226,13 @@ export function AppShell() {
               <span>
                 <a href="/static/dashboard/THIRD_PARTY_NOTICES.txt">Licenze e crediti</a>
                 {' · '}
-                <a href={session.data?.routes?.terms || '/termini/'}>Condizioni d'uso e privacy</a>
+                <a href={session.data?.routes?.terms || '/termini/'}>Condizioni d'uso</a>
+                {' · '}
+                <a href="/privacy/">Privacy</a>
+                {' · '}
+                <a href="/cookie/">Cookie</a>
+                {' · '}
+                <a href="/rimborsi/">Rimborsi</a>
               </span>
             </footer>
           </main>

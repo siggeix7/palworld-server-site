@@ -300,7 +300,7 @@ describe('dashboard router and shell', () => {
     expect(await screen.findByRole('heading', { name: 'Test Palpagos' })).toBeVisible()
     await user.click(within(screen.getByRole('navigation', { name: 'Server' })).getByRole('link', { name: /Mappa/ }))
 
-    expect(await screen.findByRole('button', { name: 'Retry' })).toBeVisible()
+    expect(await screen.findByRole('button', { name: 'Retry loading the map' })).toBeVisible()
     expect(window.location.pathname).toBe('/mappa/')
     expect(screen.queryByText('Il pannello non può essere visualizzato')).not.toBeInTheDocument()
   })

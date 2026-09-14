@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -8,9 +9,25 @@ import requests
 from django.conf import settings
 from django.db import OperationalError
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 
 from dashboard.collector import CollectorError, PalworldClient, PalworldCollector
-from dashboard.models import LatestDataset
+from dashboard.models import (
+    AuthThrottle,
+    ClaimChallenge,
+    ClaimSession,
+    ClaimThrottle,
+    GuildSnapshot,
+    LatestDataset,
+    MetricSample,
+    Player,
+    PlayerClaimData,
+    PlayerSession,
+    PositionSample,
+    RuntimeState,
+    ServerEvent,
+)
+from dashboard.services import cleanup_if_due
 
 
 class Response:
@@ -184,6 +201,198 @@ class PalworldCollectorTests(TestCase):
                 self.assertEqual(collector.dataset_state[dataset]["failures"], 1)
 
 
+class RetentionTests(TestCase):
+    @override_settings(PLAYER_IP_RETENTION_DAYS=30)
+    def test_cleanup_removes_expired_player_ips_but_keeps_recent_values(self):
+        now = timezone.now()
+        old = Player.objects.create(
+            public_id="old-player",
+            name="Old",
+            first_seen=now - timedelta(days=40),
+            last_seen=now - timedelta(days=31),
+            ip_address="192.0.2.10",
+            ip_observed_at=now - timedelta(days=31),
+        )
+        recent = Player.objects.create(
+            public_id="recent-player",
+            name="Recent",
+            first_seen=now - timedelta(days=2),
+            last_seen=now - timedelta(days=1),
+            ip_address="192.0.2.11",
+            ip_observed_at=now - timedelta(days=29),
+        )
+        RuntimeState.objects.create(key="retention-cleanup", value={"last": 0})
+
+        cleanup_if_due()
+
+        old.refresh_from_db()
+        recent.refresh_from_db()
+        self.assertIsNone(old.ip_address)
+        self.assertIsNone(old.ip_observed_at)
+        self.assertEqual(recent.ip_address, "192.0.2.11")
+        self.assertIsNotNone(recent.ip_observed_at)
+
+    @override_settings(
+        POSITION_RETENTION_DAYS=7,
+        METRIC_RETENTION_DAYS=90,
+        SESSION_RETENTION_DAYS=365,
+        PLAYER_RETENTION_DAYS=365,
+        SAVE_RETENTION_DAYS=30,
+        PLAYER_IP_RETENTION_DAYS=30,
+    )
+    def test_cleanup_prunes_stale_persisted_data_by_its_completion_time(self):
+        now = timezone.now()
+        expired_player = Player.objects.create(
+            public_id="expired-player",
+            name="Expired",
+            first_seen=now - timedelta(days=400),
+            last_seen=now - timedelta(days=366),
+        )
+        retained_player = Player.objects.create(
+            public_id="retained-player",
+            name="Retained",
+            first_seen=now - timedelta(days=400),
+            last_seen=now - timedelta(days=1),
+        )
+        old_session = PlayerSession.objects.create(
+            player=retained_player,
+            started_at=now - timedelta(days=400),
+            last_seen=now - timedelta(days=366),
+            ended_at=now - timedelta(days=366),
+        )
+        long_session = PlayerSession.objects.create(
+            player=retained_player,
+            started_at=now - timedelta(days=400),
+            last_seen=now - timedelta(days=10),
+            ended_at=now - timedelta(days=10),
+        )
+        active_session = PlayerSession.objects.create(
+            player=retained_player,
+            started_at=now - timedelta(days=400),
+            last_seen=now - timedelta(days=1),
+        )
+        old_position = PositionSample.objects.create(
+            player=retained_player,
+            source_clock=now - timedelta(days=8),
+            x=1,
+            y=1,
+        )
+        recent_position = PositionSample.objects.create(
+            player=retained_player,
+            source_clock=now - timedelta(days=6),
+            x=2,
+            y=2,
+        )
+        old_metric = MetricSample.objects.create(
+            source_clock=now - timedelta(days=91),
+        )
+        recent_metric = MetricSample.objects.create(
+            source_clock=now - timedelta(days=89),
+        )
+        old_event = ServerEvent.objects.create(
+            player=retained_player,
+            event_type=ServerEvent.JOIN,
+            source_clock=now - timedelta(days=91),
+        )
+        recent_event = ServerEvent.objects.create(
+            player=retained_player,
+            event_type=ServerEvent.LEAVE,
+            source_clock=now - timedelta(days=89),
+        )
+
+        old_datasets = []
+        for key in ("game_data", "metrics", "players", "info", "settings", "status"):
+            dataset = LatestDataset.objects.create(
+                key=key,
+                payload={},
+                source_clock=now,
+            )
+            old_datasets.append(dataset)
+        LatestDataset.objects.filter(
+            pk__in=[dataset.pk for dataset in old_datasets]
+        ).update(received_at=now - timedelta(days=366))
+
+        old_save = GuildSnapshot.objects.create(payload={})
+        recent_save = GuildSnapshot.objects.create(id=2, payload={})
+        GuildSnapshot.objects.filter(pk=old_save.pk).update(
+            updated_at=now - timedelta(days=31)
+        )
+        GuildSnapshot.objects.filter(pk=recent_save.pk).update(
+            updated_at=now - timedelta(days=29)
+        )
+        old_claim_data = PlayerClaimData.objects.create(
+            public_id="old-claim",
+            payload={},
+            snapshot_at=now,
+        )
+        recent_claim_data = PlayerClaimData.objects.create(
+            public_id="recent-claim",
+            payload={},
+            snapshot_at=now,
+        )
+        PlayerClaimData.objects.filter(pk=old_claim_data.pk).update(
+            updated_at=now - timedelta(days=31)
+        )
+        PlayerClaimData.objects.filter(pk=recent_claim_data.pk).update(
+            updated_at=now - timedelta(days=29)
+        )
+        expired_challenge = ClaimChallenge.objects.create(
+            bearer_hash="a" * 64,
+            subject="subject",
+            public_player_id="public-player",
+            question={},
+            correct_answer=0,
+            expires_at=now - timedelta(seconds=1),
+        )
+        expired_claim_session = ClaimSession.objects.create(
+            bearer_hash="b" * 64,
+            subject="subject",
+            public_player_id="public-player",
+            idle_expires_at=now + timedelta(days=1),
+            absolute_expires_at=now - timedelta(seconds=1),
+        )
+        expired_throttle = ClaimThrottle.objects.create(
+            key="expired",
+            window_started_at=now - timedelta(hours=2),
+        )
+        expired_auth_throttle = AuthThrottle.objects.create(
+            key="expired-auth",
+            window_started_at=now - timedelta(days=2),
+        )
+        RuntimeState.objects.create(key="retention-cleanup", value={"last": 0})
+
+        cleanup_if_due()
+
+        self.assertFalse(Player.objects.filter(pk=expired_player.pk).exists())
+        self.assertTrue(Player.objects.filter(pk=retained_player.pk).exists())
+        self.assertFalse(PlayerSession.objects.filter(pk=old_session.pk).exists())
+        self.assertTrue(PlayerSession.objects.filter(pk=long_session.pk).exists())
+        self.assertTrue(PlayerSession.objects.filter(pk=active_session.pk).exists())
+        self.assertFalse(PositionSample.objects.filter(pk=old_position.pk).exists())
+        self.assertTrue(PositionSample.objects.filter(pk=recent_position.pk).exists())
+        self.assertFalse(MetricSample.objects.filter(pk=old_metric.pk).exists())
+        self.assertTrue(MetricSample.objects.filter(pk=recent_metric.pk).exists())
+        self.assertFalse(ServerEvent.objects.filter(pk=old_event.pk).exists())
+        self.assertTrue(ServerEvent.objects.filter(pk=recent_event.pk).exists())
+        self.assertFalse(
+            LatestDataset.objects.filter(
+                pk__in=[dataset.pk for dataset in old_datasets]
+            ).exists()
+        )
+        self.assertFalse(GuildSnapshot.objects.filter(pk=old_save.pk).exists())
+        self.assertTrue(GuildSnapshot.objects.filter(pk=recent_save.pk).exists())
+        self.assertFalse(PlayerClaimData.objects.filter(pk=old_claim_data.pk).exists())
+        self.assertTrue(PlayerClaimData.objects.filter(pk=recent_claim_data.pk).exists())
+        self.assertFalse(ClaimChallenge.objects.filter(pk=expired_challenge.pk).exists())
+        self.assertFalse(
+            ClaimSession.objects.filter(pk=expired_claim_session.pk).exists()
+        )
+        self.assertFalse(ClaimThrottle.objects.filter(pk=expired_throttle.pk).exists())
+        self.assertFalse(
+            AuthThrottle.objects.filter(pk=expired_auth_throttle.pk).exists()
+        )
+
+
 class DirectArchitectureTests(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
@@ -199,12 +408,22 @@ class DirectArchitectureTests(SimpleTestCase):
         self.assertIn('PALWORLD_API_URL: "${PALWORLD_API_URL:', compose)
         self.assertIn("${PRIVATE_PORT:-8081}:8001", compose)
         self.assertIn("python3 web/manage.py runcollector", entrypoint)
+        self.assertIn("python3 web/manage.py run_retention_cleanup", entrypoint)
         self.assertIn("python3 web/manage.py run_weekly_scheduler", entrypoint)
         self.assertIn("palworld_site.ingest_wsgi:application", entrypoint)
         self.assertIn("postgres:17-bookworm", compose)
         self.assertIn("DATABASE_ENGINE: postgresql", compose)
         self.assertIn('context: "${APP_BUILD_CONTEXT:-.}"', compose)
+        self.assertIn(
+            'PRIVACY_CONTROLLER_NAME: "${PRIVACY_CONTROLLER_NAME:?PRIVACY_CONTROLLER_NAME is required}"',
+            compose,
+        )
+        self.assertIn(
+            'RETENTION_CLEANUP_LOCK_PATH: "${RETENTION_CLEANUP_LOCK_PATH:-/data/palworld-retention-cleanup.lock}"',
+            compose,
+        )
         self.assertIn('SESSION_RETENTION_DAYS: "${SESSION_RETENTION_DAYS:-365}"', compose)
+        self.assertIn('PLAYER_IP_RETENTION_DAYS: "${PLAYER_IP_RETENTION_DAYS:-30}"', compose)
         self.assertIn("--access-logformat", entrypoint)
         self.assertNotIn("%(U)s", entrypoint)
 

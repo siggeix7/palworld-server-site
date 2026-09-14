@@ -69,6 +69,9 @@ class SiteAccessMiddleware:
     access_exempt_paths = (
         "/healthz/",
         "/termini/",
+        "/privacy/",
+        "/cookie/",
+        "/rimborsi/",
         "/accounts/login/",
         "/accounts/logout/",
         "/accounts/register/",

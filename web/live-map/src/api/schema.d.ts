@@ -1642,7 +1642,7 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description Player archive with telemetry and save progression */
+      /** @description Player archive with telemetry and a configured save summary; detailed save progress requires a player claim when enabled */
       200: {
         headers: {
           [name: string]: unknown
