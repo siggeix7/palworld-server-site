@@ -77,7 +77,7 @@ class LiveMapTests(TestCase):
         )
         self.assertEqual(
             payload["upstreamRevision"],
-            "454acd087f9297538809a6744643835dfa51f979",
+            "369ac4085a451ad546d3cee5d08952f36e4b2282",
         )
         self.assertEqual(payload["landmarkCatalogue"]["gameVersion"], "1.0.3.101283")
         self.assertEqual(

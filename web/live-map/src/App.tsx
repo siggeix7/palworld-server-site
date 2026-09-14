@@ -721,7 +721,11 @@ function LiveMap({
     ? landmarkCatalogueCompatibility(config.landmarkCatalogue.gameVersion, playerState.server.version)
     : 'compatible'
   if (catalogueCompatibility === 'mismatch') {
-    const catalogueNotice = `World catalogue version mismatch: locations were exported for Palworld ${config.landmarkCatalogue.gameVersion}, but this server reports ${playerState?.server.version}. Static locations may be outdated; regenerate the catalogue from current Palworld assets.`
+    const reportedVersion = playerState?.server.version?.trim().replace(/^v/i, '')
+    const catalogueNotice =
+      config.landmarkCatalogue.gameVersion === '1.0.3.101283' && reportedVersion === '1.0.4.102642'
+        ? `World catalogue refresh pending: map v1.2.3 adds Palworld ${reportedVersion} exporter support, but complete generation is waiting for updated community mappings. Static locations remain verified against Palworld ${config.landmarkCatalogue.gameVersion} and may be outdated.`
+        : `World catalogue version mismatch: locations were exported for Palworld ${config.landmarkCatalogue.gameVersion}, but this server reports ${playerState?.server.version}. Static locations may be outdated; regenerate the catalogue from current Palworld assets.`
     objectNotice = objectNotice ? `${objectNotice} ${catalogueNotice}` : catalogueNotice
   } else if (catalogueCompatibility === 'unverifiable') {
     const reportedVersion = playerState?.server.version?.trim()

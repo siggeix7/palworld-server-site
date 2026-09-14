@@ -250,6 +250,33 @@ describe('MapViewport zoom controls', () => {
     expect(screen.getByRole('application')).toHaveClass('map-layer-world-tree')
   })
 
+  it('suppresses native map drags without blocking inspector controls', () => {
+    installViewportMocks()
+    const { container } = render(
+      <MapViewport
+        activeLayer={layer}
+        items={[]}
+        enabledKinds={new Set<ItemKind>()}
+        enabledPlayerStatuses={new Set(['online', 'offline'])}
+        hiddenIds={new Set<string>()}
+        search=""
+        onShowItem={() => undefined}
+        inspectorOpen
+      >
+        <div role="dialog" aria-label="Details">
+          <button type="button">Dialog action</button>
+        </div>
+      </MapViewport>
+    )
+    const scene = container.querySelector<HTMLElement>('.map-scene')
+    if (!scene) throw new Error('Expected map scene')
+
+    expect(scene).toHaveClass('select-none')
+    expect(fireEvent.dragStart(screen.getByRole('application'))).toBe(false)
+    expect(fireEvent.dragStart(scene)).toBe(false)
+    expect(fireEvent.dragStart(screen.getByRole('button', { name: 'Dialog action' }))).toBe(true)
+  })
+
   it('loads only the fitted LOD tiles and keeps the ready layer visible across an LOD transition', () => {
     installViewportMocks()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)

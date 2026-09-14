@@ -540,6 +540,28 @@ describe('App', () => {
     )
   })
 
+  it('explains the known Palworld 1.0.4 catalogue export blocker', async () => {
+    mockAPI((path) => {
+      if (path === '/api/v1/live-map/players') {
+        return {
+          ...(responses[path] as Record<string, unknown>),
+          server: { name: 'Test Realm', version: 'v1.0.4.102642' }
+        }
+      }
+      return responses[path]
+    })
+    render(<App />)
+
+    await screen.findByRole('heading', { name: 'Test Realm' })
+    const explorer = await screen.findByRole('complementary', { name: 'Map filters' })
+    expect(within(explorer).getByText(/World catalogue refresh pending:/)).toHaveTextContent(
+      'map v1.2.3 adds Palworld 1.0.4.102642 exporter support'
+    )
+    expect(within(explorer).getByText(/World catalogue refresh pending:/)).toHaveTextContent(
+      'waiting for updated community mappings'
+    )
+  })
+
   it('accepts an exact numeric server release with a leading v', async () => {
     mockAPI((path) => {
       if (path === '/api/v1/live-map/players') {
