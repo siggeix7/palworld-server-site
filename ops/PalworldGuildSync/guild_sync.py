@@ -1,26 +1,52 @@
 #!/usr/bin/env python3
 """Send compact guild, base camp, world, and private claim data to the site."""
 
-from collections import Counter, defaultdict
 import hashlib
+import hmac
 import os
 import re
 import stat
 import sys
+from collections import Counter, defaultdict
 from urllib.parse import urlsplit
 
 import requests
 
-
 SAVE_PATH = os.getenv(
     "SAVE_PATH",
-    "/opt/Palworld/palworld/Pal/Saved/SaveGames/0/"
-    "36814278E2A240ADB8F57D42AAF739CD/Level.sav",
+    "/opt/Palworld/palworld/Pal/Saved/SaveGames/0/36814278E2A240ADB8F57D42AAF739CD/Level.sav",
 )
+MAX_SECRET_LENGTH = 16 * 1024
+PLACEHOLDER_PREFIX = "replace-with-"
+
+
+def read_secret(file_variable, value_variable):
+    secret_path = os.getenv(file_variable, "").strip()
+    if secret_path:
+        try:
+            with open(secret_path, encoding="utf-8") as secret_file:
+                value = secret_file.read(MAX_SECRET_LENGTH + 1).strip()
+        except (OSError, UnicodeError):
+            return ""
+        return (
+            value
+            if len(value) <= MAX_SECRET_LENGTH
+            and not value.casefold().startswith(PLACEHOLDER_PREFIX)
+            else ""
+        )
+    value = os.getenv(value_variable, "").strip()
+    return (
+        value
+        if len(value) <= MAX_SECRET_LENGTH and not value.casefold().startswith(PLACEHOLDER_PREFIX)
+        else ""
+    )
+
+
 SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
-SITE_TOKEN = os.getenv("SITE_TOKEN", "")
-VERIFY_SSL = os.getenv("VERIFY_SSL", "true").lower() == "true"
-ALLOW_INSECURE_HTTP = os.getenv("ALLOW_INSECURE_HTTP", "false").lower() == "true"
+SITE_TOKEN = read_secret("SITE_TOKEN_FILE", "SITE_TOKEN")
+PLAYER_HASH_SECRET = read_secret("PLAYER_HASH_SECRET_FILE", "PLAYER_HASH_SECRET")
+VERIFY_SSL = os.getenv("VERIFY_SSL", "true").strip().casefold() != "false"
+ALLOW_INSECURE_HTTP = os.getenv("ALLOW_INSECURE_HTTP", "false").strip().casefold() == "true"
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 ZERO_GUID = ZERO_UUID.replace("-", "")
 LOW_SANITY_THRESHOLD = 30
@@ -160,9 +186,7 @@ def parse_guilds(world_data):
 
     for group_key, group_data in items:
         group_value = group_data.get("value", group_data)
-        group_type = (
-            group_value.get("GroupType", {}).get("value", {}).get("value", "?")
-        )
+        group_type = group_value.get("GroupType", {}).get("value", {}).get("value", "?")
         if group_type != "EPalGroupType::Guild":
             continue
 
@@ -171,13 +195,13 @@ def parse_guilds(world_data):
         players = []
         for player in raw_data.get("players", []):
             player_uid = to_str(player.get("player_uid", ""))
-            players.append({
-                "player_uid": player_uid,
-                "player_name": to_str(
-                    player.get("player_info", {}).get("player_name", "")
-                ),
-                "is_admin": player_uid == admin_player_uid,
-            })
+            players.append(
+                {
+                    "player_uid": player_uid,
+                    "player_name": to_str(player.get("player_info", {}).get("player_name", "")),
+                    "is_admin": player_uid == admin_player_uid,
+                }
+            )
         guilds.append(
             {
                 "group_id": to_str(raw_data.get("group_id", group_key)),
@@ -199,16 +223,10 @@ def player_status_points(save_parameters):
         for item in values:
             if not isinstance(item, dict):
                 continue
-            key = PLAYER_STATUS_NAMES.get(
-                to_str(property_value(item.get("StatusName"), ""))
-            )
+            key = PLAYER_STATUS_NAMES.get(to_str(property_value(item.get("StatusName"), "")))
             if key:
                 totals[key] += nonnegative_int(item.get("StatusPoint"))
-    return {
-        key: totals[key]
-        for key in PLAYER_STATUS_NAMES.values()
-        if totals[key] > 0
-    }
+    return {key: totals[key] for key in PLAYER_STATUS_NAMES.values() if totals[key] > 0}
 
 
 def parse_players(world_data, guilds):
@@ -233,13 +251,9 @@ def parse_players(world_data, guilds):
     for item in world_data.get("CharacterSaveParameterMap", {}).get("value", []):
         key = item.get("key", {})
         raw_data = item.get("value", {}).get("RawData", {}).get("value", {})
-        save_parameters = (
-            raw_data.get("object", {}).get("SaveParameter", {}).get("value", {})
-        )
+        save_parameters = raw_data.get("object", {}).get("SaveParameter", {}).get("value", {})
         if not property_value(save_parameters.get("IsPlayer"), False):
-            owner_id = to_str(
-                property_value(save_parameters.get("OwnerPlayerUId"), "")
-            )
+            owner_id = to_str(property_value(save_parameters.get("OwnerPlayerUId"), ""))
             if owner_id:
                 pal_counts[owner_id] += 1
             continue
@@ -250,9 +264,7 @@ def parse_players(world_data, guilds):
         member = guild_members.get(player_uid, {})
         player_name = (
             to_str(property_value(save_parameters.get("NickName"), "")).strip()
-            or to_str(
-                property_value(save_parameters.get("FilteredNickName"), "")
-            ).strip()
+            or to_str(property_value(save_parameters.get("FilteredNickName"), "")).strip()
             or to_str(member.get("player_name", "")).strip()
         )
         if not player_name:
@@ -264,9 +276,7 @@ def parse_players(world_data, guilds):
             "is_admin": bool(member.get("is_admin", False)),
             "level": nonnegative_int(save_parameters.get("Level")),
             "exp": nonnegative_int(save_parameters.get("Exp")),
-            "unused_status_points": nonnegative_int(
-                save_parameters.get("UnusedStatusPoint")
-            ),
+            "unused_status_points": nonnegative_int(save_parameters.get("UnusedStatusPoint")),
             "status_points": player_status_points(save_parameters),
             "owned_pal_count": 0,
         }
@@ -324,18 +334,12 @@ def parse_claim_progress(save_data):
     if not isinstance(record_data, dict):
         raise ValueError("RecordData is not an object")
     return {
-        "fast_travel": true_flag_keys(
-            record_data, "FastTravelPointUnlockFlag"
-        ),
+        "fast_travel": true_flag_keys(record_data, "FastTravelPointUnlockFlag"),
         "areas": true_flag_keys(record_data, "FindAreaFlagMap"),
         "notes": true_flag_keys(record_data, "NoteObtainForInstanceFlag"),
         "relics": true_flag_keys(record_data, "RelicObtainForInstanceFlag"),
-        "item_pickups": true_flag_keys(
-            record_data, "ItemPickupObtainForInstanceFlag"
-        ),
-        "normal_bosses": true_flag_keys(
-            record_data, "NormalBossDefeatFlag"
-        ),
+        "item_pickups": true_flag_keys(record_data, "ItemPickupObtainForInstanceFlag"),
+        "normal_bosses": true_flag_keys(record_data, "NormalBossDefeatFlag"),
         "tower_bosses": true_flag_keys(record_data, "TowerBossDefeatFlag"),
     }
 
@@ -467,11 +471,13 @@ def parse_claim_party(container, characters):
             raise ValueError("party repeats a slot or Pal")
         seen_slots.add(slot_index)
         seen_instances.add(instance_id)
-        party.append({
-            "slot": slot_index,
-            "species": species,
-            "instance_id": instance_id,
-        })
+        party.append(
+            {
+                "slot": slot_index,
+                "species": species,
+                "instance_id": instance_id,
+            }
+        )
 
     if len(party) > MAX_CLAIM_PARTY_PALS:
         raise ValueError("party contains too many Pals")
@@ -517,9 +523,7 @@ def parse_claim_player(
         "player_uid": player_uid,
         "player_name": player_name,
         "inventory": inventory,
-        "party": parse_claim_party(party_container, characters)
-        if party_container
-        else [],
+        "party": parse_claim_party(party_container, characters) if party_container else [],
         "progress": parse_claim_progress(save_data),
     }
 
@@ -560,9 +564,9 @@ def parse_claim_players(
     players_directory = os.path.join(os.path.dirname(os.path.abspath(save_path)), "Players")
     try:
         players_directory_signature = directory_signature(players_directory)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         if player_names:
-            raise ValueError("Players directory is missing")
+            raise ValueError("Players directory is missing") from exc
         return []
 
     player_files = []
@@ -631,9 +635,7 @@ def index_characters(world_data, guilds):
     # Saved guild handle lists retain historical memberships after transfers.
     # Current owners plus base worker containers provide the active attribution.
     player_guilds = {
-        player["player_uid"]: guild["group_id"]
-        for guild in guilds
-        for player in guild["players"]
+        player["player_uid"]: guild["group_id"] for guild in guilds for player in guild["players"]
     }
     guild_pal_ids = {guild["group_id"]: set() for guild in guilds}
     characters = {}
@@ -644,9 +646,7 @@ def index_characters(world_data, guilds):
         if not instance_id or instance_id == ZERO_UUID:
             continue
         raw_data = item.get("value", {}).get("RawData", {}).get("value", {})
-        save_parameters = (
-            raw_data.get("object", {}).get("SaveParameter", {}).get("value", {})
-        )
+        save_parameters = raw_data.get("object", {}).get("SaveParameter", {}).get("value", {})
         if property_value(save_parameters.get("IsPlayer"), False):
             continue
         characters[instance_id] = save_parameters
@@ -665,12 +665,7 @@ def index_character_containers(world_data):
         container_id = to_str(property_value(key.get("ID"), ""))
         if not container_id or container_id == ZERO_UUID:
             continue
-        slots = (
-            item.get("value", {})
-            .get("Slots", {})
-            .get("value", {})
-            .get("values", [])
-        )
+        slots = item.get("value", {}).get("Slots", {}).get("value", {}).get("values", [])
         instance_ids = set()
         for slot in slots:
             if not isinstance(slot, dict):
@@ -690,17 +685,12 @@ def parse_world(world_data):
             active_raid_base_ids.add(to_str(item.get("key", "")))
 
     oil_rigs = (
-        world_data.get("OilrigSaveData", {})
-        .get("value", {})
-        .get("OilrigMap", {})
-        .get("value", [])
+        world_data.get("OilrigSaveData", {}).get("value", {}).get("OilrigMap", {}).get("value", [])
     )
     if not isinstance(oil_rigs, list):
         oil_rigs = []
     oil_rig_entries = [
-        item
-        for item in oil_rigs
-        if not to_str(item.get("key", "")).endswith("::Debug")
+        item for item in oil_rigs if not to_str(item.get("key", "")).endswith("::Debug")
     ]
     return {
         "active_raid_count": len(active_raid_base_ids),
@@ -724,10 +714,7 @@ def parse_bases(
     guild_pal_ids,
     active_raid_base_ids,
 ):
-    player_counts = {
-        guild["group_id"]: len(guild["players"])
-        for guild in guilds
-    }
+    player_counts = {guild["group_id"]: len(guild["players"]) for guild in guilds}
     guild_ids = set(player_counts)
     guild_workers = defaultdict(set)
     guild_working = defaultdict(set)
@@ -760,10 +747,7 @@ def parse_bases(
             diagnostics["unowned_base_count"] += 1
 
         director = (
-            value.get("WorkerDirector", {})
-            .get("value", {})
-            .get("RawData", {})
-            .get("value", {})
+            value.get("WorkerDirector", {}).get("value", {}).get("RawData", {}).get("value", {})
         )
         container_id = to_str(director.get("container_id", ""))
         if container_id and container_id not in containers:
@@ -836,9 +820,7 @@ def enrich_guilds(
     guild_problems,
 ):
     base_counts = Counter(base["group_id"] for base in bases)
-    active_raids = Counter(
-        base["group_id"] for base in bases if base.get("raid_active")
-    )
+    active_raids = Counter(base["group_id"] for base in bases if base.get("raid_active"))
     for guild in guilds:
         group_id = guild["group_id"]
         guild.update(
@@ -855,57 +837,62 @@ def enrich_guilds(
 
 
 def opaque_id(kind, value):
-    source = f"{kind}:{to_str(value)}".encode("utf-8")
-    return hashlib.sha256(source).hexdigest()[:20]
+    if not PLAYER_HASH_SECRET:
+        raise ValueError("PLAYER_HASH_SECRET is not set")
+    source = f"{kind}:{to_str(value)}".encode()
+    return hmac.new(PLAYER_HASH_SECRET.encode("utf-8"), source, hashlib.sha256).hexdigest()[:20]
 
 
 def minimize_payload(guilds, bases, players):
-    guild_keys = {
-        guild["group_id"]: opaque_id("guild", guild["group_id"])
-        for guild in guilds
-    }
+    guild_keys = {guild["group_id"]: opaque_id("guild", guild["group_id"]) for guild in guilds}
     public_guilds = []
     for guild in guilds:
-        public_guilds.append({
-            key: value
-            for key, value in guild.items()
-            if key not in {
-                "admin_player_uid",
-                "base_ids",
-                "players",
-                "group_id",
-                "group_name",
-            }
-        } | {
-            "group_id": guild_keys[guild["group_id"]],
-            "players": [
-                {
-                    "player_name": player["player_name"],
-                    "is_admin": player["is_admin"],
+        public_guilds.append(
+            {
+                key: value
+                for key, value in guild.items()
+                if key
+                not in {
+                    "admin_player_uid",
+                    "base_ids",
+                    "players",
+                    "group_id",
+                    "group_name",
                 }
-                for player in guild["players"]
-            ],
-        })
+            }
+            | {
+                "group_id": guild_keys[guild["group_id"]],
+                "players": [
+                    {
+                        "player_name": player["player_name"],
+                        "is_admin": player["is_admin"],
+                    }
+                    for player in guild["players"]
+                ],
+            }
+        )
 
     public_bases = []
     for base in bases:
-        public_bases.append({
-            key: value
-            for key, value in base.items()
-            if key not in {
-                "base_id",
-                "group_id",
-                "location_z",
-                "area_range",
-                "state",
-                "player_count",
+        public_bases.append(
+            {
+                key: value
+                for key, value in base.items()
+                if key
+                not in {
+                    "base_id",
+                    "group_id",
+                    "location_z",
+                    "area_range",
+                    "state",
+                    "player_count",
+                }
             }
-        } | {
-            "base_id": opaque_id("base", base["base_id"]),
-            "group_id": guild_keys.get(
-                base["group_id"], opaque_id("guild", base["group_id"])
-            ),
-        })
+            | {
+                "base_id": opaque_id("base", base["base_id"]),
+                "group_id": guild_keys.get(base["group_id"], opaque_id("guild", base["group_id"])),
+            }
+        )
     public_players = [
         {
             "player_id": opaque_id("player", player["player_uid"]),
@@ -955,9 +942,7 @@ def validate_world_data(world_data):
         if group_type != "EPalGroupType::Guild":
             continue
         raw_property = group_value.get("RawData")
-        raw_data = (
-            raw_property.get("value") if isinstance(raw_property, dict) else None
-        )
+        raw_data = raw_property.get("value") if isinstance(raw_property, dict) else None
         required_fields = {
             "group_id",
             "group_name",
@@ -991,40 +976,20 @@ def validate_world_data(world_data):
         if not isinstance(item, dict):
             raise ValueError(f"CharacterSaveParameterMap[{index}] is not decoded")
         item_value = item.get("value")
-        raw_property = (
-            item_value.get("RawData") if isinstance(item_value, dict) else None
-        )
-        raw_data = (
-            raw_property.get("value") if isinstance(raw_property, dict) else None
-        )
+        raw_property = item_value.get("RawData") if isinstance(item_value, dict) else None
+        raw_data = raw_property.get("value") if isinstance(raw_property, dict) else None
         raw_object = raw_data.get("object") if isinstance(raw_data, dict) else None
-        save_parameter = (
-            raw_object.get("SaveParameter") if isinstance(raw_object, dict) else None
-        )
-        save_parameters = (
-            save_parameter.get("value")
-            if isinstance(save_parameter, dict)
-            else None
-        )
+        save_parameter = raw_object.get("SaveParameter") if isinstance(raw_object, dict) else None
+        save_parameters = save_parameter.get("value") if isinstance(save_parameter, dict) else None
         if not isinstance(save_parameters, dict):
-            raise ValueError(
-                f"CharacterSaveParameterMap[{index}].RawData is not decoded"
-            )
+            raise ValueError(f"CharacterSaveParameterMap[{index}].RawData is not decoded")
 
     for index, item in enumerate(datasets["BaseCampSaveData"]):
         item_value = item.get("value") if isinstance(item, dict) else None
-        raw_property = (
-            item_value.get("RawData") if isinstance(item_value, dict) else None
-        )
-        raw_data = (
-            raw_property.get("value") if isinstance(raw_property, dict) else None
-        )
-        transform = (
-            raw_data.get("transform") if isinstance(raw_data, dict) else None
-        )
-        translation = (
-            transform.get("translation") if isinstance(transform, dict) else None
-        )
+        raw_property = item_value.get("RawData") if isinstance(item_value, dict) else None
+        raw_data = raw_property.get("value") if isinstance(raw_property, dict) else None
+        transform = raw_data.get("transform") if isinstance(raw_data, dict) else None
+        translation = transform.get("translation") if isinstance(transform, dict) else None
         required_fields = {
             "id",
             "name",
@@ -1041,40 +1006,24 @@ def validate_world_data(world_data):
 
     for index, item in enumerate(datasets["CharacterContainerSaveData"]):
         item_value = item.get("value") if isinstance(item, dict) else None
-        slots_property = (
-            item_value.get("Slots") if isinstance(item_value, dict) else None
-        )
-        slots_value = (
-            slots_property.get("value")
-            if isinstance(slots_property, dict)
-            else None
-        )
-        slots = (
-            slots_value.get("values")
-            if isinstance(slots_value, dict)
-            else None
-        )
+        slots_property = item_value.get("Slots") if isinstance(item_value, dict) else None
+        slots_value = slots_property.get("value") if isinstance(slots_property, dict) else None
+        slots = slots_value.get("values") if isinstance(slots_value, dict) else None
         if not isinstance(slots, list):
             raise ValueError(f"CharacterContainerSaveData[{index}] is not decoded")
         for slot in slots:
             raw_property = slot.get("RawData") if isinstance(slot, dict) else None
             if not isinstance(raw_property, dict) or "value" not in raw_property:
-                raise ValueError(
-                    f"CharacterContainerSaveData[{index}] has an invalid slot"
-                )
+                raise ValueError(f"CharacterContainerSaveData[{index}] has an invalid slot")
             slot_data = raw_property["value"]
             if slot_data is not None and (
                 not isinstance(slot_data, dict) or "instance_id" not in slot_data
             ):
-                raise ValueError(
-                    f"CharacterContainerSaveData[{index}].RawData is not decoded"
-                )
+                raise ValueError(f"CharacterContainerSaveData[{index}].RawData is not decoded")
 
     for index, item in enumerate(datasets["ItemContainerSaveData"]):
         item_value = item.get("value") if isinstance(item, dict) else None
-        slots_property = (
-            item_value.get("Slots") if isinstance(item_value, dict) else None
-        )
+        slots_property = item_value.get("Slots") if isinstance(item_value, dict) else None
         slots_value = property_value(slots_property, {})
         slots = slots_value.get("values") if isinstance(slots_value, dict) else None
         if not isinstance(slots, list):
@@ -1082,22 +1031,32 @@ def validate_world_data(world_data):
         for slot in slots:
             raw_property = slot.get("RawData") if isinstance(slot, dict) else None
             if not isinstance(raw_property, dict) or "value" not in raw_property:
-                raise ValueError(
-                    f"ItemContainerSaveData[{index}] has an invalid slot"
-                )
+                raise ValueError(f"ItemContainerSaveData[{index}] has an invalid slot")
             slot_data = property_value(raw_property)
             if slot_data is not None and (
                 not isinstance(slot_data, dict)
                 or not {"slot_index", "count", "item"}.issubset(slot_data)
             ):
-                raise ValueError(
-                    f"ItemContainerSaveData[{index}].RawData is not decoded"
-                )
+                raise ValueError(f"ItemContainerSaveData[{index}].RawData is not decoded")
 
 
 def main():
     site = urlsplit(SITE_URL)
-    if site.scheme not in {"http", "https"} or not site.hostname:
+    try:
+        site_port = site.port
+    except ValueError:
+        print("SITE_URL contains an invalid port", file=sys.stderr)
+        return 1
+    del site_port
+    if (
+        site.scheme not in {"http", "https"}
+        or not site.hostname
+        or site.username
+        or site.password
+        or site.path
+        or site.query
+        or site.fragment
+    ):
         print("SITE_URL must be an absolute HTTP(S) origin", file=sys.stderr)
         return 1
     if site.scheme == "http" and not ALLOW_INSECURE_HTTP:
@@ -1105,6 +1064,9 @@ def main():
         return 1
     if not SITE_TOKEN:
         print("SITE_TOKEN is not set", file=sys.stderr)
+        return 1
+    if not PLAYER_HASH_SECRET:
+        print("PLAYER_HASH_SECRET is not set", file=sys.stderr)
         return 1
 
     from palsav.io import load_sav
@@ -1163,9 +1125,7 @@ def main():
         guild_working,
         guild_problems,
     )
-    public_guilds, public_bases, public_players = minimize_payload(
-        guilds, bases, players
-    )
+    public_guilds, public_bases, public_players = minimize_payload(guilds, bases, players)
 
     with requests.Session() as session:
         session.trust_env = False
@@ -1183,15 +1143,20 @@ def main():
             headers={"Authorization": f"Bearer {SITE_TOKEN}"},
             verify=VERIFY_SSL,
             timeout=15,
+            allow_redirects=False,
+            stream=True,
         )
-    print(
-        f"Sent {len(guilds)} guilds, {len(bases)} bases, {len(players)} players, "
-        f"and {sum(guild['pal_count'] for guild in guilds)} Pals; "
-        f"status={response.status_code}"
-    )
-    if not response.ok:
-        print(response.text, file=sys.stderr)
-        return 1
+        try:
+            print(
+                f"Sent {len(guilds)} guilds, {len(bases)} bases, {len(players)} players, "
+                f"and {sum(guild['pal_count'] for guild in guilds)} Pals; "
+                f"status={response.status_code}"
+            )
+            if response.status_code >= 300 or not response.ok:
+                print("Site rejected the guild snapshot", file=sys.stderr)
+                return 1
+        finally:
+            response.close()
     return 0
 
 

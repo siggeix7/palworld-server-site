@@ -42,19 +42,22 @@ class SpaApiTests(TestCase):
         response = self.client.get(reverse("session-api"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {
-            "authenticated": True,
-            "user": {"username": "member", "email": "member@example.com"},
-            "siteAdmin": False,
-            "appVersion": "test-build",
-            "routes": {
-                "terms": reverse("terms"),
-                "profile": reverse("change-username"),
-                "password": reverse("password_change"),
-                "members": None,
-                "admin": None,
+        self.assertEqual(
+            response.json(),
+            {
+                "authenticated": True,
+                "user": {"username": "member", "email": "member@example.com"},
+                "siteAdmin": False,
+                "appVersion": "test-build",
+                "routes": {
+                    "terms": reverse("terms"),
+                    "profile": reverse("change-username"),
+                    "password": reverse("password_change"),
+                    "members": None,
+                    "admin": None,
+                },
             },
-        })
+        )
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
 
@@ -72,13 +75,16 @@ class SpaApiTests(TestCase):
         response = self.client.get(reverse("server-access-api"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {
-            "host": "play.example.com",
-            "port": "8211",
-            "password": "game-server-secret",
-            "address": "play.example.com:8211",
-            "configured": True,
-        })
+        self.assertEqual(
+            response.json(),
+            {
+                "host": "play.example.com",
+                "port": "8211",
+                "password": "game-server-secret",
+                "address": "play.example.com:8211",
+                "configured": True,
+            },
+        )
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
 

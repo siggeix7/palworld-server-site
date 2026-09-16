@@ -137,12 +137,18 @@ class LiveMapTests(TestCase):
             },
         )
         allowed = {
-            "id", "kind", "name", "detail", "level", "x", "y", "z", "map",
+            "id",
+            "kind",
+            "name",
+            "detail",
+            "level",
+            "x",
+            "y",
+            "z",
+            "map",
             "rewards",
         }
-        self.assertTrue(
-            all(set(location) <= allowed for location in payload["locations"])
-        )
+        self.assertTrue(all(set(location) <= allowed for location in payload["locations"]))
         self.assertIn(
             {
                 "name": "Zenara & Astralym",
@@ -312,13 +318,15 @@ class LiveMapTests(TestCase):
         LatestDataset.objects.create(
             key="players",
             payload={
-                "players": [{
-                    "id": "public-player-id",
-                    "name": "Explorer",
-                    "level": 50,
-                    "location_x": -100,
-                    "location_y": 200,
-                }]
+                "players": [
+                    {
+                        "id": "public-player-id",
+                        "name": "Explorer",
+                        "level": 50,
+                        "location_x": -100,
+                        "location_y": 200,
+                    }
+                ]
             },
             source_clock=self.now,
         )
@@ -332,17 +340,21 @@ class LiveMapTests(TestCase):
         GuildSnapshot.objects.create(
             payload={
                 "schema_version": 3,
-                "guilds": [{
-                    "group_id": "a" * 20,
-                    "guild_name": "Private Guild",
-                    "players": [],
-                }],
-                "players": [{
-                    "player_id": "b" * 20,
-                    "player_name": "Explorer",
-                    "guild_id": "a" * 20,
-                    "level": 99,
-                }],
+                "guilds": [
+                    {
+                        "group_id": "a" * 20,
+                        "guild_name": "Private Guild",
+                        "players": [],
+                    }
+                ],
+                "players": [
+                    {
+                        "player_id": "b" * 20,
+                        "player_name": "Explorer",
+                        "guild_id": "a" * 20,
+                        "level": 99,
+                    }
+                ],
             }
         )
 
@@ -555,7 +567,5 @@ class LiveMapTests(TestCase):
 
         payload = self.client.get(reverse("live-map-objects")).json()
 
-        self.assertEqual(
-            payload["objects"][0]["ownerId"], "matching-public-player"
-        )
+        self.assertEqual(payload["objects"][0]["ownerId"], "matching-public-player")
         self.assertNotIn("owner_ids", payload["objects"][0])

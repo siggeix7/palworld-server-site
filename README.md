@@ -88,6 +88,12 @@ Usare secret distinti per `DJANGO_SECRET_KEY`, `PLAYER_HASH_SECRET` e
 `PRIVATE_API_TOKEN`. Il file di produzione `.env` deve avere permessi `0600` e
 non deve essere incluso nel repository.
 
+Per usare file secret per l'applicazione, impostare `APP_SECRETS_PATH` sulla
+directory host e le variabili `*_FILE` sui relativi percorsi container sotto
+`/run/app-secrets/`. Il file ha precedenza sul valore plain; file mancanti,
+vuoti o più grandi di 16 KiB bloccano l'avvio. I secret PostgreSQL restano
+gestiti separatamente da Compose.
+
 ## Configurazione
 
 Creare `/opt/palworld-server-site/.env` partendo da `.env.example`. Variabili
@@ -102,6 +108,7 @@ SITE_PORT=8080
 PRIVATE_BIND=127.0.0.1
 PRIVATE_PORT=8081
 DATA_PATH=/opt/palworld-server-site/data
+APP_SECRETS_PATH=/opt/palworld-server-site/secrets/app
 
 PUBLIC_SITE_URL=https://palworld.example.com:8443
 DJANGO_ALLOWED_HOSTS=palworld.example.com,localhost,127.0.0.1
@@ -161,6 +168,11 @@ chmod 0444 /opt/palworld-server-site/secrets/postgres-*-password
 I file sono leggibili nei container non root, ma la directory host `secrets`
 resta `0700` e ciascun servizio monta soltanto i secret necessari.
 
+Il wrapper PostgreSQL sincronizza la password del ruolo applicativo a ogni
+riavvio del database. Per ruotarla, aggiornare il file indicato da
+`POSTGRES_APP_PASSWORD_FILE` e riavviare `db`; non modificare manualmente
+`postgres-data/`.
+
 `POSTGRES_DATA_PATH` contiene PostgreSQL; `DATA_PATH` contiene i lock applicativi
 e conserva il vecchio SQLite durante la finestra di rollback. L'entrypoint
 attende il database e applica automaticamente le migrazioni. PostgreSQL non
@@ -184,7 +196,10 @@ docker compose run --rm --no-deps \
 
 Il comando verifica integrità SQLite, target vuoto, permessi Django, conteggi,
 chiavi primarie e sequenze. Conservare SQLite finché la nuova versione non ha
-superato la finestra di osservazione.
+superato la finestra di osservazione. Gli alias claim dei giocatori già presenti
+vengono assegnati al primo ingest successivo in cui il personaggio ricompare;
+gli identificativi raw non sono persistiti nel database, quindi non è possibile
+ricostruirli durante la migrazione.
 
 ### Backup e trasferimento
 
@@ -196,6 +211,14 @@ container e copiare tutta `/opt/palworld-server-site`: `.env`, Compose, `source/
 registry privato. Una copia fisica di `postgres-data` è
 valida solo con PostgreSQL fermo, stessa major e stessa architettura; negli altri
 casi usare `pg_dump` e `pg_restore`.
+
+Il save Palworld è gestito separatamente da
+`ops/PalworldGuildSync/backup.sh`: fermare il game server e creare l'archivio
+con `backup.sh --allow-live`. Lo script include `Level.sav` e `Players/`, non
+include `.env`, conserva i sidecar SHA-256 e mantiene le 14 copie più recenti.
+Per un ripristino fermare il game server e usare `restore.sh --confirm`; il
+comando verifica checksum e percorsi dell'archivio e crea prima una copia di
+rollback.
 
 ### Report settimanale
 
@@ -229,6 +252,7 @@ configurare almeno:
 ```dotenv
 SITE_URL=https://<endpoint-privato>
 SITE_TOKEN=<stesso valore di PRIVATE_API_TOKEN>
+PLAYER_HASH_SECRET=<stesso valore di PLAYER_HASH_SECRET>
 VERIFY_SSL=true
 ALLOW_INSECURE_HTTP=false
 SAVE_PATH=/percorso/al/mondo/Level.sav

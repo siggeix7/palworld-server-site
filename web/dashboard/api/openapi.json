@@ -1737,10 +1737,12 @@
       },
       "ClaimProgressResponse": {
         "type": "object",
-        "required": ["snapshotAt", "catalogueVersion", "domains"],
+        "required": ["snapshotAt", "catalogueVersion", "domains", "idleExpiresAt", "absoluteExpiresAt"],
         "properties": {
           "snapshotAt": {"type": "string", "format": "date-time"},
           "catalogueVersion": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "idleExpiresAt": {"type": "string", "format": "date-time"},
+          "absoluteExpiresAt": {"type": "string", "format": "date-time"},
           "domains": {
             "type": "array",
             "minItems": 8,
@@ -1974,9 +1976,21 @@
           {
             "if": {
               "required": ["schema_version"],
+              "properties": {"schema_version": {"const": 2}}
+            },
+            "then": {
+              "not": {"anyOf": [{"required": ["players"]}, {"required": ["claim"]}]}
+            }
+          },
+          {
+            "if": {
+              "required": ["schema_version"],
               "properties": {"schema_version": {"const": 3}}
             },
-            "then": {"required": ["players"]}
+            "then": {
+              "required": ["players"],
+              "not": {"required": ["claim"]}
+            }
           },
           {
             "if": {

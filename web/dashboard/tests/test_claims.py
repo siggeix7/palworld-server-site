@@ -21,17 +21,19 @@ from dashboard.models import (
 )
 class PlayerClaimTests(TestCase):
     player_id = "a" * 24
+    claim_player_id = "b" * 24
 
     def setUp(self):
         now = timezone.now()
         Player.objects.create(
             public_id=self.player_id,
+            claim_public_id=self.claim_player_id,
             name="Explorer",
             first_seen=now,
             last_seen=now,
         )
         PlayerClaimData.objects.create(
-            public_id=self.player_id,
+            public_id=self.claim_player_id,
             snapshot_at=now,
             payload={
                 "player_name": "Explorer",
@@ -78,10 +80,12 @@ class PlayerClaimTests(TestCase):
 
         cycled = self.client.post(
             reverse("live-map-player-claims-cycle"),
-            data=json.dumps({
-                "challengeToken": challenge["challengeToken"],
-                "questionId": question["id"],
-            }),
+            data=json.dumps(
+                {
+                    "challengeToken": challenge["challengeToken"],
+                    "questionId": question["id"],
+                }
+            ),
             content_type="application/json",
         )
         self.assertEqual(cycled.status_code, 200)
@@ -96,10 +100,12 @@ class PlayerClaimTests(TestCase):
         answer = next_question["options"].index(expected)
         verified = self.client.post(
             reverse("live-map-player-claims-verify"),
-            data=json.dumps({
-                "challengeToken": challenge["challengeToken"],
-                "answers": [{"questionId": next_question["id"], "option": answer}],
-            }),
+            data=json.dumps(
+                {
+                    "challengeToken": challenge["challengeToken"],
+                    "answers": [{"questionId": next_question["id"], "option": answer}],
+                }
+            ),
             content_type="application/json",
         )
         self.assertEqual(verified.status_code, 200)
@@ -114,7 +120,12 @@ class PlayerClaimTests(TestCase):
         self.assertEqual(progress.status_code, 200)
         payload = progress.json()
         self.assertEqual(len(payload["domains"]), 8)
-        self.assertEqual(payload["catalogueVersion"], "66fc7c1008062208ee8e49a4e3e0a01e0b2eaa57c78b41ba8d00e18deb0e1fe4")
+        self.assertEqual(
+            payload["catalogueVersion"],
+            "66fc7c1008062208ee8e49a4e3e0a01e0b2eaa57c78b41ba8d00e18deb0e1fe4",
+        )
+        self.assertIn("idleExpiresAt", payload)
+        self.assertIn("absoluteExpiresAt", payload)
         self.assertEqual(payload["domains"][0]["id"], "alpha-pals")
 
     def test_wrong_answer_consumes_challenge(self):
@@ -129,10 +140,12 @@ class PlayerClaimTests(TestCase):
         wrong_option = (question["options"].index(expected) + 1) % len(question["options"])
         wrong = self.client.post(
             reverse("live-map-player-claims-verify"),
-            data=json.dumps({
-                "challengeToken": challenge["challengeToken"],
-                "answers": [{"questionId": question["id"], "option": wrong_option}],
-            }),
+            data=json.dumps(
+                {
+                    "challengeToken": challenge["challengeToken"],
+                    "answers": [{"questionId": question["id"], "option": wrong_option}],
+                }
+            ),
             content_type="application/json",
         )
         self.assertEqual(wrong.status_code, 401)
@@ -145,10 +158,12 @@ class PlayerClaimTests(TestCase):
 
         invalid = self.client.post(
             reverse("live-map-player-claims-verify"),
-            data=json.dumps({
-                "challengeToken": challenge["challengeToken"],
-                "answers": [],
-            }),
+            data=json.dumps(
+                {
+                    "challengeToken": challenge["challengeToken"],
+                    "answers": [],
+                }
+            ),
             content_type="application/json",
         )
 
@@ -191,6 +206,13 @@ class PlayerClaimTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertFalse(ClaimThrottle.objects.filter(key="old").exists())
 
+    def test_claim_start_is_limited_per_player(self):
+        self.assertEqual(self.start().status_code, 201)
+
+        response = self.start()
+
+        self.assertEqual(response.status_code, 429)
+
 
 @override_settings(SITE_AUTH_REQUIRED=False)
 class PlayerClaimOpenAPITests(SimpleTestCase):
@@ -205,7 +227,9 @@ class PlayerClaimOpenAPITests(SimpleTestCase):
             "#/components/responses/ClaimReady",
         )
         self.assertEqual(
-            paths["/api/v1/live-map/player-claims/questions/cycle"]["post"]["responses"]["200"]["$ref"],
+            paths["/api/v1/live-map/player-claims/questions/cycle"]["post"]["responses"]["200"][
+                "$ref"
+            ],
             "#/components/responses/ClaimCycled",
         )
         self.assertEqual(

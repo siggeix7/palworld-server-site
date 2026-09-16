@@ -127,13 +127,16 @@ class SectionPageTests(TestCase):
 
         response = self.client.get(reverse("server-access-api"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {
-            "host": "play.example.com",
-            "port": "8211",
-            "password": "game-server-secret",
-            "address": "play.example.com:8211",
-            "configured": True,
-        })
+        self.assertEqual(
+            response.json(),
+            {
+                "host": "play.example.com",
+                "port": "8211",
+                "password": "game-server-secret",
+                "address": "play.example.com:8211",
+                "configured": True,
+            },
+        )
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("private", response.headers["Cache-Control"])
 
@@ -141,17 +144,21 @@ class SectionPageTests(TestCase):
         GuildSnapshot.objects.create(
             payload={
                 "schema_version": 2,
-                "guilds": [{
-                    "group_id": "guild-1",
-                    "guild_name": "Explorers",
-                    "players": [{"player_name": "Member"}],
-                }],
-                "bases": [{
-                    "base_id": "base-1",
-                    "group_id": "guild-1",
-                    "name": "Forte Nord",
-                    "problem_worker_count": 2,
-                }],
+                "guilds": [
+                    {
+                        "group_id": "guild-1",
+                        "guild_name": "Explorers",
+                        "players": [{"player_name": "Member"}],
+                    }
+                ],
+                "bases": [
+                    {
+                        "base_id": "base-1",
+                        "group_id": "guild-1",
+                        "name": "Forte Nord",
+                        "problem_worker_count": 2,
+                    }
+                ],
                 "world": {"active_raid_count": 0, "oil_rig_count": 3},
             }
         )
@@ -166,18 +173,22 @@ class SectionPageTests(TestCase):
         snapshot = GuildSnapshot.objects.create(
             payload={
                 "schema_version": 2,
-                "guilds": [{
-                    "group_id": "guild-1",
-                    "guild_name": "Explorers",
-                    "players": [],
-                }],
-                "bases": [{
-                    "base_id": "base-1",
-                    "group_id": "guild-1",
-                    "name": "Forte Nord",
-                    "problem_worker_count": 2,
-                    "raid_active": True,
-                }],
+                "guilds": [
+                    {
+                        "group_id": "guild-1",
+                        "guild_name": "Explorers",
+                        "players": [],
+                    }
+                ],
+                "bases": [
+                    {
+                        "base_id": "base-1",
+                        "group_id": "guild-1",
+                        "name": "Forte Nord",
+                        "problem_worker_count": 2,
+                        "raid_active": True,
+                    }
+                ],
                 "diagnostics": {"unresolved_worker_count": 1},
                 "world": {"active_raid_count": 2, "oil_rig_alert_count": 1},
             }
@@ -207,9 +218,7 @@ class SectionPageTests(TestCase):
             ("admin-panel", "dashboard/js/admin.js"),
         ):
             if name == "admin-panel":
-                admin = self.create_user(
-                    "script-admin", "admin@example.com", admin=True
-                )
+                admin = self.create_user("script-admin", "admin@example.com", admin=True)
                 self.client.force_login(admin)
             response = self.client.get(reverse(name))
             self.assert_spa_shell(response)

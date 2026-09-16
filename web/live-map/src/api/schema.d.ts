@@ -1129,6 +1129,10 @@ export interface components {
       /** Format: date-time */
       snapshotAt: string
       catalogueVersion: string
+      /** Format: date-time */
+      idleExpiresAt: string
+      /** Format: date-time */
+      absoluteExpiresAt: string
       domains: components['schemas']['ClaimProgressDomain'][]
     }
     ClaimLogoutResponse: {
@@ -1268,7 +1272,7 @@ export interface components {
       world: components['schemas']['GuildWorld']
       diagnostics: components['schemas']['GuildDiagnostics']
       claim?: components['schemas']['GuildClaim']
-    } & (unknown & unknown)
+    } & (unknown & unknown & unknown)
     Guild: {
       group_id: string
       guild_name: string

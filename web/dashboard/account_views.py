@@ -4,18 +4,18 @@ from urllib.parse import urlencode
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.utils.encoding import force_str
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_decode
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
-from django.utils.decorators import method_decorator
-from django.urls import reverse, reverse_lazy
 
 from .accounts import (
     get_user_profile,
@@ -38,16 +38,11 @@ from .forms import (
 from .models import UserProfile
 from .tokens import email_verification_token
 
-
 logger = logging.getLogger(__name__)
 
 
 def _notify_admins_if_needed(request, user, profile):
-    if (
-        not profile.email_verified
-        or profile.approved
-        or profile.admin_notified_at
-    ):
+    if not profile.email_verified or profile.approved or profile.admin_notified_at:
         return
     try:
         sent = notify_admins_of_pending_user(request, user)
@@ -167,11 +162,7 @@ def verify_email(request, uidb64, token):
         user = get_user_model().objects.get(pk=user_id)
     except (ValueError, TypeError, OverflowError, get_user_model().DoesNotExist):
         user = None
-    if (
-        not user
-        or not user.is_active
-        or not email_verification_token.check_token(user, token)
-    ):
+    if not user or not user.is_active or not email_verification_token.check_token(user, token):
         return render(request, "dashboard/accounts/verification_invalid.html", status=400)
     if request.method == "GET":
         return render(
@@ -194,9 +185,11 @@ def resend_verification(request):
     initial = {"email": request.user.email} if request.user.is_authenticated else None
     form = ResendVerificationForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
-        user = get_user_model().objects.filter(
-            email__iexact=form.cleaned_data["email"], is_active=True
-        ).first()
+        user = (
+            get_user_model()
+            .objects.filter(email__iexact=form.cleaned_data["email"], is_active=True)
+            .first()
+        )
         if user and not get_user_profile(user).email_verified:
             try:
                 send_verification_email(request, user)
@@ -340,7 +333,6 @@ def delete_member(request, profile_id):
 def change_username(request):
     if not has_site_access(request.user):
         return redirect("pending-approval")
-    profile = get_user_profile(request.user)
     form = UsernameChangeForm(request.POST or None, user=request.user)
     if request.method == "POST" and form.is_valid():
         old_username = request.user.username
@@ -350,7 +342,7 @@ def change_username(request):
         logger.info("User %s changed username to %s", old_username, new_username)
         messages.success(
             request,
-            f"Nome utente aggiornato da \"{old_username}\" a \"{new_username}\". "
+            f'Nome utente aggiornato da "{old_username}" a "{new_username}". '
             f"Assicurati che corrisponda al nome usato in Palworld.",
         )
         return redirect("change-username")

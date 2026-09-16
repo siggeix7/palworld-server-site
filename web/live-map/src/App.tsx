@@ -285,7 +285,8 @@ function LiveMap({
   const expectedCatalogueVersion = useMemo(() => catalogueVersionFromURL(config.catalogueUrl), [config.catalogueUrl])
   const { state: saveProgress } = useSaveProgress(claimSession.session, {
     expectedCatalogueVersion,
-    onUnauthorized: claimSession.invalidate
+    onUnauthorized: claimSession.invalidate,
+    onSessionRefreshed: claimSession.updateSessionExpiry
   })
   const playerState = players.data
   const objectState = objects.data || { ...EMPTY_OBJECT_STATE, enabled: config.worldDataEnabled }

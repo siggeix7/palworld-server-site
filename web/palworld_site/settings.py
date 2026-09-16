@@ -1,35 +1,18 @@
 import os
 import re
+import secrets
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
 
+from .config import read_secret
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-def read_secret(file_variable, value_variable):
-    secret_path = os.getenv(file_variable, "").strip()
-    if secret_path:
-        try:
-            value = Path(secret_path).read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise ImproperlyConfigured(
-                f"Unable to read secret file configured by {file_variable}"
-            ) from exc
-    else:
-        value = os.getenv(value_variable, "").strip()
-    if not value:
-        raise ImproperlyConfigured(
-            f"{file_variable} or {value_variable} must be configured"
-        )
-    return value
-
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-if not SECRET_KEY:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY is required")
+SECRET_KEY = read_secret("DJANGO_SECRET_KEY_FILE", "DJANGO_SECRET_KEY")
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 ALLOWED_HOSTS = [
     host.strip()
@@ -48,6 +31,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "dashboard.middleware.RequestIDMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -104,9 +88,7 @@ elif DATABASE_ENGINE in {"postgres", "postgresql"}:
         }
     }
 else:
-    raise ImproperlyConfigured(
-        "DATABASE_ENGINE must be either sqlite or postgresql"
-    )
+    raise ImproperlyConfigured("DATABASE_ENGINE must be either sqlite or postgresql")
 
 LEGACY_SQLITE_PATH = os.getenv("LEGACY_SQLITE_PATH", "").strip()
 if LEGACY_SQLITE_PATH:
@@ -175,13 +157,17 @@ if (
     raise ImproperlyConfigured("PUBLIC_SITE_URL must be an absolute HTTPS origin")
 del public_site_port
 CSRF_TRUSTED_ORIGINS = [PUBLIC_SITE_URL]
-PLAYER_HASH_SECRET = os.getenv("PLAYER_HASH_SECRET", SECRET_KEY)
-PRIVATE_API_TOKEN = os.getenv("PRIVATE_API_TOKEN", "")
+PLAYER_HASH_SECRET = read_secret("PLAYER_HASH_SECRET_FILE", "PLAYER_HASH_SECRET")
+if secrets.compare_digest(PLAYER_HASH_SECRET, SECRET_KEY):
+    raise ImproperlyConfigured("PLAYER_HASH_SECRET must be different from DJANGO_SECRET_KEY")
+PRIVATE_API_TOKEN = read_secret("PRIVATE_API_TOKEN_FILE", "PRIVATE_API_TOKEN", required=False)
 PRIVATE_API_MAX_BYTES = int(os.getenv("PRIVATE_API_MAX_BYTES", "67108864"))
 PALWORLD_API_URL = os.getenv("PALWORLD_API_URL", "").strip().rstrip("/")
 PALWORLD_API_USER = os.getenv("PALWORLD_API_USER", "admin")
-PALWORLD_API_PASSWORD = os.getenv("PALWORLD_API_PASSWORD", "")
-PALWORLD_API_VERIFY_TLS = os.getenv("PALWORLD_API_VERIFY_TLS", "true").lower() == "true"
+PALWORLD_API_PASSWORD = read_secret(
+    "PALWORLD_API_PASSWORD_FILE", "PALWORLD_API_PASSWORD", required=False
+)
+PALWORLD_API_VERIFY_TLS = os.getenv("PALWORLD_API_VERIFY_TLS", "true").strip().casefold() != "false"
 PALWORLD_API_ALLOW_INSECURE_HTTP = (
     os.getenv("PALWORLD_API_ALLOW_INSECURE_HTTP", "false").lower() == "true"
 )
@@ -189,7 +175,7 @@ PALWORLD_API_CONNECT_TIMEOUT = float(os.getenv("PALWORLD_API_CONNECT_TIMEOUT", "
 if PALWORLD_API_URL:
     palworld_api = urlsplit(PALWORLD_API_URL)
     try:
-        palworld_api.port
+        _ = palworld_api.port
     except ValueError as exc:
         raise ImproperlyConfigured("PALWORLD_API_URL contains an invalid port") from exc
     if (
@@ -265,9 +251,7 @@ SITE_ADMIN_USERS = {
 if not SITE_ADMIN_USERS:
     raise ImproperlyConfigured("SITE_ADMIN_USERS must contain at least one identifier")
 CURRENT_TERMS_VERSION = os.getenv("CURRENT_TERMS_VERSION", "2026-09-14")
-CURRENT_TERMS_EFFECTIVE_DATE = os.getenv(
-    "CURRENT_TERMS_EFFECTIVE_DATE", "14 settembre 2026"
-)
+CURRENT_TERMS_EFFECTIVE_DATE = os.getenv("CURRENT_TERMS_EFFECTIVE_DATE", "14 settembre 2026")
 
 
 def _required_legal_setting(name):
@@ -287,15 +271,15 @@ PRIVACY_CONTROLLER_NAME = _required_legal_setting("PRIVACY_CONTROLLER_NAME")
 PRIVACY_CONTACT_EMAIL = _required_legal_setting("PRIVACY_CONTACT_EMAIL")
 PALWORLD_PUBLIC_HOST = os.getenv("PALWORLD_PUBLIC_HOST", "").strip()
 PALWORLD_PUBLIC_PORT = os.getenv("PALWORLD_PUBLIC_PORT", "8211").strip()
-PALWORLD_PUBLIC_PASSWORD = os.getenv("PALWORLD_PUBLIC_PASSWORD", "")
-
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+PALWORLD_PUBLIC_PASSWORD = read_secret(
+    "PALWORLD_PUBLIC_PASSWORD_FILE", "PALWORLD_PUBLIC_PASSWORD", required=False
 )
+
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.libero.it")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_HOST_PASSWORD = read_secret("EMAIL_HOST_PASSWORD_FILE", "EMAIL_HOST_PASSWORD", required=False)
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "true").lower() == "true"
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "false").lower() == "true"
 if EMAIL_USE_SSL and EMAIL_USE_TLS:
@@ -308,8 +292,10 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = os.getenv("DJANGO_USE_X_FORWARDED_HOST", "false").lower() == "true"
 SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "false").lower() == "true"
 SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-SECURE_HSTS_PRELOAD = False
+SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+    os.getenv("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", "false").lower() == "true"
+)
+SECURE_HSTS_PRELOAD = os.getenv("DJANGO_SECURE_HSTS_PRELOAD", "false").lower() == "true"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_HTTPONLY = True
@@ -329,14 +315,19 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "filters": {
-        "redact_sensitive_paths": {
-            "()": "dashboard.logging.RedactSensitivePathsFilter"
-        }
+        "redact_sensitive_paths": {"()": "dashboard.logging.RedactSensitivePathsFilter"},
+        "request_id": {"()": "dashboard.logging.RequestIDFilter"},
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "filters": ["redact_sensitive_paths"],
+            "filters": ["request_id", "redact_sensitive_paths"],
+            "formatter": "production",
+        }
+    },
+    "formatters": {
+        "production": {
+            "format": "%(asctime)s %(levelname)s request_id=%(request_id)s %(name)s %(message)s",
         }
     },
     "loggers": {

@@ -10,7 +10,6 @@ from pathlib import Path
 
 from PIL import Image, features
 
-
 TILE_SIZE = 512
 LEVELS = (1024, 2048, 4096, 8192)
 WEBP_QUALITY = 82
@@ -58,7 +57,7 @@ def pyramid_is_current(directory: Path, manifest: dict[str, object], generator_h
         if not isinstance(levels, list) or len(levels) != len(LEVELS):
             return False
         aggregate_lines: list[str] = []
-        for level_size, level in zip(LEVELS, levels):
+        for level_size, level in zip(LEVELS, levels, strict=True):
             columns = level_size // TILE_SIZE
             if not isinstance(level, dict) or any(
                 level.get(key) != value
@@ -96,7 +95,9 @@ def pyramid_is_current(directory: Path, manifest: dict[str, object], generator_h
     return True
 
 
-def generate_layer(directory: Path, layer: dict[str, object], generator_hash: str) -> dict[str, object]:
+def generate_layer(
+    directory: Path, layer: dict[str, object], generator_hash: str
+) -> dict[str, object]:
     layer_id = str(layer["id"])
     source_path = directory / str(layer["file"])
     for stale_tile in directory.glob(f"{layer_id}-z*-x*-y*.webp"):
@@ -109,8 +110,12 @@ def generate_layer(directory: Path, layer: dict[str, object], generator_hash: st
         generated_levels: list[dict[str, object]] = []
         aggregate_lines: list[str] = []
         for level_size in LEVELS:
-            level = source if level_size == LEVELS[-1] else source.resize(
-                (level_size, level_size), Image.Resampling.LANCZOS, reducing_gap=3.0
+            level = (
+                source
+                if level_size == LEVELS[-1]
+                else source.resize(
+                    (level_size, level_size), Image.Resampling.LANCZOS, reducing_gap=3.0
+                )
             )
             columns = level_size // TILE_SIZE
             tiles: list[dict[str, object]] = []

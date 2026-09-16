@@ -46,12 +46,12 @@ class AccountAccessTests(TestCase):
             email=email,
             password=self.password,
         )
-        profile_kwargs = dict(
-            user=user,
-            email_verified=verified,
-            approved=approved,
-            must_change_password=must_change_password,
-        )
+        profile_kwargs = {
+            "user": user,
+            "email_verified": verified,
+            "approved": approved,
+            "must_change_password": must_change_password,
+        }
         if accepted_terms:
             profile_kwargs["terms_version"] = settings.CURRENT_TERMS_VERSION
             profile_kwargs["terms_accepted_at"] = timezone.now()
@@ -134,7 +134,9 @@ class AccountAccessTests(TestCase):
 
     def test_username_change_rejects_duplicates(self):
         self.create_user(username="taken", email="taken@example.com", verified=True, approved=True)
-        user = self.create_user(username="other", email="other@example.com", verified=True, approved=True)
+        user = self.create_user(
+            username="other", email="other@example.com", verified=True, approved=True
+        )
         self.client.force_login(user)
         response = self.client.post(
             reverse("change-username"),
@@ -171,8 +173,7 @@ class AccountAccessTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("https://palworld.example.com/accounts/verify/", mail.outbox[0].body)
         verify_html = [
-            content for content, mimetype in mail.outbox[0].alternatives
-            if mimetype == "text/html"
+            content for content, mimetype in mail.outbox[0].alternatives if mimetype == "text/html"
         ]
         self.assertEqual(len(verify_html), 1)
         self.assertIn("Conferma e-mail", verify_html[0])
@@ -302,9 +303,7 @@ class AccountAccessTests(TestCase):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = email_verification_token.make_token(user)
 
-        verification_url = reverse(
-            "verify-email", kwargs={"uidb64": uid, "token": token}
-        )
+        verification_url = reverse("verify-email", kwargs={"uidb64": uid, "token": token})
         response = self.client.get(verification_url)
 
         self.assertEqual(response.status_code, 200)
@@ -418,9 +417,7 @@ class AccountAccessTests(TestCase):
         uid = urlsafe_base64_encode(force_bytes(member.pk))
         token = email_verification_token.make_token(member)
 
-        self.client.post(
-            reverse("verify-email", kwargs={"uidb64": uid, "token": token})
-        )
+        self.client.post(reverse("verify-email", kwargs={"uidb64": uid, "token": token}))
 
         member.site_profile.refresh_from_db()
         self.assertIsNotNone(member.site_profile.admin_notified_at)
@@ -529,22 +526,91 @@ class AccountAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("home")).status_code, 200)
 
     def test_login_rate_limit_is_shared_through_the_database(self):
-        for _attempt in range(10):
+        for attempt in range(10):
             response = self.client.post(
                 reverse("login"),
-                {"username": "unknown", "password": "invalid-password"},
+                {
+                    "username": f"unknown-{attempt}",
+                    "password": "invalid-password",
+                },
             )
             self.assertEqual(response.status_code, 200)
 
         response = self.client.post(
             reverse("login"),
-            {"username": "unknown", "password": "invalid-password"},
+            {"username": "unknown-final", "password": "invalid-password"},
         )
 
         self.assertEqual(response.status_code, 429)
         self.assertGreater(int(response.headers["Retry-After"]), 0)
         self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
+        self.assertIn("style-src-attr 'unsafe-inline'", response.headers["Content-Security-Policy"])
+
+    def test_login_rate_limit_blocks_account_across_ips_and_case_variants(self):
+        for attempt, address in enumerate(
+            ("192.0.2.1", "192.0.2.2", "192.0.2.3", "192.0.2.4", "192.0.2.5")
+        ):
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": ("MEMBER@EXAMPLE.COM" if attempt % 2 else "member@example.com"),
+                    "password": "invalid-password",
+                },
+                REMOTE_ADDR=address,
+            )
+            self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "Member@Example.Com", "password": "invalid-password"},
+            REMOTE_ADDR="192.0.2.6",
+        )
+        self.assertEqual(response.status_code, 429)
+
+    @override_settings(AUTH_TRUSTED_PROXY_ADDRESSES={"10.0.0.1"})
+    def test_login_rate_limit_uses_forwarded_address_only_from_trusted_proxy(self):
+        for attempt in range(10):
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": f"forwarded-{attempt}",
+                    "password": "invalid-password",
+                },
+                REMOTE_ADDR="10.0.0.1",
+                HTTP_X_FORWARDED_FOR="198.51.100.20",
+            )
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                reverse("login"),
+                {"username": "forwarded-final", "password": "invalid-password"},
+                REMOTE_ADDR="10.0.0.1",
+                HTTP_X_FORWARDED_FOR="198.51.100.20",
+            ).status_code,
+            429,
+        )
+
+        for attempt in range(10):
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": f"spoofed-{attempt}",
+                    "password": "invalid-password",
+                },
+                REMOTE_ADDR="198.51.100.21",
+                HTTP_X_FORWARDED_FOR="198.51.100.20",
+            )
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                reverse("login"),
+                {"username": "spoofed-final", "password": "invalid-password"},
+                REMOTE_ADDR="198.51.100.21",
+                HTTP_X_FORWARDED_FOR="198.51.100.20",
+            ).status_code,
+            429,
+        )
 
     def test_csrf_rejections_do_not_consume_login_quota(self):
         csrf_client = Client(enforce_csrf_checks=True)
@@ -580,8 +646,7 @@ class AccountAccessTests(TestCase):
             mail.outbox[0].body,
         )
         reset_html = [
-            content for content, mimetype in mail.outbox[0].alternatives
-            if mimetype == "text/html"
+            content for content, mimetype in mail.outbox[0].alternatives if mimetype == "text/html"
         ]
         self.assertEqual(len(reset_html), 1)
         self.assertIn("Reimposta password", reset_html[0])
@@ -656,9 +721,7 @@ class AccountAccessTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "condizioni sono cambiate")
-        self.assertFalse(
-            get_user_model().objects.filter(username="StaleTermsUser").exists()
-        )
+        self.assertFalse(get_user_model().objects.filter(username="StaleTermsUser").exists())
 
     def test_existing_user_without_terms_is_redirected_on_first_login(self):
         user = self.create_user(verified=True, approved=True, accepted_terms=False)

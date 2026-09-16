@@ -49,6 +49,7 @@ interface PlayerClaimContextValue {
   verifyClaim: () => Promise<void>
   cycleQuestion: () => Promise<void>
   setAnswer: (answer: number) => void
+  updateSessionExpiry: (expiresAt: number) => void
   invalidate: () => void
   disconnect: () => Promise<void>
 }
@@ -100,12 +101,18 @@ function parseCycled(value: unknown) {
   return { question, expiresAt }
 }
 
-function parseVerified(value: unknown) {
-  if (!isRecord(value) || value.status !== 'verified' || typeof value.sessionToken !== 'string') return null
+function parseSessionExpiry(value: unknown) {
+  if (!isRecord(value)) return null
   const idle = typeof value.idleExpiresAt === 'string' ? Date.parse(value.idleExpiresAt) : Number.NaN
   const absolute = typeof value.absoluteExpiresAt === 'string' ? Date.parse(value.absoluteExpiresAt) : Number.NaN
   const expiresAt = Math.min(idle, absolute)
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null
+  return Number.isFinite(expiresAt) && expiresAt > Date.now() ? expiresAt : null
+}
+
+function parseVerified(value: unknown) {
+  if (!isRecord(value) || value.status !== 'verified' || typeof value.sessionToken !== 'string') return null
+  const expiresAt = parseSessionExpiry(value)
+  if (expiresAt === null) return null
   return { bearer: value.sessionToken, expiresAt }
 }
 
@@ -146,6 +153,17 @@ export function PlayerClaimProvider({ enabled, children }: { enabled: boolean; c
     setSession({ phase: 'anonymous' })
     setChallenge(null)
   }, [])
+
+  const updateSessionExpiry = useCallback(
+    (expiresAt: number) => {
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        invalidate()
+        return
+      }
+      setSession((current) => (current.phase === 'connected' ? { ...current, expiresAt } : current))
+    },
+    [invalidate]
+  )
 
   useEffect(() => {
     if (session.phase !== 'connected') return
@@ -295,6 +313,7 @@ export function PlayerClaimProvider({ enabled, children }: { enabled: boolean; c
       verifyClaim,
       cycleQuestion,
       setAnswer,
+      updateSessionExpiry,
       invalidate,
       disconnect
     }),
@@ -310,6 +329,7 @@ export function PlayerClaimProvider({ enabled, children }: { enabled: boolean; c
       verifyClaim,
       cycleQuestion,
       setAnswer,
+      updateSessionExpiry,
       invalidate,
       disconnect
     ]
@@ -322,6 +342,7 @@ export function usePlayerClaimSession() {
   return {
     enabled: claim?.enabled === true,
     session: claim?.session || ({ phase: 'anonymous' } as const),
+    updateSessionExpiry: claim?.updateSessionExpiry,
     invalidate: claim?.invalidate
   }
 }

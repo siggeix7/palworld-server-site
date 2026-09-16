@@ -1,4 +1,3 @@
-from datetime import time, timedelta
 import hashlib
 import hmac
 import json
@@ -6,6 +5,7 @@ import logging
 import math
 import re
 import secrets
+from datetime import time, timedelta
 from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -40,58 +40,118 @@ ADMIN_USERID_MAX_LENGTH = 64
 ADMIN_USERID_PATTERN = re.compile(r"^[A-Za-z0-9_:.\-]{1,64}\Z")
 ADMIN_ANNOUNCE_MAX_LENGTH = 500
 ADMIN_COMMAND_TIMEOUT = 10
+ADMIN_RESPONSE_MAX_BYTES = 1 << 20
 SCHEDULE_TIME_PATTERN = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]\Z")
 SNAPSHOT_NAME_MAX_LENGTH = 128
 SNAPSHOT_KEY_MAX_LENGTH = 64
 CLAIM_GUID_PATTERN = re.compile(r"^[0-9a-fA-F]{32}\Z")
 GUILD_FIELDS = {
-    "group_id", "guild_name", "players", "base_count", "pal_count",
-    "worker_count", "working_count", "problem_worker_count",
+    "group_id",
+    "guild_name",
+    "players",
+    "base_count",
+    "pal_count",
+    "worker_count",
+    "working_count",
+    "problem_worker_count",
     "active_raid_count",
 }
 BASE_FIELDS = {
-    "base_id", "group_id", "name", "location_x", "location_y",
-    "worker_count", "working_count", "sick_count", "hungry_count",
-    "low_sanity_count", "problem_worker_count", "work_types", "raid_active",
+    "base_id",
+    "group_id",
+    "name",
+    "location_x",
+    "location_y",
+    "worker_count",
+    "working_count",
+    "sick_count",
+    "hungry_count",
+    "low_sanity_count",
+    "problem_worker_count",
+    "work_types",
+    "raid_active",
 }
 COUNT_FIELDS = {
-    "base_count", "pal_count", "worker_count", "working_count",
-    "problem_worker_count", "active_raid_count", "sick_count", "hungry_count",
+    "base_count",
+    "pal_count",
+    "worker_count",
+    "working_count",
+    "problem_worker_count",
+    "active_raid_count",
+    "sick_count",
+    "hungry_count",
     "low_sanity_count",
 }
 WORLD_FIELDS = {
-    "active_raid_count", "oil_rig_count", "oil_rig_alert_count",
+    "active_raid_count",
+    "oil_rig_count",
+    "oil_rig_alert_count",
     "oil_rig_cleared_count",
 }
 DIAGNOSTIC_FIELDS = {
-    "unowned_base_count", "missing_worker_container_count",
+    "unowned_base_count",
+    "missing_worker_container_count",
     "unresolved_worker_count",
 }
 PLAYER_FIELDS = {
-    "player_id", "player_name", "guild_id", "is_admin", "level", "exp",
-    "owned_pal_count", "unused_status_points", "status_points",
+    "player_id",
+    "player_name",
+    "guild_id",
+    "is_admin",
+    "level",
+    "exp",
+    "owned_pal_count",
+    "unused_status_points",
+    "status_points",
 }
 PLAYER_STATUS_FIELDS = {
-    "max_hp", "stamina", "attack", "carry_weight", "capture_rate",
+    "max_hp",
+    "stamina",
+    "attack",
+    "carry_weight",
+    "capture_rate",
     "work_speed",
 }
 CLAIM_PLAYER_FIELDS = {
-    "player_uid", "player_name", "inventory", "party", "progress",
+    "player_uid",
+    "player_name",
+    "inventory",
+    "party",
+    "progress",
 }
 CLAIM_INVENTORY_FIELDS = {
-    "common", "weapons", "armor", "food", "drop_slot", "essential",
+    "common",
+    "weapons",
+    "armor",
+    "food",
+    "drop_slot",
+    "essential",
 }
 CLAIM_STACK_FIELDS = {
-    "slot", "item_id", "count", "dynamic_item_id",
+    "slot",
+    "item_id",
+    "count",
+    "dynamic_item_id",
 }
 CLAIM_PARTY_FIELDS = {
-    "slot", "species", "instance_id",
+    "slot",
+    "species",
+    "instance_id",
 }
 CLAIM_PROGRESS_FIELDS = {
-    "fast_travel", "areas", "notes", "relics",
-    "item_pickups", "normal_bosses", "tower_bosses",
+    "fast_travel",
+    "areas",
+    "notes",
+    "relics",
+    "item_pickups",
+    "normal_bosses",
+    "tower_bosses",
 }
 CLAIM_ZERO_GUID = "0" * 32
+
+
+def _is_opaque_id(value):
+    return isinstance(value, str) and bool(OPAQUE_ID_PATTERN.fullmatch(value))
 
 
 def _admin_required(request):
@@ -144,10 +204,18 @@ def _validate_guild_payload(payload):
     if not isinstance(payload, dict):
         return "payload must be an object"
     schema_version = payload.get("schema_version")
-    if schema_version not in {2, 3, 4}:
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version not in {2, 3, 4}
+    ):
         return "unsupported schema_version"
     supported_fields = {
-        "schema_version", "guilds", "bases", "world", "diagnostics",
+        "schema_version",
+        "guilds",
+        "bases",
+        "world",
+        "diagnostics",
     }
     if schema_version >= 3:
         supported_fields.add("players")
@@ -172,16 +240,11 @@ def _validate_guild_payload(payload):
     for guild in payload["guilds"]:
         if not isinstance(guild, dict) or set(guild) - GUILD_FIELDS:
             return "each guild must contain only supported fields"
-        if not OPAQUE_ID_PATTERN.fullmatch(guild.get("group_id", "")):
+        if not _is_opaque_id(guild.get("group_id", "")):
             return "each guild must be an object with a group_id"
-        if not _valid_snapshot_text(
-            guild.get("guild_name"), SNAPSHOT_NAME_MAX_LENGTH
-        ):
+        if not _valid_snapshot_text(guild.get("guild_name"), SNAPSHOT_NAME_MAX_LENGTH):
             return "guild_name must be a printable string of at most 128 characters"
-        if any(
-            field in guild and not _is_nonnegative_int(guild[field])
-            for field in COUNT_FIELDS
-        ):
+        if any(field in guild and not _is_nonnegative_int(guild[field]) for field in COUNT_FIELDS):
             return "guild counts must be non-negative integers"
         players = guild.get("players")
         if not isinstance(players, list) or len(players) > 64:
@@ -203,13 +266,11 @@ def _validate_guild_payload(payload):
     for base in payload["bases"]:
         if not isinstance(base, dict) or set(base) - BASE_FIELDS:
             return "each base must contain only supported fields"
-        if not OPAQUE_ID_PATTERN.fullmatch(
-            base.get("base_id", "")
-        ) or not OPAQUE_ID_PATTERN.fullmatch(base.get("group_id", "")):
-            return "each base must have a base_id and group_id"
-        if not _valid_snapshot_text(
-            base.get("name"), SNAPSHOT_NAME_MAX_LENGTH
+        if not _is_opaque_id(base.get("base_id", "")) or not _is_opaque_id(
+            base.get("group_id", "")
         ):
+            return "each base must have a base_id and group_id"
+        if not _valid_snapshot_text(base.get("name"), SNAPSHOT_NAME_MAX_LENGTH):
             return "base name must be a printable string of at most 128 characters"
         if any(
             not isinstance(base.get(field), (int, float))
@@ -218,10 +279,7 @@ def _validate_guild_payload(payload):
             for field in ("location_x", "location_y")
         ):
             return "base coordinates must be numeric"
-        if any(
-            field in base and not _is_nonnegative_int(base[field])
-            for field in COUNT_FIELDS
-        ):
+        if any(field in base and not _is_nonnegative_int(base[field]) for field in COUNT_FIELDS):
             return "base counts must be non-negative integers"
         if not isinstance(base.get("raid_active"), bool):
             return "base raid_active must be boolean"
@@ -243,27 +301,26 @@ def _validate_guild_payload(payload):
     for player in payload.get("players", []):
         if not isinstance(player, dict) or set(player) - PLAYER_FIELDS:
             return "each saved player must contain only supported fields"
-        if not OPAQUE_ID_PATTERN.fullmatch(player.get("player_id", "")):
+        if not _is_opaque_id(player.get("player_id", "")):
             return "each saved player must have a player_id"
-        if (
-            not _valid_snapshot_text(
-                player.get("player_name"),
-                SNAPSHOT_NAME_MAX_LENGTH,
-                allow_empty=False,
-            )
+        if not _valid_snapshot_text(
+            player.get("player_name"),
+            SNAPSHOT_NAME_MAX_LENGTH,
+            allow_empty=False,
         ):
             return "saved player names must be non-empty strings"
         guild_id = player.get("guild_id")
-        if not isinstance(guild_id, str) or (
-            guild_id and not OPAQUE_ID_PATTERN.fullmatch(guild_id)
-        ):
+        if not isinstance(guild_id, str) or (guild_id and not _is_opaque_id(guild_id)):
             return "saved player guild_id must be empty or opaque"
         if not isinstance(player.get("is_admin"), bool):
             return "saved player is_admin must be boolean"
         if any(
             not _is_nonnegative_int(player.get(field))
             for field in (
-                "level", "exp", "owned_pal_count", "unused_status_points",
+                "level",
+                "exp",
+                "owned_pal_count",
+                "unused_status_points",
             )
         ):
             return "saved player counts must be non-negative integers"
@@ -327,7 +384,9 @@ def _validate_guild_payload(payload):
                     if not _is_nonnegative_int(stack.get("count")) or stack.get("count") == 0:
                         return "claim inventory stack count must be positive integer"
                     dynamic_id = stack.get("dynamic_item_id")
-                    if dynamic_id is not None and (not isinstance(dynamic_id, str) or len(dynamic_id) > 256):
+                    if dynamic_id is not None and (
+                        not isinstance(dynamic_id, str) or len(dynamic_id) > 256
+                    ):
                         return "claim inventory stack dynamic_item_id must be empty string or non-empty string"
             party = cp.get("party")
             if not isinstance(party, list) or len(party) > 64:
@@ -349,7 +408,9 @@ def _validate_guild_payload(payload):
                 ):
                     return "claim party entry must have species"
                 instance_id = pal.get("instance_id")
-                if instance_id is not None and (not isinstance(instance_id, str) or len(instance_id) > 256):
+                if instance_id is not None and (
+                    not isinstance(instance_id, str) or len(instance_id) > 256
+                ):
                     return "claim party entry instance_id must be empty string or non-empty string"
             progress = cp.get("progress")
             if not isinstance(progress, dict) or set(progress) != CLAIM_PROGRESS_FIELDS:
@@ -360,8 +421,11 @@ def _validate_guild_payload(payload):
                 if len(keys) > 8192:
                     return f"claim player progress.{prog_key} contains too many entries"
                 for key in keys:
-                    if not isinstance(key, str) or not key or len(key) > 500 or not all(
-                        character.isprintable() for character in key
+                    if (
+                        not isinstance(key, str)
+                        or not key
+                        or len(key) > 500
+                        or not all(character.isprintable() for character in key)
                     ):
                         return "progress key must be non-empty string"
 
@@ -379,20 +443,24 @@ def _validate_guild_payload(payload):
 def _guild_alerts(snapshot, now=None):
     now = now or timezone.now()
     if not snapshot:
-        return [{
-            "level": "danger",
-            "title": "Sincronizzazione save assente",
-            "detail": "Non è ancora stato ricevuto uno snapshot del mondo.",
-        }]
+        return [
+            {
+                "level": "danger",
+                "title": "Sincronizzazione save assente",
+                "detail": "Non è ancora stato ricevuto uno snapshot del mondo.",
+            }
+        ]
 
     alerts = []
     age = now - snapshot.updated_at
     if age > GUILD_SNAPSHOT_STALE_AFTER:
-        alerts.append({
-            "level": "danger",
-            "title": "Sincronizzazione save in ritardo",
-            "detail": f"L'ultimo snapshot risale a {int(age.total_seconds() // 60)} minuti fa.",
-        })
+        alerts.append(
+            {
+                "level": "danger",
+                "title": "Sincronizzazione save in ritardo",
+                "detail": f"L'ultimo snapshot risale a {int(age.total_seconds() // 60)} minuti fa.",
+            }
+        )
 
     payload = snapshot.payload if isinstance(snapshot.payload, dict) else {}
     guilds = payload.get("guilds", [])
@@ -410,11 +478,13 @@ def _guild_alerts(snapshot, now=None):
     for guild in guilds:
         if not isinstance(guild, dict) or guild.get("players"):
             continue
-        alerts.append({
-            "level": "warning",
-            "title": "Gilda senza membri",
-            "detail": guild.get("guild_name") or guild.get("group_name") or "Gilda senza nome",
-        })
+        alerts.append(
+            {
+                "level": "warning",
+                "title": "Gilda senza membri",
+                "detail": guild.get("guild_name") or guild.get("group_name") or "Gilda senza nome",
+            }
+        )
 
     for base in bases:
         if not isinstance(base, dict):
@@ -422,24 +492,30 @@ def _guild_alerts(snapshot, now=None):
         base_name = base.get("name") or "Base senza nome"
         guild_name = guild_names.get(base.get("group_id"), "Gilda non riconosciuta")
         if base.get("group_id") not in guild_names:
-            alerts.append({
-                "level": "danger",
-                "title": "Base senza gilda valida",
-                "detail": base_name,
-            })
+            alerts.append(
+                {
+                    "level": "danger",
+                    "title": "Base senza gilda valida",
+                    "detail": base_name,
+                }
+            )
         problem_count = _nonnegative_int(base.get("problem_worker_count"))
         if problem_count:
-            alerts.append({
-                "level": "warning",
-                "title": "Pal in difficoltà",
-                "detail": f"{base_name} · {guild_name}: {problem_count} lavoratori da controllare.",
-            })
+            alerts.append(
+                {
+                    "level": "warning",
+                    "title": "Pal in difficoltà",
+                    "detail": f"{base_name} · {guild_name}: {problem_count} lavoratori da controllare.",
+                }
+            )
         if base.get("raid_active"):
-            alerts.append({
-                "level": "danger",
-                "title": "Invasione attiva",
-                "detail": f"{base_name} · {guild_name}",
-            })
+            alerts.append(
+                {
+                    "level": "danger",
+                    "title": "Invasione attiva",
+                    "detail": f"{base_name} · {guild_name}",
+                }
+            )
 
     diagnostics = payload.get("diagnostics", {})
     if isinstance(diagnostics, dict):
@@ -448,39 +524,39 @@ def _guild_alerts(snapshot, now=None):
             for key in ("missing_worker_container_count", "unresolved_worker_count")
         )
         if invalid_references:
-            alerts.append({
-                "level": "warning",
-                "title": "Riferimenti save scollegati",
-                "detail": f"Rilevati {invalid_references} riferimenti a lavoratori o contenitori non risolti.",
-            })
+            alerts.append(
+                {
+                    "level": "warning",
+                    "title": "Riferimenti save scollegati",
+                    "detail": f"Rilevati {invalid_references} riferimenti a lavoratori o contenitori non risolti.",
+                }
+            )
     world = payload.get("world", {})
     world_raid_count = (
-        _nonnegative_int(world.get("active_raid_count"))
-        if isinstance(world, dict)
-        else 0
+        _nonnegative_int(world.get("active_raid_count")) if isinstance(world, dict) else 0
     )
     matched_raid_count = sum(
-        bool(base.get("raid_active"))
-        for base in bases
-        if isinstance(base, dict)
+        bool(base.get("raid_active")) for base in bases if isinstance(base, dict)
     )
     if world_raid_count > matched_raid_count:
-        alerts.append({
-            "level": "danger",
-            "title": "Invasione non associata",
-            "detail": "Lo snapshot segnala un'invasione che non è collegata a una base valida.",
-        })
+        alerts.append(
+            {
+                "level": "danger",
+                "title": "Invasione non associata",
+                "detail": "Lo snapshot segnala un'invasione che non è collegata a una base valida.",
+            }
+        )
     oil_rig_alerts = (
-        _nonnegative_int(world.get("oil_rig_alert_count"))
-        if isinstance(world, dict)
-        else 0
+        _nonnegative_int(world.get("oil_rig_alert_count")) if isinstance(world, dict) else 0
     )
     if oil_rig_alerts:
-        alerts.append({
-            "level": "warning",
-            "title": "Allarme piattaforma petrolifera",
-            "detail": f"{oil_rig_alerts} piattaforme risultano in allerta nello snapshot.",
-        })
+        alerts.append(
+            {
+                "level": "warning",
+                "title": "Allarme piattaforma petrolifera",
+                "detail": f"{oil_rig_alerts} piattaforme risultano in allerta nello snapshot.",
+            }
+        )
     return alerts
 
 
@@ -491,19 +567,23 @@ def palworld_players(request):
     _admin_required(request)
     dataset = LatestDataset.objects.filter(key="players").first()
     if not dataset:
-        return JsonResponse({
-            "available": False,
-            "players": [],
-            "generated_at": None,
-            "stale": True,
-        })
+        return JsonResponse(
+            {
+                "available": False,
+                "players": [],
+                "generated_at": None,
+                "stale": True,
+            }
+        )
     age = (timezone.now() - dataset.source_clock).total_seconds()
-    return JsonResponse({
-        "available": True,
-        "players": (dataset.payload or {}).get("players", []),
-        "generated_at": dataset.source_clock.isoformat(),
-        "stale": age > settings.DATA_STALE_SECONDS,
-    })
+    return JsonResponse(
+        {
+            "available": True,
+            "players": (dataset.payload or {}).get("players", []),
+            "generated_at": dataset.source_clock.isoformat(),
+            "stale": age > settings.DATA_STALE_SECONDS,
+        }
+    )
 
 
 @require_GET
@@ -512,29 +592,28 @@ def palworld_players(request):
 def player_ip_addresses(request):
     _admin_required(request)
     active_player_ids = set(
-        PlayerSession.objects.filter(ended_at__isnull=True).values_list(
-            "player_id", flat=True
-        )
+        PlayerSession.objects.filter(ended_at__isnull=True).values_list("player_id", flat=True)
     )
     players = Player.objects.filter(ip_address__isnull=False).order_by(
         "-ip_observed_at", "name", "public_id"
     )
-    return JsonResponse({
-        "players": [
-            {
-                "name": player.name,
-                "account_name": player.account_name,
-                "ip": player.ip_address,
-                "observed_at": (
-                    player.ip_observed_at.isoformat()
-                    if player.ip_observed_at else None
-                ),
-                "last_seen": player.last_seen.isoformat(),
-                "online": player.id in active_player_ids,
-            }
-            for player in players
-        ],
-    })
+    return JsonResponse(
+        {
+            "players": [
+                {
+                    "name": player.name,
+                    "account_name": player.account_name,
+                    "ip": player.ip_address,
+                    "observed_at": (
+                        player.ip_observed_at.isoformat() if player.ip_observed_at else None
+                    ),
+                    "last_seen": player.last_seen.isoformat(),
+                    "online": player.id in active_player_ids,
+                }
+                for player in players
+            ],
+        }
+    )
 
 
 def _schedule_payload(schedule):
@@ -543,24 +622,16 @@ def _schedule_payload(schedule):
         "weekday": schedule.weekday,
         "time": schedule.run_time.strftime("%H:%M"),
         "timezone": schedule.timezone,
-        "next_run_at": (
-            schedule.next_run_at.isoformat() if schedule.next_run_at else None
-        ),
+        "next_run_at": (schedule.next_run_at.isoformat() if schedule.next_run_at else None),
         "last_run": {
             "scheduled_for": (
-                schedule.last_scheduled_for.isoformat()
-                if schedule.last_scheduled_for
-                else None
+                schedule.last_scheduled_for.isoformat() if schedule.last_scheduled_for else None
             ),
             "started_at": (
-                schedule.last_started_at.isoformat()
-                if schedule.last_started_at
-                else None
+                schedule.last_started_at.isoformat() if schedule.last_started_at else None
             ),
             "finished_at": (
-                schedule.last_finished_at.isoformat()
-                if schedule.last_finished_at
-                else None
+                schedule.last_finished_at.isoformat() if schedule.last_finished_at else None
             ),
             "status": schedule.last_status,
             "error": schedule.last_error or None,
@@ -575,14 +646,10 @@ def _schedule_payload(schedule):
 def weekly_report_schedule(request):
     _admin_required(request)
     with transaction.atomic():
-        schedule, _ = WeeklyReportSchedule.objects.select_for_update().get_or_create(
-            id=1
-        )
+        schedule, _ = WeeklyReportSchedule.objects.select_for_update().get_or_create(id=1)
         if request.method == "POST":
             if request.content_type != "application/json":
-                return JsonResponse(
-                    {"error": "Content-Type must be application/json"}, status=415
-                )
+                return JsonResponse({"error": "Content-Type must be application/json"}, status=415)
             try:
                 body = _load_json_body(request)
             except (ValueError, UnicodeDecodeError):
@@ -603,35 +670,19 @@ def weekly_report_schedule(request):
             timezone_name = body["timezone"]
             if not isinstance(enabled, bool):
                 return JsonResponse({"error": "enabled must be a boolean"}, status=400)
-            if (
-                not isinstance(weekday, int)
-                or isinstance(weekday, bool)
-                or not 0 <= weekday <= 6
-            ):
+            if not isinstance(weekday, int) or isinstance(weekday, bool) or not 0 <= weekday <= 6:
                 return JsonResponse(
                     {"error": "weekday must be an integer between 0 and 6"},
                     status=400,
                 )
-            if not isinstance(run_time, str) or not SCHEDULE_TIME_PATTERN.fullmatch(
-                run_time
-            ):
-                return JsonResponse(
-                    {"error": "time must use the HH:MM format"}, status=400
-                )
-            if (
-                not isinstance(timezone_name, str)
-                or not timezone_name
-                or len(timezone_name) > 64
-            ):
-                return JsonResponse(
-                    {"error": "timezone must be a valid IANA timezone"}, status=400
-                )
+            if not isinstance(run_time, str) or not SCHEDULE_TIME_PATTERN.fullmatch(run_time):
+                return JsonResponse({"error": "time must use the HH:MM format"}, status=400)
+            if not isinstance(timezone_name, str) or not timezone_name or len(timezone_name) > 64:
+                return JsonResponse({"error": "timezone must be a valid IANA timezone"}, status=400)
             try:
                 ZoneInfo(timezone_name)
             except (ZoneInfoNotFoundError, ValueError):
-                return JsonResponse(
-                    {"error": "timezone must be a valid IANA timezone"}, status=400
-                )
+                return JsonResponse({"error": "timezone must be a valid IANA timezone"}, status=400)
             hour, minute = (int(part) for part in run_time.split(":"))
             schedule.enabled = enabled
             schedule.weekday = weekday
@@ -672,12 +723,14 @@ def palworld_info(request):
     if not dataset:
         return JsonResponse({"available": False, "generated_at": None, "stale": True})
     age = (timezone.now() - dataset.source_clock).total_seconds()
-    return JsonResponse({
-        "available": True,
-        **(dataset.payload or {}),
-        "generated_at": dataset.source_clock.isoformat(),
-        "stale": age > 35 * 60,
-    })
+    return JsonResponse(
+        {
+            "available": True,
+            **(dataset.payload or {}),
+            "generated_at": dataset.source_clock.isoformat(),
+            "stale": age > 35 * 60,
+        }
+    )
 
 
 class PalworldCommandError(Exception):
@@ -687,9 +740,8 @@ class PalworldCommandError(Exception):
 class PalworldCommandClient:
     """Minimal synchronous client for admin server commands (announce/kick/ban/unban).
 
-    Unlike the collector's PalworldClient, this one is built per request and
-    does not stream or bound wall-clock time: admin actions are rare, return
-    small payloads, and rely on the per-phase connect/read timeouts below.
+    Unlike the collector's PalworldClient, this one is built per request. Admin
+    actions are rare, but responses are still streamed and bounded.
     """
 
     def __init__(self):
@@ -711,6 +763,7 @@ class PalworldCommandClient:
 
     def _request(self, method, path, json_body=None):
         url = urljoin(self.base_url, path.lstrip("/"))
+        response = None
         try:
             response = self.session.request(
                 method,
@@ -719,22 +772,44 @@ class PalworldCommandClient:
                 timeout=(settings.PALWORLD_API_CONNECT_TIMEOUT, ADMIN_COMMAND_TIMEOUT),
                 verify=settings.PALWORLD_API_VERIFY_TLS,
                 allow_redirects=False,
+                stream=True,
             )
         except requests.RequestException as exc:
-            raise PalworldCommandError(f"Palworld unreachable: {exc}") from exc
-        if response.status_code in {401, 403}:
-            raise PalworldCommandError("Palworld authentication failed")
-        if response.status_code == 404:
-            raise PalworldCommandError("Palworld endpoint not found")
-        if response.status_code == 400:
-            detail = (response.text or "")[:200]
-            raise PalworldCommandError(f"Palworld rejected the request: {detail}")
-        if not response.ok:
-            raise PalworldCommandError(f"Palworld HTTP {response.status_code}")
+            logger.warning("Palworld command request failed type=%s", type(exc).__name__)
+            raise PalworldCommandError("Palworld is unreachable") from exc
         try:
-            return response.json() if response.content else {}
-        except ValueError as exc:
+            if 300 <= response.status_code < 400:
+                raise PalworldCommandError("Palworld returned an unexpected redirect")
+            if response.status_code in {401, 403}:
+                raise PalworldCommandError("Palworld authentication failed")
+            if response.status_code == 404:
+                raise PalworldCommandError("Palworld endpoint not found")
+            if response.status_code == 400:
+                raise PalworldCommandError("Palworld rejected the request")
+            if not response.ok:
+                raise PalworldCommandError("Palworld returned an HTTP error")
+            content_length = response.headers.get("Content-Length")
+            try:
+                if content_length and int(content_length) > ADMIN_RESPONSE_MAX_BYTES:
+                    raise PalworldCommandError("Palworld response was too large")
+            except ValueError as exc:
+                raise PalworldCommandError("Palworld returned an invalid response") from exc
+            body = bytearray()
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                body.extend(chunk)
+                if len(body) > ADMIN_RESPONSE_MAX_BYTES:
+                    raise PalworldCommandError("Palworld response was too large")
+            if not body:
+                return {}
+            return json.loads(body.decode("utf-8"))
+        except requests.RequestException as exc:
+            logger.warning("Palworld command response failed type=%s", type(exc).__name__)
+            raise PalworldCommandError("Palworld is unreachable") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise PalworldCommandError("Palworld returned an invalid response") from exc
+        finally:
+            if response is not None:
+                response.close()
 
     def players(self):
         data = self._request("GET", "v1/api/players")
@@ -782,7 +857,7 @@ def _command_number(value, default=0.0):
 def _command_audit_id(userid):
     return hmac.new(
         settings.PLAYER_HASH_SECRET.encode("utf-8"),
-        f"admin-command:{userid}".encode("utf-8"),
+        f"admin-command:{userid}".encode(),
         hashlib.sha256,
     ).hexdigest()[:16]
 
@@ -801,21 +876,20 @@ def palworld_admin_players(request):
         if not isinstance(raw, dict):
             continue
         userid = _clean_command_user(
-            raw.get("userId")
-            or raw.get("user_id")
-            or raw.get("playerId")
-            or raw.get("player_id")
+            raw.get("userId") or raw.get("user_id") or raw.get("playerId") or raw.get("player_id")
         )
         if not _valid_command_user(userid):
             continue
-        minimal.append({
-            "userId": userid,
-            "name": str(raw.get("name") or raw.get("nickname") or "").strip()[:128],
-            "level": _nonnegative_int(raw.get("level")),
-            "ping": round(_command_number(raw.get("ping")), 1),
-            "location_x": _command_number(raw.get("location_x") or raw.get("locationX")),
-            "location_y": _command_number(raw.get("location_y") or raw.get("locationY")),
-        })
+        minimal.append(
+            {
+                "userId": userid,
+                "name": str(raw.get("name") or raw.get("nickname") or "").strip()[:128],
+                "level": _nonnegative_int(raw.get("level")),
+                "ping": round(_command_number(raw.get("ping")), 1),
+                "location_x": _command_number(raw.get("location_x") or raw.get("locationX")),
+                "location_y": _command_number(raw.get("location_y") or raw.get("locationY")),
+            }
+        )
     return JsonResponse({"players": minimal})
 
 
@@ -855,9 +929,7 @@ def palworld_announce(request):
 
 def _command_target_from_body(request):
     if request.content_type != "application/json":
-        return None, JsonResponse(
-            {"error": "Content-Type must be application/json"}, status=415
-        )
+        return None, JsonResponse({"error": "Content-Type must be application/json"}, status=415)
     try:
         body = _load_json_body(request)
     except (ValueError, UnicodeDecodeError):

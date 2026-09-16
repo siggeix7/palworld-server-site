@@ -120,9 +120,7 @@ class PalworldClientTests(SimpleTestCase):
     def test_status_checks_the_rest_api_socket(self):
         connection = mock.Mock()
         create_connection = mock.Mock(return_value=connection)
-        client = PalworldClient(
-            session=Session(Response({})), socket_connection=create_connection
-        )
+        client = PalworldClient(session=Session(Response({})), socket_connection=create_connection)
         self.assertTrue(client.fetch("status"))
         create_connection.assert_called_once_with(
             ("palworld.example.com", 8212),
@@ -153,12 +151,16 @@ class FakeClient:
 @override_settings(PLAYER_HASH_SECRET="test-player-secret")
 class PalworldCollectorTests(TestCase):
     def test_collects_and_persists_sanitized_data(self):
-        client = FakeClient({"info": {
-            "version": "1.0",
-            "servername": "Palworld",
-            "description": "Server",
-            "worldguid": "must-not-be-stored",
-        }})
+        client = FakeClient(
+            {
+                "info": {
+                    "version": "1.0",
+                    "servername": "Palworld",
+                    "description": "Server",
+                    "worldguid": "must-not-be-stored",
+                }
+            }
+        )
         collector = PalworldCollector(threading.Event(), client=client)
         self.assertTrue(collector.collect("info"))
         payload = LatestDataset.objects.get(key="info").payload
@@ -195,9 +197,7 @@ class PalworldCollectorTests(TestCase):
         for dataset in ("info", "metrics", "status"):
             with self.subTest(dataset=dataset):
                 self.assertFalse(collector.collect(dataset))
-                self.assertEqual(
-                    collector.dataset_state[dataset]["error"], "unexpected"
-                )
+                self.assertEqual(collector.dataset_state[dataset]["error"], "unexpected")
                 self.assertEqual(collector.dataset_state[dataset]["failures"], 1)
 
 
@@ -308,18 +308,14 @@ class RetentionTests(TestCase):
                 source_clock=now,
             )
             old_datasets.append(dataset)
-        LatestDataset.objects.filter(
-            pk__in=[dataset.pk for dataset in old_datasets]
-        ).update(received_at=now - timedelta(days=366))
+        LatestDataset.objects.filter(pk__in=[dataset.pk for dataset in old_datasets]).update(
+            received_at=now - timedelta(days=366)
+        )
 
         old_save = GuildSnapshot.objects.create(payload={})
         recent_save = GuildSnapshot.objects.create(id=2, payload={})
-        GuildSnapshot.objects.filter(pk=old_save.pk).update(
-            updated_at=now - timedelta(days=31)
-        )
-        GuildSnapshot.objects.filter(pk=recent_save.pk).update(
-            updated_at=now - timedelta(days=29)
-        )
+        GuildSnapshot.objects.filter(pk=old_save.pk).update(updated_at=now - timedelta(days=31))
+        GuildSnapshot.objects.filter(pk=recent_save.pk).update(updated_at=now - timedelta(days=29))
         old_claim_data = PlayerClaimData.objects.create(
             public_id="old-claim",
             payload={},
@@ -375,22 +371,16 @@ class RetentionTests(TestCase):
         self.assertFalse(ServerEvent.objects.filter(pk=old_event.pk).exists())
         self.assertTrue(ServerEvent.objects.filter(pk=recent_event.pk).exists())
         self.assertFalse(
-            LatestDataset.objects.filter(
-                pk__in=[dataset.pk for dataset in old_datasets]
-            ).exists()
+            LatestDataset.objects.filter(pk__in=[dataset.pk for dataset in old_datasets]).exists()
         )
         self.assertFalse(GuildSnapshot.objects.filter(pk=old_save.pk).exists())
         self.assertTrue(GuildSnapshot.objects.filter(pk=recent_save.pk).exists())
         self.assertFalse(PlayerClaimData.objects.filter(pk=old_claim_data.pk).exists())
         self.assertTrue(PlayerClaimData.objects.filter(pk=recent_claim_data.pk).exists())
         self.assertFalse(ClaimChallenge.objects.filter(pk=expired_challenge.pk).exists())
-        self.assertFalse(
-            ClaimSession.objects.filter(pk=expired_claim_session.pk).exists()
-        )
+        self.assertFalse(ClaimSession.objects.filter(pk=expired_claim_session.pk).exists())
         self.assertFalse(ClaimThrottle.objects.filter(pk=expired_throttle.pk).exists())
-        self.assertFalse(
-            AuthThrottle.objects.filter(pk=expired_auth_throttle.pk).exists()
-        )
+        self.assertFalse(AuthThrottle.objects.filter(pk=expired_auth_throttle.pk).exists())
 
 
 class DirectArchitectureTests(SimpleTestCase):
@@ -460,4 +450,4 @@ class DirectArchitectureTests(SimpleTestCase):
             "palworld_admin_players",
         ):
             self.assertIn(f"def {view_name}(", admin_views)
-            self.assertIn(f"_admin_required(request)", admin_views)
+            self.assertIn("_admin_required(request)", admin_views)

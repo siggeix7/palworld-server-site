@@ -31,6 +31,7 @@ class MetricSample(models.Model):
 
 class Player(models.Model):
     public_id = models.CharField(max_length=32, unique=True)
+    claim_public_id = models.CharField(max_length=32, unique=True, null=True, blank=True)
     name = models.CharField(max_length=128)
     account_name = models.CharField(max_length=128, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
@@ -205,9 +206,7 @@ class WeeklyReportSchedule(models.Model):
     last_scheduled_for = models.DateTimeField(null=True, blank=True)
     last_started_at = models.DateTimeField(null=True, blank=True)
     last_finished_at = models.DateTimeField(null=True, blank=True)
-    last_status = models.CharField(
-        max_length=16, choices=STATUS_CHOICES, default=NEVER
-    )
+    last_status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=NEVER)
     last_error = models.CharField(max_length=64, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 

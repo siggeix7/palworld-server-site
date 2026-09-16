@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone as datetime_timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.core.management import call_command
@@ -9,7 +9,6 @@ from django.utils import timezone
 from .models import WeeklyReportSchedule
 
 logger = logging.getLogger(__name__)
-UTC = datetime_timezone.utc
 
 
 def _local_occurrence(day, run_time, zone):
@@ -25,9 +24,7 @@ def next_run_at(weekday, run_time, timezone_name, after):
     zone = ZoneInfo(timezone_name)
     local_after = after.astimezone(zone)
     days_ahead = (weekday - local_after.weekday()) % 7
-    candidate = _local_occurrence(
-        local_after.date() + timedelta(days=days_ahead), run_time, zone
-    )
+    candidate = _local_occurrence(local_after.date() + timedelta(days=days_ahead), run_time, zone)
     if candidate <= after:
         candidate = _local_occurrence(
             local_after.date() + timedelta(days=days_ahead + 7), run_time, zone
@@ -39,9 +36,7 @@ def previous_run_at(weekday, run_time, timezone_name, before):
     zone = ZoneInfo(timezone_name)
     local_before = before.astimezone(zone)
     days_back = (local_before.weekday() - weekday) % 7
-    candidate = _local_occurrence(
-        local_before.date() - timedelta(days=days_back), run_time, zone
-    )
+    candidate = _local_occurrence(local_before.date() - timedelta(days=days_back), run_time, zone)
     if candidate >= before:
         candidate = _local_occurrence(
             local_before.date() - timedelta(days=days_back + 7), run_time, zone
@@ -62,9 +57,7 @@ def ensure_next_run(schedule, now=None):
 
 def mark_interrupted_run():
     now = timezone.now()
-    WeeklyReportSchedule.objects.filter(
-        id=1, last_status=WeeklyReportSchedule.RUNNING
-    ).update(
+    WeeklyReportSchedule.objects.filter(id=1, last_status=WeeklyReportSchedule.RUNNING).update(
         last_status=WeeklyReportSchedule.INTERRUPTED,
         last_finished_at=now,
         last_error="scheduler_restarted",

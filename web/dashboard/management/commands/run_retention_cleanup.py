@@ -9,7 +9,6 @@ from django.db import OperationalError, close_old_connections
 
 from dashboard.services import cleanup_if_due
 
-
 logger = logging.getLogger(__name__)
 
 

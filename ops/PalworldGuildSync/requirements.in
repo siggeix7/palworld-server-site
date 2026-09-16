@@ -1,0 +1,4 @@
+orjson==3.11.8
+requests==2.33.0
+setuptools==83.0.0
+wheel==0.47.0

@@ -11,7 +11,6 @@ from django.views.decorators.http import require_GET
 from .accounts import is_site_admin
 from .models import Player
 
-
 PLAYER_PUBLIC_ID_PATTERN = re.compile(r"^[0-9a-f]{24}\Z")
 PAGE_TITLES = {
     "home": "Palworld Server Observatory",
@@ -30,11 +29,7 @@ PAGE_TITLES = {
 
 
 def _render_app(request, page_key, status=200):
-    canonical_url = (
-        f"{settings.PUBLIC_SITE_URL}{request.path}"
-        if settings.PUBLIC_SITE_URL
-        else ""
-    )
+    canonical_url = f"{settings.PUBLIC_SITE_URL}{request.path}" if settings.PUBLIC_SITE_URL else ""
     return render(
         request,
         "dashboard/app.html",
@@ -59,9 +54,10 @@ def app(request, page_key):
 @never_cache
 @ensure_csrf_cookie
 def player_page(request, public_id):
-    exists = PLAYER_PUBLIC_ID_PATTERN.fullmatch(public_id) and Player.objects.filter(
-        public_id=public_id
-    ).exists()
+    exists = (
+        PLAYER_PUBLIC_ID_PATTERN.fullmatch(public_id)
+        and Player.objects.filter(public_id=public_id).exists()
+    )
     return _render_app(request, "player", status=200 if exists else 404)
 
 

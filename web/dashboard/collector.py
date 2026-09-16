@@ -15,7 +15,6 @@ from django.utils import timezone
 from .models import RuntimeState
 from .services import DATASETS, IngestError, run_maintenance, store_dataset
 
-
 logger = logging.getLogger(__name__)
 
 ENDPOINTS = {
@@ -84,31 +83,39 @@ class PalworldClient:
             return self._status()
         deadline = time.monotonic() + settings.PALWORLD_API_TOTAL_TIMEOUTS[dataset]
         try:
-            with _wall_clock_timeout(settings.PALWORLD_API_TOTAL_TIMEOUTS[dataset]):
-                with self.session.get(
+            with (
+                _wall_clock_timeout(settings.PALWORLD_API_TOTAL_TIMEOUTS[dataset]),
+                self.session.get(
                     urljoin(self.base_url, ENDPOINTS[dataset]),
-                    timeout=(settings.PALWORLD_API_CONNECT_TIMEOUT, settings.PALWORLD_API_TIMEOUTS[dataset]),
+                    timeout=(
+                        settings.PALWORLD_API_CONNECT_TIMEOUT,
+                        settings.PALWORLD_API_TIMEOUTS[dataset],
+                    ),
                     verify=settings.PALWORLD_API_VERIFY_TLS,
                     stream=True,
                     allow_redirects=False,
-                ) as response:
-                    if 300 <= response.status_code < 400:
-                        raise CollectorError(f"http_{response.status_code}")
-                    response.raise_for_status()
-                    content_length = response.headers.get("Content-Length")
-                    try:
-                        if content_length and int(content_length) > settings.PALWORLD_API_MAX_BYTES[dataset]:
-                            raise CollectorError("too_large")
-                    except ValueError:
-                        raise CollectorError("invalid_content_length")
-                    body = bytearray()
-                    limit = settings.PALWORLD_API_MAX_BYTES[dataset]
-                    for chunk in response.iter_content(chunk_size=64 * 1024):
-                        if time.monotonic() > deadline:
-                            raise CollectorError("deadline")
-                        body.extend(chunk)
-                        if len(body) > limit:
-                            raise CollectorError("too_large")
+                ) as response,
+            ):
+                if 300 <= response.status_code < 400:
+                    raise CollectorError(f"http_{response.status_code}")
+                response.raise_for_status()
+                content_length = response.headers.get("Content-Length")
+                try:
+                    if (
+                        content_length
+                        and int(content_length) > settings.PALWORLD_API_MAX_BYTES[dataset]
+                    ):
+                        raise CollectorError("too_large")
+                except ValueError as exc:
+                    raise CollectorError("invalid_content_length") from exc
+                body = bytearray()
+                limit = settings.PALWORLD_API_MAX_BYTES[dataset]
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    if time.monotonic() > deadline:
+                        raise CollectorError("deadline")
+                    body.extend(chunk)
+                    if len(body) > limit:
+                        raise CollectorError("too_large")
         except _DeadlineExpired as exc:
             raise CollectorError("deadline") from exc
         except CollectorError:
@@ -161,7 +168,7 @@ class PalworldCollector:
             }
             for dataset in sorted(DATASETS)
         }
-        self.next_run = {dataset: 0.0 for dataset in DATASETS}
+        self.next_run = dict.fromkeys(DATASETS, 0.0)
         self.next_maintenance = 0.0
 
     def run(self):
@@ -242,12 +249,14 @@ class PalworldCollector:
         try:
             RuntimeState.objects.update_or_create(
                 key="collector-status",
-                defaults={"value": {
-                    "state": state,
-                    "started_at": self.started_at,
-                    "heartbeat": timezone.now().isoformat(),
-                    "datasets": self.dataset_state,
-                }},
+                defaults={
+                    "value": {
+                        "state": state,
+                        "started_at": self.started_at,
+                        "heartbeat": timezone.now().isoformat(),
+                        "datasets": self.dataset_state,
+                    }
+                },
             )
         except OperationalError:
             logger.warning("Collector heartbeat delayed by database contention")

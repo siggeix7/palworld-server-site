@@ -2,7 +2,6 @@ from django.urls import path
 
 from . import admin_views, api_views, claims, live_map, views
 
-
 urlpatterns = [
     path("api/openapi.json", api_views.openapi_schema, name="openapi-schema"),
     path("api/v1/session", api_views.session, name="session-api"),

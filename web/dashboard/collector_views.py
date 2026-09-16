@@ -56,9 +56,11 @@ def status(request):
     if not _authorized(request):
         return JsonResponse({"error": "unauthorized"}, status=401)
     state = _collector_state()
-    return JsonResponse({
-        "state": state.get("state", "unavailable"),
-        "started_at": state.get("started_at"),
-        "heartbeat": state.get("heartbeat"),
-        "datasets": state.get("datasets", {}),
-    })
+    return JsonResponse(
+        {
+            "state": state.get("state", "unavailable"),
+            "started_at": state.get("started_at"),
+            "heartbeat": state.get("heartbeat"),
+            "datasets": state.get("datasets", {}),
+        }
+    )

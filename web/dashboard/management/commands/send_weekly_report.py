@@ -5,9 +5,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
-from django.utils.dateparse import parse_datetime
 from django.db.models import Avg
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from dashboard.emails import send_weekly_player_email
 from dashboard.models import GuildSnapshot, Player, PlayerSession, PositionSample
@@ -95,9 +95,7 @@ class Command(BaseCommand):
         def seconds_in(player_id, start, end):
             total = 0
             for session in player_sessions[player_id]:
-                stale_end = session.last_seen + timedelta(
-                    seconds=settings.DATA_STALE_SECONDS
-                )
+                stale_end = session.last_seen + timedelta(seconds=settings.DATA_STALE_SECONDS)
                 session_end = session.ended_at or min(now, stale_end)
                 segment_start = max(session.started_at, start)
                 segment_end = min(session_end, end)
@@ -106,18 +104,12 @@ class Command(BaseCommand):
             return total
 
         week_seconds = {
-            player_id: seconds_in(player_id, *week_window)
-            for player_id in player_sessions
+            player_id: seconds_in(player_id, *week_window) for player_id in player_sessions
         }
         prev_seconds = {
-            player_id: seconds_in(player_id, *prev_window)
-            for player_id in player_sessions
+            player_id: seconds_in(player_id, *prev_window) for player_id in player_sessions
         }
-        active = {
-            player_id: seconds
-            for player_id, seconds in week_seconds.items()
-            if seconds > 0
-        }
+        active = {player_id: seconds for player_id, seconds in week_seconds.items() if seconds > 0}
         if not active:
             self.stdout.write("No active players in the last 7 days: no report sent")
             return
@@ -157,9 +149,7 @@ class Command(BaseCommand):
 
         top_players = [
             {"name": player_map[player_id].name, "minutes": int(seconds // 60)}
-            for player_id, seconds in sorted(
-                active.items(), key=lambda item: -item[1]
-            )[:5]
+            for player_id, seconds in sorted(active.items(), key=lambda item: -item[1])[:5]
         ]
 
         assignments = defaultdict(list)
@@ -185,9 +175,7 @@ class Command(BaseCommand):
         sent = 0
         for user_id, matches in assignments.items():
             if len(matches) != 1:
-                self.stderr.write(
-                    f"Multiple players match site user_id={user_id}; skipped"
-                )
+                self.stderr.write(f"Multiple players match site user_id={user_id}; skipped")
                 continue
             user, player_id, seconds = matches[0]
             player = player_map[player_id]
@@ -205,9 +193,7 @@ class Command(BaseCommand):
                 "prev_minutes": prev_minutes,
                 "prev_pct": self._delta_pct(week_minutes, prev_minutes),
                 "session_count": session_stats[player_id]["session_count"],
-                "longest_session_minutes": session_stats[player_id][
-                    "longest_minutes"
-                ],
+                "longest_session_minutes": session_stats[player_id]["longest_minutes"],
                 "active_days": session_stats[player_id]["active_days"],
                 "top_day": session_stats[player_id]["top_day"],
                 "level": player.level,
@@ -218,9 +204,7 @@ class Command(BaseCommand):
                 "guild_name": guild_info["name"],
                 "guild_bases": guild_info["bases"],
                 "top_players": top_players,
-                "is_top_player": any(
-                    entry["name"] == player.name for entry in top_players
-                ),
+                "is_top_player": any(entry["name"] == player.name for entry in top_players),
             }
             sent += send_weekly_player_email(user, context)
         self.stdout.write(f"Weekly player report sent to {sent} recipient(s)")
@@ -238,9 +222,7 @@ class Command(BaseCommand):
             day_seconds = defaultdict(int)
             seen_days = set()
             for session in sessions:
-                stale_end = session.last_seen + timedelta(
-                    seconds=settings.DATA_STALE_SECONDS
-                )
+                stale_end = session.last_seen + timedelta(seconds=settings.DATA_STALE_SECONDS)
                 session_end = session.ended_at or min(now, stale_end)
                 segment_start = max(session.started_at, since)
                 segment_end = min(session_end, now)
@@ -267,11 +249,7 @@ class Command(BaseCommand):
 
     def _guild_lookup(self):
         snapshot = GuildSnapshot.objects.first()
-        payload = (
-            snapshot.payload
-            if snapshot and isinstance(snapshot.payload, dict)
-            else {}
-        )
+        payload = snapshot.payload if snapshot and isinstance(snapshot.payload, dict) else {}
         saved_guilds = payload.get("guilds", [])
         saved_players = payload.get("players", [])
         if not isinstance(saved_guilds, list) or not isinstance(saved_players, list):

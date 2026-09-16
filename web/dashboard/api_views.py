@@ -10,7 +10,6 @@ from django.views.decorators.http import require_GET
 
 from .accounts import is_site_admin
 
-
 OPENAPI_PATH = Path(__file__).resolve().parent / "api" / "openapi.json"
 
 

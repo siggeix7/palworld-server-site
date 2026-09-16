@@ -67,22 +67,12 @@ class WeeklyReportTests(TestCase):
     def test_command_sends_personalized_report_only_to_active_players(self):
         self.create_user("Explorer", "explorer@example.com")
         explorer = self.create_player("a" * 24, "Explorer", self.now)
-        self.create_session(
-            explorer, self.now - timedelta(days=3, hours=1), 60
-        )
-        self.create_session(
-            explorer, self.now - timedelta(hours=5), 75
-        )
-        self.create_session(
-            explorer, self.now - timedelta(days=9, hours=1), 90
-        )
+        self.create_session(explorer, self.now - timedelta(days=3, hours=1), 60)
+        self.create_session(explorer, self.now - timedelta(hours=5), 75)
+        self.create_session(explorer, self.now - timedelta(days=9, hours=1), 90)
 
-        old_timer = self.create_player(
-            "b" * 24, "Old Timer", self.now - timedelta(days=10)
-        )
-        self.create_session(
-            old_timer, self.now - timedelta(days=10), 100
-        )
+        old_timer = self.create_player("b" * 24, "Old Timer", self.now - timedelta(days=10))
+        self.create_session(old_timer, self.now - timedelta(days=10), 100)
 
         ghost = self.create_player("c" * 24, "Ghost", self.now)
         self.create_session(ghost, self.now - timedelta(days=2), 45)
@@ -196,9 +186,7 @@ class WeeklyReportTests(TestCase):
 
     def test_command_without_active_players_sends_nothing(self):
         self.create_user("Inactive", "inactive@example.com")
-        inactive = self.create_player(
-            "f" * 24, "Inactive", self.now - timedelta(days=30)
-        )
+        inactive = self.create_player("f" * 24, "Inactive", self.now - timedelta(days=30))
         self.create_session(inactive, self.now - timedelta(days=30), 60)
 
         call_command("send_weekly_report")

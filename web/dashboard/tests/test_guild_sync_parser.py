@@ -1,18 +1,14 @@
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.test import SimpleTestCase
 
-
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "ops"
-    / "PalworldGuildSync"
-    / "guild_sync.py"
-)
+SCRIPT_PATH = Path(__file__).resolve().parents[3] / "ops" / "PalworldGuildSync" / "guild_sync.py"
+os.environ.setdefault("PLAYER_HASH_SECRET", "test-parser-player-hash")
 SPEC = importlib.util.spec_from_file_location("guild_sync", SCRIPT_PATH)
 guild_sync = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(guild_sync)
@@ -36,9 +32,11 @@ def character(instance_id, owner_id="", player_uid="", **parameters):
     return {
         "key": key,
         "value": {
-            "RawData": prop({
-                "object": {"SaveParameter": prop(values)},
-            }),
+            "RawData": prop(
+                {
+                    "object": {"SaveParameter": prop(values)},
+                }
+            ),
         },
     }
 
@@ -50,125 +48,162 @@ class GuildSyncParserTests(SimpleTestCase):
         self.base_id = "base-raw-uuid"
         self.container_id = "container-raw-uuid"
         self.world = {
-            "GroupSaveDataMap": prop([{
-                "key": self.guild_id,
-                "value": {
-                    "GroupType": enum("EPalGroupType::Guild"),
-                    "RawData": prop({
-                        "group_id": self.guild_id,
-                        "group_name": self.player_id,
-                        "guild_name": "Explorers",
-                        "admin_player_uid": self.player_id,
-                        "players": [{
-                            "player_uid": self.player_id,
-                            "player_info": {"player_name": "Leader"},
-                        }, {
-                            "player_uid": "legacy-player-uid",
-                            "player_info": {"player_name": "Legacy"},
-                        }],
-                        "base_ids": [self.base_id],
-                    }),
-                },
-            }]),
-            "CharacterSaveParameterMap": prop([
-                character(
-                    "leader-character",
-                    player_uid=self.player_id,
-                    IsPlayer=True,
-                    NickName="Leader",
-                    Level=51,
-                    Exp=123456,
-                    UnusedStatusPoint=3,
-                    GotStatusPointList={
-                        "values": [
-                            {
-                                "StatusName": prop("最大HP"),
-                                "StatusPoint": prop(4),
-                            },
-                            {
-                                "StatusName": prop("攻撃力"),
-                                "StatusPoint": prop(2),
-                            },
-                        ],
-                    },
-                    GotExStatusPointList={
-                        "values": [{
-                            "StatusName": prop("最大HP"),
-                            "StatusPoint": prop(1),
-                        }],
-                    },
-                ),
-                character(
-                    "healthy-worker",
-                    self.player_id,
-                    PhysicalHealth=prop("EPalStatusPhysicalHealthType::Healthful"),
-                    HungerType=prop("EPalStatusHungerType::Default"),
-                    SanityValue=80,
-                    CurrentWorkSuitability=prop("EPalWorkSuitability::Mining"),
-                ),
-                character(
-                    "problem-worker",
-                    WorkerSick=prop("EPalBaseCampWorkerSickType::Weakness"),
-                    HungerType=prop("EPalStatusHungerType::Starvation"),
-                    SanityValue=10,
-                ),
-            ]),
-            "CharacterContainerSaveData": prop([{
-                "key": {"ID": prop(self.container_id)},
-                "value": {
-                    "Slots": prop({
-                        "values": [
-                            {"RawData": prop({"instance_id": "healthy-worker"})},
-                            {"RawData": prop({"instance_id": "problem-worker"})},
-                            {"RawData": prop(None)},
-                        ],
-                    }),
-                },
-            }]),
-            "ItemContainerSaveData": prop([]),
-            "BaseCampSaveData": prop([{
-                "key": self.base_id,
-                "value": {
-                    "RawData": prop({
-                        "id": self.base_id,
-                        "name": "\u65b0\u898f\u751f\u6210 placeholder",
-                        "state": 1,
-                        "group_id_belong_to": self.guild_id,
-                        "transform": {
-                            "translation": {"x": 10, "y": 20, "z": 30},
+            "GroupSaveDataMap": prop(
+                [
+                    {
+                        "key": self.guild_id,
+                        "value": {
+                            "GroupType": enum("EPalGroupType::Guild"),
+                            "RawData": prop(
+                                {
+                                    "group_id": self.guild_id,
+                                    "group_name": self.player_id,
+                                    "guild_name": "Explorers",
+                                    "admin_player_uid": self.player_id,
+                                    "players": [
+                                        {
+                                            "player_uid": self.player_id,
+                                            "player_info": {"player_name": "Leader"},
+                                        },
+                                        {
+                                            "player_uid": "legacy-player-uid",
+                                            "player_info": {"player_name": "Legacy"},
+                                        },
+                                    ],
+                                    "base_ids": [self.base_id],
+                                }
+                            ),
                         },
-                    }),
-                    "WorkerDirector": prop({
-                        "RawData": prop({"container_id": self.container_id}),
-                    }),
-                },
-            }]),
-            "InvaderSaveData": prop([{
-                "key": self.base_id,
-                "value": {"bIsInvading": prop(True)},
-            }]),
-            "OilrigSaveData": prop({
-                "OilrigMap": prop([
+                    }
+                ]
+            ),
+            "CharacterSaveParameterMap": prop(
+                [
+                    character(
+                        "leader-character",
+                        player_uid=self.player_id,
+                        IsPlayer=True,
+                        NickName="Leader",
+                        Level=51,
+                        Exp=123456,
+                        UnusedStatusPoint=3,
+                        GotStatusPointList={
+                            "values": [
+                                {
+                                    "StatusName": prop("最大HP"),
+                                    "StatusPoint": prop(4),
+                                },
+                                {
+                                    "StatusName": prop("攻撃力"),
+                                    "StatusPoint": prop(2),
+                                },
+                            ],
+                        },
+                        GotExStatusPointList={
+                            "values": [
+                                {
+                                    "StatusName": prop("最大HP"),
+                                    "StatusPoint": prop(1),
+                                }
+                            ],
+                        },
+                    ),
+                    character(
+                        "healthy-worker",
+                        self.player_id,
+                        PhysicalHealth=prop("EPalStatusPhysicalHealthType::Healthful"),
+                        HungerType=prop("EPalStatusHungerType::Default"),
+                        SanityValue=80,
+                        CurrentWorkSuitability=prop("EPalWorkSuitability::Mining"),
+                    ),
+                    character(
+                        "problem-worker",
+                        WorkerSick=prop("EPalBaseCampWorkerSickType::Weakness"),
+                        HungerType=prop("EPalStatusHungerType::Starvation"),
+                        SanityValue=10,
+                    ),
+                ]
+            ),
+            "CharacterContainerSaveData": prop(
+                [
                     {
-                        "key": "EPalOilrigType::TypeA",
-                        "value": {"Alarm": prop(True), "Clear": prop(False)},
-                    },
+                        "key": {"ID": prop(self.container_id)},
+                        "value": {
+                            "Slots": prop(
+                                {
+                                    "values": [
+                                        {"RawData": prop({"instance_id": "healthy-worker"})},
+                                        {"RawData": prop({"instance_id": "problem-worker"})},
+                                        {"RawData": prop(None)},
+                                    ],
+                                }
+                            ),
+                        },
+                    }
+                ]
+            ),
+            "ItemContainerSaveData": prop([]),
+            "BaseCampSaveData": prop(
+                [
                     {
-                        "key": "EPalOilrigType::Debug",
-                        "value": {"Alarm": prop(True), "Clear": prop(True)},
-                    },
-                ]),
-            }),
+                        "key": self.base_id,
+                        "value": {
+                            "RawData": prop(
+                                {
+                                    "id": self.base_id,
+                                    "name": "\u65b0\u898f\u751f\u6210 placeholder",
+                                    "state": 1,
+                                    "group_id_belong_to": self.guild_id,
+                                    "transform": {
+                                        "translation": {"x": 10, "y": 20, "z": 30},
+                                    },
+                                }
+                            ),
+                            "WorkerDirector": prop(
+                                {
+                                    "RawData": prop({"container_id": self.container_id}),
+                                }
+                            ),
+                        },
+                    }
+                ]
+            ),
+            "InvaderSaveData": prop(
+                [
+                    {
+                        "key": self.base_id,
+                        "value": {"bIsInvading": prop(True)},
+                    }
+                ]
+            ),
+            "OilrigSaveData": prop(
+                {
+                    "OilrigMap": prop(
+                        [
+                            {
+                                "key": "EPalOilrigType::TypeA",
+                                "value": {"Alarm": prop(True), "Clear": prop(False)},
+                            },
+                            {
+                                "key": "EPalOilrigType::Debug",
+                                "value": {"Alarm": prop(True), "Clear": prop(True)},
+                            },
+                        ]
+                    ),
+                }
+            ),
             "GameTimeSaveData": prop({"GameDateTimeTicks": prop(123)}),
         }
 
     def test_custom_properties_include_item_container_slots(self):
-        selected = guild_sync.select_custom_properties({
-            ".worldSaveData.ItemContainerSaveData.Value.RawData": "items",
-            ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData": "slots",
-            ".worldSaveData.BaseCampSaveData.Value.ModuleMap": "excluded",
-            ".worldSaveData.OtherSaveData.Value.RawData": "other",
-        })
+        selected = guild_sync.select_custom_properties(
+            {
+                ".worldSaveData.ItemContainerSaveData.Value.RawData": "items",
+                ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData": "slots",
+                ".worldSaveData.BaseCampSaveData.Value.ModuleMap": "excluded",
+                ".worldSaveData.OtherSaveData.Value.RawData": "other",
+            }
+        )
 
         self.assertEqual(
             selected,
@@ -193,9 +228,7 @@ class GuildSyncParserTests(SimpleTestCase):
             guild_pal_ids,
             raid_ids,
         )
-        guild_sync.enrich_guilds(
-            guilds, bases, guild_pal_ids, workers, working, problems
-        )
+        guild_sync.enrich_guilds(guilds, bases, guild_pal_ids, workers, working, problems)
 
         self.assertEqual(bases[0]["name"], "Base 1")
         self.assertEqual(bases[0]["worker_count"], 2)
@@ -224,12 +257,8 @@ class GuildSyncParserTests(SimpleTestCase):
         self.assertNotIn("group_name", public_guilds[0])
         self.assertNotIn("location_z", public_bases[0])
         self.assertNotIn("player_count", public_bases[0])
-        leader = next(
-            player for player in public_players if player["player_name"] == "Leader"
-        )
-        legacy = next(
-            player for player in public_players if player["player_name"] == "Legacy"
-        )
+        leader = next(player for player in public_players if player["player_name"] == "Leader")
+        legacy = next(player for player in public_players if player["player_name"] == "Legacy")
         self.assertEqual(len(leader["player_id"]), 20)
         self.assertEqual(leader["level"], 51)
         self.assertEqual(leader["exp"], 123456)
@@ -249,29 +278,33 @@ class GuildSyncParserTests(SimpleTestCase):
         empty_groups["GroupSaveDataMap"] = prop([])
 
         undecoded_groups = copy.deepcopy(self.world)
-        undecoded_groups["GroupSaveDataMap"]["value"][0]["value"]["RawData"] = prop({
-            "values": [1, 2, 3],
-        })
+        undecoded_groups["GroupSaveDataMap"]["value"][0]["value"]["RawData"] = prop(
+            {
+                "values": [1, 2, 3],
+            }
+        )
 
         undecoded_characters = copy.deepcopy(self.world)
-        undecoded_characters["CharacterSaveParameterMap"]["value"][0]["value"][
-            "RawData"
-        ] = prop({"values": [1, 2, 3]})
+        undecoded_characters["CharacterSaveParameterMap"]["value"][0]["value"]["RawData"] = prop(
+            {"values": [1, 2, 3]}
+        )
 
         undecoded_bases = copy.deepcopy(self.world)
-        undecoded_bases["BaseCampSaveData"]["value"][0]["value"]["RawData"] = prop({
-            "values": [1, 2, 3],
-        })
+        undecoded_bases["BaseCampSaveData"]["value"][0]["value"]["RawData"] = prop(
+            {
+                "values": [1, 2, 3],
+            }
+        )
 
         undecoded_containers = copy.deepcopy(self.world)
-        undecoded_containers["CharacterContainerSaveData"]["value"][0]["value"][
-            "Slots"
-        ] = prop({"values": [{"RawData": prop({"values": [1, 2, 3]})}]})
+        undecoded_containers["CharacterContainerSaveData"]["value"][0]["value"]["Slots"] = prop(
+            {"values": [{"RawData": prop({"values": [1, 2, 3]})}]}
+        )
 
         undecoded_item_containers = copy.deepcopy(self.world)
-        undecoded_item_containers["ItemContainerSaveData"] = prop([{
-            "value": {"Slots": prop({"values": [{"RawData": prop({"values": [1, 2, 3]})}]})}
-        }])
+        undecoded_item_containers["ItemContainerSaveData"] = prop(
+            [{"value": {"Slots": prop({"values": [{"RawData": prop({"values": [1, 2, 3]})}]})}}]
+        )
 
         cases = (
             ("GroupSaveDataMap", empty_groups),
@@ -282,14 +315,11 @@ class GuildSyncParserTests(SimpleTestCase):
             ("ItemContainerSaveData", undecoded_item_containers),
         )
         for dataset, world in cases:
-            with self.subTest(dataset=dataset):
-                with self.assertRaisesRegex(ValueError, dataset):
-                    guild_sync.validate_world_data(world)
+            with self.subTest(dataset=dataset), self.assertRaisesRegex(ValueError, dataset):
+                guild_sync.validate_world_data(world)
 
     def test_does_not_fall_back_to_the_technical_group_name(self):
-        raw_data = self.world["GroupSaveDataMap"]["value"][0]["value"]["RawData"][
-            "value"
-        ]
+        raw_data = self.world["GroupSaveDataMap"]["value"][0]["value"]["RawData"]["value"]
         raw_data.pop("guild_name")
         guilds = guild_sync.parse_guilds(self.world)
         public_guilds, _, _ = guild_sync.minimize_payload(guilds, [], [])
@@ -324,76 +354,94 @@ class GuildSyncParserTests(SimpleTestCase):
             }
             return {
                 "SlotIndex": prop(slot),
-                "RawData": prop({
-                    "slot_index": slot,
-                    "count": count,
-                    "item": {"static_id": item_id, "dynamic_id": dynamic},
-                }),
+                "RawData": prop(
+                    {
+                        "slot_index": slot,
+                        "count": count,
+                        "item": {"static_id": item_id, "dynamic_id": dynamic},
+                    }
+                ),
             }
 
-        self.world["ItemContainerSaveData"] = prop([
-            item_container(
-                item_container_ids["common"],
-                [
-                    item_slot(2, "Berry", 3),
-                    item_slot(0, "Stone", 1, dynamic_id),
+        self.world["ItemContainerSaveData"] = prop(
+            [
+                item_container(
+                    item_container_ids["common"],
+                    [
+                        item_slot(2, "Berry", 3),
+                        item_slot(0, "Stone", 1, dynamic_id),
+                    ],
+                ),
+                *[
+                    item_container(item_container_ids[name], [])
+                    for name in ("weapons", "armor", "food", "drop_slot", "essential")
                 ],
-            ),
-            *[
-                item_container(item_container_ids[name], [])
-                for name in ("weapons", "armor", "food", "drop_slot", "essential")
-            ],
-        ])
-        self.world["CharacterContainerSaveData"]["value"].append({
-            "key": {"ID": prop(party_container_id)},
-            "value": {
-                "Slots": prop({
-                    "values": [{
-                        "SlotIndex": prop(2),
-                        "RawData": prop({
-                            "player_uid": guild_sync.ZERO_UUID,
-                            "instance_id": party_id,
-                            "permission_tribe_id": 0,
-                        }),
-                    }],
-                }),
-            },
-        })
+            ]
+        )
+        self.world["CharacterContainerSaveData"]["value"].append(
+            {
+                "key": {"ID": prop(party_container_id)},
+                "value": {
+                    "Slots": prop(
+                        {
+                            "values": [
+                                {
+                                    "SlotIndex": prop(2),
+                                    "RawData": prop(
+                                        {
+                                            "player_uid": guild_sync.ZERO_UUID,
+                                            "instance_id": party_id,
+                                            "permission_tribe_id": 0,
+                                        }
+                                    ),
+                                }
+                            ],
+                        }
+                    ),
+                },
+            }
+        )
         self.world["CharacterSaveParameterMap"]["value"].append(
             character(party_id, CharacterID="Lamball")
         )
 
         inventory_info = {
-            f"{name.title().replace('_', '')}ContainerId": prop({
-                "ID": prop(identifier),
-            })
+            f"{name.title().replace('_', '')}ContainerId": prop(
+                {
+                    "ID": prop(identifier),
+                }
+            )
             for name, identifier in item_container_ids.items()
         }
-        inventory_info["WeaponLoadOutContainerId"] = inventory_info.pop(
-            "WeaponsContainerId"
-        )
-        inventory_info["PlayerEquipArmorContainerId"] = inventory_info.pop(
-            "ArmorContainerId"
-        )
+        inventory_info["WeaponLoadOutContainerId"] = inventory_info.pop("WeaponsContainerId")
+        inventory_info["PlayerEquipArmorContainerId"] = inventory_info.pop("ArmorContainerId")
         inventory_info["FoodEquipContainerId"] = inventory_info.pop("FoodContainerId")
         player_save = {
-            "SaveData": prop({
-                "PlayerUId": prop(player_uid),
-                "InventoryInfo": prop(inventory_info),
-                "OtomoCharacterContainerId": prop({"ID": prop(party_container_id)}),
-                "RecordData": prop({
-                    "FastTravelPointUnlockFlag": prop([
-                        {"key": "Waypoint-B", "value": True},
-                        {"key": "Waypoint-A", "value": False},
-                    ]),
-                    "FindAreaFlagMap": prop([{"key": "Area-1", "value": True}]),
-                    "NoteObtainForInstanceFlag": prop([{"key": "Day2", "value": True}]),
-                    "RelicObtainForInstanceFlag": prop([{"key": "relic-1", "value": True}]),
-                    "ItemPickupObtainForInstanceFlag": prop([{"key": "pickup-1", "value": True}]),
-                    "NormalBossDefeatFlag": prop([{"key": "boss-1", "value": True}]),
-                    "TowerBossDefeatFlag": prop([{"key": "tower-1", "value": True}]),
-                }),
-            }),
+            "SaveData": prop(
+                {
+                    "PlayerUId": prop(player_uid),
+                    "InventoryInfo": prop(inventory_info),
+                    "OtomoCharacterContainerId": prop({"ID": prop(party_container_id)}),
+                    "RecordData": prop(
+                        {
+                            "FastTravelPointUnlockFlag": prop(
+                                [
+                                    {"key": "Waypoint-B", "value": True},
+                                    {"key": "Waypoint-A", "value": False},
+                                ]
+                            ),
+                            "FindAreaFlagMap": prop([{"key": "Area-1", "value": True}]),
+                            "NoteObtainForInstanceFlag": prop([{"key": "Day2", "value": True}]),
+                            "RelicObtainForInstanceFlag": prop([{"key": "relic-1", "value": True}]),
+                            "ItemPickupObtainForInstanceFlag": prop(
+                                [{"key": "pickup-1", "value": True}]
+                            ),
+                            "NormalBossDefeatFlag": prop([{"key": "boss-1", "value": True}]),
+                            "TowerBossDefeatFlag": prop([{"key": "tower-1", "value": True}]),
+                        }
+                    ),
+                }
+            ),
         }
 
         with TemporaryDirectory() as directory:
@@ -426,11 +474,16 @@ class GuildSyncParserTests(SimpleTestCase):
                 {"slot": 2, "item_id": "Berry", "count": 3},
             ],
         )
-        self.assertEqual(claim["party"], [{
-            "slot": 2,
-            "species": "Lamball",
-            "instance_id": party_id.replace("-", ""),
-        }])
+        self.assertEqual(
+            claim["party"],
+            [
+                {
+                    "slot": 2,
+                    "species": "Lamball",
+                    "instance_id": party_id.replace("-", ""),
+                }
+            ],
+        )
         self.assertEqual(claim["progress"]["fast_travel"], ["waypoint-b"])
         self.assertEqual(claim["progress"]["areas"], ["area-1"])
         self.assertEqual(claim["progress"]["notes"], ["day2"])
@@ -438,24 +491,30 @@ class GuildSyncParserTests(SimpleTestCase):
 
     def test_private_parser_rejects_ambiguous_inventory_slots(self):
         container = {
-            "Slots": prop({
-                "values": [
-                    {
-                        "RawData": prop({
-                            "slot_index": 0,
-                            "count": 1,
-                            "item": {"static_id": "Stone"},
-                        }),
-                    },
-                    {
-                        "RawData": prop({
-                            "slot_index": 0,
-                            "count": 1,
-                            "item": {"static_id": "Wood"},
-                        }),
-                    },
-                ],
-            }),
+            "Slots": prop(
+                {
+                    "values": [
+                        {
+                            "RawData": prop(
+                                {
+                                    "slot_index": 0,
+                                    "count": 1,
+                                    "item": {"static_id": "Stone"},
+                                }
+                            ),
+                        },
+                        {
+                            "RawData": prop(
+                                {
+                                    "slot_index": 0,
+                                    "count": 1,
+                                    "item": {"static_id": "Wood"},
+                                }
+                            ),
+                        },
+                    ],
+                }
+            ),
         }
 
         with self.assertRaisesRegex(ValueError, "repeats a slot"):
@@ -464,11 +523,13 @@ class GuildSyncParserTests(SimpleTestCase):
     def test_private_parser_rejects_symlinked_or_mutating_player_saves(self):
         player_uid = "a" * 32
         player_save = {
-            "SaveData": prop({
-                "PlayerUId": prop(player_uid),
-                "InventoryInfo": prop({}),
-                "RecordData": prop({}),
-            }),
+            "SaveData": prop(
+                {
+                    "PlayerUId": prop(player_uid),
+                    "InventoryInfo": prop({}),
+                    "RecordData": prop({}),
+                }
+            ),
         }
 
         with TemporaryDirectory() as directory:

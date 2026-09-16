@@ -14,3 +14,4 @@ web/live-map/dist/
 /data/
 /postgres-data/
 /secrets/
+/backups/

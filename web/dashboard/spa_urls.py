@@ -2,7 +2,6 @@ from django.urls import path
 
 from . import spa_views
 
-
 urlpatterns = [
     path("", spa_views.app, {"page_key": "home"}, name="home"),
     path("mappa/", spa_views.app, {"page_key": "map"}, name="map"),

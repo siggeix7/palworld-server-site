@@ -19,12 +19,12 @@ if [[ -z "${app_password}" ]]; then
   exit 1
 fi
 
-psql --set=ON_ERROR_STOP=1 \
+APP_DB_PASSWORD="${app_password}" psql --set=ON_ERROR_STOP=1 \
   --username "${POSTGRES_USER}" \
   --dbname "${POSTGRES_DB}" \
   --set=app_database="${app_database}" \
-  --set=app_user="${app_user}" \
-  --set=app_password="${app_password}" <<'SQL'
+  --set=app_user="${app_user}" <<'SQL'
+\getenv app_password APP_DB_PASSWORD
 SELECT format(
   'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION',
   :'app_user',

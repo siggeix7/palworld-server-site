@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-sqlite:
+    name: Python checks and SQLite tests
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SECRET_KEY: ci-django-secret-key
+      PLAYER_HASH_SECRET: ci-player-hash-secret
+      PRIVATE_API_TOKEN: ci-private-api-token
+      PUBLIC_SITE_URL: https://testserver
+      SITE_ADMIN_USERS: admin@example.com
+      PRIVACY_CONTROLLER_NAME: ci-controller
+      PRIVACY_CONTACT_EMAIL: privacy@testserver
+      DATABASE_PATH: ${{ runner.temp }}/palworld.sqlite3
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.5"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: python -m ruff check web/dashboard web/palworld_site ops/PalworldGuildSync
+
+      - name: Ruff format
+        run: python -m ruff format --check web/dashboard web/palworld_site ops/PalworldGuildSync
+
+      - name: Django system checks
+        run: python web/manage.py check
+
+      - name: Migration checks
+        run: python web/manage.py makemigrations --check --dry-run
+
+      - name: Operational script checks
+        run: make test-ops
+
+      - name: Django tests
+        run: python web/manage.py test dashboard
+
+      - name: Python dependency audit
+        run: |
+          pip-audit --requirement requirements.txt
+          pip-audit --requirement requirements-dev.txt
+          pip-audit --requirement ops/PalworldGuildSync/requirements.txt
+
+  python-postgres:
+    name: PostgreSQL 17 tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 10s
+    env:
+      DJANGO_SECRET_KEY: ci-django-secret-key
+      PLAYER_HASH_SECRET: ci-player-hash-secret
+      PRIVATE_API_TOKEN: ci-private-api-token
+      PUBLIC_SITE_URL: https://testserver
+      SITE_ADMIN_USERS: admin@example.com
+      PRIVACY_CONTROLLER_NAME: ci-controller
+      PRIVACY_CONTACT_EMAIL: privacy@testserver
+      DATABASE_ENGINE: postgresql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: postgres
+      DB_USER: postgres
+      DB_PASSWORD: ci-postgres-password
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.5"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install --require-hashes -r requirements.txt
+
+      - name: Django system checks
+        run: python web/manage.py check
+
+      - name: Migration checks
+        run: python web/manage.py makemigrations --check --dry-run
+
+      - name: Django PostgreSQL tests
+        run: python web/manage.py test dashboard
+
+  frontend:
+    name: Frontend lint, tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/live-map
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+          cache-dependency-path: web/live-map/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate API types
+        run: npm run generate:api
+
+      - name: Lint and typecheck
+        run: npm run check
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Frontend dependency audit
+        run: npm audit --audit-level=high
+
+      - name: Frontend build
+        run: npm run build
+
+  docker:
+    name: Docker build and image scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: docker build --tag palworld-server-site:ci .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: palworld-server-site:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL

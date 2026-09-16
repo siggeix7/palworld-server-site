@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta, timezone as datetime_timezone
+from datetime import UTC, datetime, time, timedelta
 from unittest import mock
 from zoneinfo import ZoneInfo
 
@@ -15,8 +15,6 @@ from dashboard.weekly_scheduler import (
     previous_run_at,
     run_due_report,
 )
-
-UTC = datetime_timezone.utc
 
 
 class WeeklySchedulerTests(TestCase):

@@ -158,13 +158,16 @@ class WorldObjectsTests(TestCase):
         self.assertNotIn("_player_ips", dataset.payload)
         self.assertEqual(dataset.payload["count"], 5)
         self.assertEqual(dataset.payload["source_count"], 8)
-        self.assertEqual(dataset.payload["kind_counts"], {
-            "bases": 1,
-            "workers": 1,
-            "companions": 1,
-            "npcs": 1,
-            "wild-pals": 1,
-        })
+        self.assertEqual(
+            dataset.payload["kind_counts"],
+            {
+                "bases": 1,
+                "workers": 1,
+                "companions": 1,
+                "npcs": 1,
+                "wild-pals": 1,
+            },
+        )
         self.assertEqual(dataset.payload["omitted_counts"]["inactive"], 1)
         self.assertEqual(dataset.payload["omitted_counts"]["invalid_coordinates"], 1)
         self.assertFalse(dataset.payload["truncated"])
@@ -193,9 +196,7 @@ class WorldObjectsTests(TestCase):
         self.assertNotIn("GuildID", serialized)
         self.assertNotIn("Inactive Lamball", serialized)
 
-        companion = next(
-            obj for obj in payload["objects"] if obj["kind"] == "companions"
-        )
+        companion = next(obj for obj in payload["objects"] if obj["kind"] == "companions")
         self.assertTrue(companion["owner_id"])
         self.assertEqual(len(companion["owner_id"]), 24)
         base = next(obj for obj in payload["objects"] if obj["kind"] == "bases")
@@ -237,45 +238,51 @@ class WorldObjectsTests(TestCase):
         self.assertTrue(response.json()["stale"])
 
     def test_world_tree_overlap_prefers_world_tree_layer(self):
-        payload = {"ActorData": [{
-            "InstanceID": "world-tree-npc",
-            "Type": "Character",
-            "UnitType": "NPC",
-            "NickName": "World Tree NPC",
-            "LocationX": 348000,
-            "LocationY": -600000,
-        }]}
+        payload = {
+            "ActorData": [
+                {
+                    "InstanceID": "world-tree-npc",
+                    "Type": "Character",
+                    "UnitType": "NPC",
+                    "NickName": "World Tree NPC",
+                    "LocationX": 348000,
+                    "LocationY": -600000,
+                }
+            ]
+        }
         store_dataset("game_data", payload)
         obj = LatestDataset.objects.get(key="game_data").payload["objects"][0]
         self.assertEqual(obj["map"], "world-tree")
 
     def test_ambiguous_identities_are_omitted(self):
-        payload = {"ActorData": [
-            {
-                "InstanceID": "duplicate",
-                "Type": "Character",
-                "UnitType": "NPC",
-                "NickName": "One",
-                "LocationX": 1,
-                "LocationY": 2,
-            },
-            {
-                "InstanceID": "DUPLICATE",
-                "Type": "Character",
-                "UnitType": "NPC",
-                "NickName": "Two",
-                "LocationX": 3,
-                "LocationY": 4,
-            },
-            {
-                "InstanceID": "unique",
-                "Type": "Character",
-                "UnitType": "NPC",
-                "NickName": "Merchant",
-                "LocationX": 5,
-                "LocationY": 6,
-            },
-        ]}
+        payload = {
+            "ActorData": [
+                {
+                    "InstanceID": "duplicate",
+                    "Type": "Character",
+                    "UnitType": "NPC",
+                    "NickName": "One",
+                    "LocationX": 1,
+                    "LocationY": 2,
+                },
+                {
+                    "InstanceID": "DUPLICATE",
+                    "Type": "Character",
+                    "UnitType": "NPC",
+                    "NickName": "Two",
+                    "LocationX": 3,
+                    "LocationY": 4,
+                },
+                {
+                    "InstanceID": "unique",
+                    "Type": "Character",
+                    "UnitType": "NPC",
+                    "NickName": "Merchant",
+                    "LocationX": 5,
+                    "LocationY": 6,
+                },
+            ]
+        }
         store_dataset("game_data", payload)
         stored = LatestDataset.objects.get(key="game_data").payload
         self.assertEqual(stored["count"], 1)
@@ -283,31 +290,33 @@ class WorldObjectsTests(TestCase):
         self.assertEqual(stored["omitted_counts"]["ambiguous_identity"], 2)
 
     def test_object_limit_keeps_higher_priority_kinds(self):
-        payload = {"ActorData": [
-            {
-                "InstanceID": "wild-1",
-                "Type": "Character",
-                "UnitType": "WildPal",
-                "NickName": "Wild",
-                "LocationX": 1,
-                "LocationY": 2,
-            },
-            {
-                "InstanceID": "npc-1",
-                "Type": "Character",
-                "UnitType": "NPC",
-                "NickName": "NPC",
-                "LocationX": 3,
-                "LocationY": 4,
-            },
-            {
-                "Type": "PalBox",
-                "GuildID": "guild",
-                "GuildName": "Priority base",
-                "LocationX": 5,
-                "LocationY": 6,
-            },
-        ]}
+        payload = {
+            "ActorData": [
+                {
+                    "InstanceID": "wild-1",
+                    "Type": "Character",
+                    "UnitType": "WildPal",
+                    "NickName": "Wild",
+                    "LocationX": 1,
+                    "LocationY": 2,
+                },
+                {
+                    "InstanceID": "npc-1",
+                    "Type": "Character",
+                    "UnitType": "NPC",
+                    "NickName": "NPC",
+                    "LocationX": 3,
+                    "LocationY": 4,
+                },
+                {
+                    "Type": "PalBox",
+                    "GuildID": "guild",
+                    "GuildName": "Priority base",
+                    "LocationX": 5,
+                    "LocationY": 6,
+                },
+            ]
+        }
         with patch("dashboard.services.MAX_WORLD_OBJECTS", 2):
             store_dataset("game_data", payload)
         stored = LatestDataset.objects.get(key="game_data").payload
@@ -323,47 +332,51 @@ class WorldObjectsTests(TestCase):
         player_two = "2" * 32
         actor_one = player_one + ":" + "a" * 32
         actor_two = player_two + ":" + "b" * 32
-        game_data = {"ActorData": [
-            {
-                "InstanceID": actor_one,
-                "userid": "shared-user",
-                "Type": "Character",
-                "UnitType": "Player",
-            },
-            {
-                "InstanceID": actor_two,
-                "userid": "shared-user",
-                "Type": "Character",
-                "UnitType": "Player",
-            },
-            {
-                "InstanceID": "companion-one",
-                "TrainerInstanceID": actor_one,
-                "Type": "Character",
-                "UnitType": "OtomoPal",
-                "NickName": "Owned Pal",
-                "LocationX": 1,
-                "LocationY": 2,
-            },
-        ]}
-        players = {"players": [
-            {
-                "playerId": player_one,
-                "userId": "shared-user",
-                "name": "One",
-                "location_x": 1,
-                "location_y": 2,
-                "level": 1,
-            },
-            {
-                "playerId": player_two,
-                "userId": "shared-user",
-                "name": "Two",
-                "location_x": 3,
-                "location_y": 4,
-                "level": 1,
-            },
-        ]}
+        game_data = {
+            "ActorData": [
+                {
+                    "InstanceID": actor_one,
+                    "userid": "shared-user",
+                    "Type": "Character",
+                    "UnitType": "Player",
+                },
+                {
+                    "InstanceID": actor_two,
+                    "userid": "shared-user",
+                    "Type": "Character",
+                    "UnitType": "Player",
+                },
+                {
+                    "InstanceID": "companion-one",
+                    "TrainerInstanceID": actor_one,
+                    "Type": "Character",
+                    "UnitType": "OtomoPal",
+                    "NickName": "Owned Pal",
+                    "LocationX": 1,
+                    "LocationY": 2,
+                },
+            ]
+        }
+        players = {
+            "players": [
+                {
+                    "playerId": player_one,
+                    "userId": "shared-user",
+                    "name": "One",
+                    "location_x": 1,
+                    "location_y": 2,
+                    "level": 1,
+                },
+                {
+                    "playerId": player_two,
+                    "userId": "shared-user",
+                    "name": "Two",
+                    "location_x": 3,
+                    "location_y": 4,
+                    "level": 1,
+                },
+            ]
+        }
         store_dataset("game_data", game_data)
         store_dataset("players", players)
         companion = LatestDataset.objects.get(key="game_data").payload["objects"][0]
@@ -395,30 +408,36 @@ class WorldObjectsTests(TestCase):
     def test_companion_owner_candidates_cover_player_id_only_payload(self):
         player_id = "A" * 32
         actor_instance = player_id + ":" + "B" * 32
-        game_data = {"ActorData": [
-            {
-                "InstanceID": actor_instance,
-                "userid": "game-data-user",
-                "Type": "Character",
-                "UnitType": "Player",
-            },
-            {
-                "InstanceID": "companion-player-id-fallback",
-                "TrainerInstanceID": actor_instance,
-                "Type": "Character",
-                "UnitType": "OtomoPal",
-                "NickName": "Fallback Pal",
-                "LocationX": 1,
-                "LocationY": 2,
-            },
-        ]}
-        players = {"players": [{
-            "playerId": player_id,
-            "name": "Player ID Only",
-            "location_x": 1,
-            "location_y": 2,
-            "level": 1,
-        }]}
+        game_data = {
+            "ActorData": [
+                {
+                    "InstanceID": actor_instance,
+                    "userid": "game-data-user",
+                    "Type": "Character",
+                    "UnitType": "Player",
+                },
+                {
+                    "InstanceID": "companion-player-id-fallback",
+                    "TrainerInstanceID": actor_instance,
+                    "Type": "Character",
+                    "UnitType": "OtomoPal",
+                    "NickName": "Fallback Pal",
+                    "LocationX": 1,
+                    "LocationY": 2,
+                },
+            ]
+        }
+        players = {
+            "players": [
+                {
+                    "playerId": player_id,
+                    "name": "Player ID Only",
+                    "location_x": 1,
+                    "location_y": 2,
+                    "level": 1,
+                }
+            ]
+        }
         store_dataset("game_data", game_data)
         store_dataset("players", players)
         companion = LatestDataset.objects.get(key="game_data").payload["objects"][0]

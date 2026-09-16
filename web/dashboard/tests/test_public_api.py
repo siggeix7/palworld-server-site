@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from django.core.cache import cache
@@ -20,10 +20,8 @@ from dashboard.services import recompute_lifetime_rollups
 class PublicApiTests(TestCase):
     def setUp(self):
         cache.clear()
-        now = datetime.fromtimestamp(int(time.time()), tz=dt_timezone.utc)
-        LatestDataset.objects.create(
-            key="status", payload={"reachable": True}, source_clock=now
-        )
+        now = datetime.fromtimestamp(int(time.time()), tz=UTC)
+        LatestDataset.objects.create(key="status", payload={"reachable": True}, source_clock=now)
         LatestDataset.objects.create(
             key="metrics",
             payload={
@@ -132,10 +130,14 @@ class PublicApiTests(TestCase):
         self.assertEqual(response.json()["fps_health"]["state"], "calibrating")
 
     def test_fps_health_uses_cadence_and_breaks_at_data_gaps(self):
-        now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
+        now = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
         MetricSample.objects.all().delete()
-        timestamps = [now - timedelta(minutes=20) + timedelta(seconds=20 * index) for index in range(10)]
-        timestamps += [now - timedelta(minutes=5) + timedelta(seconds=20 * index) for index in range(16)]
+        timestamps = [
+            now - timedelta(minutes=20) + timedelta(seconds=20 * index) for index in range(10)
+        ]
+        timestamps += [
+            now - timedelta(minutes=5) + timedelta(seconds=20 * index) for index in range(16)
+        ]
         for index, timestamp in enumerate(timestamps):
             fps = 20 if index < 10 else 60
             MetricSample.objects.create(
@@ -162,7 +164,7 @@ class PublicApiTests(TestCase):
         self.assertLessEqual(health["score"], 30)
 
     def test_sparse_and_future_fps_samples_do_not_create_false_coverage(self):
-        now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
+        now = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
         MetricSample.objects.all().delete()
         for timestamp in [
             now - timedelta(minutes=10),
@@ -196,7 +198,7 @@ class PublicApiTests(TestCase):
         self.assertTrue(payload["samples"][1]["gap_before"])
 
     def test_player_archive_returns_periods_and_rolling_minutes(self):
-        now = datetime(2026, 7, 20, 12, 0, tzinfo=dt_timezone.utc)
+        now = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
         sessions = [
             (now - timedelta(minutes=10), now, None),
             (
@@ -249,9 +251,7 @@ class PublicApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["windows"], {"month_days": 30, "year_days": 365})
-        player = next(
-            entry for entry in payload["players"] if entry["id"] == "public-player-id"
-        )
+        player = next(entry for entry in payload["players"] if entry["id"] == "public-player-id")
         self.assertTrue(player["online"])
         self.assertEqual(player["session_count"], 5)
         self.assertEqual(player["minutes_30d"], 160)
@@ -265,9 +265,7 @@ class PublicApiTests(TestCase):
         self.assertTrue(player["periods"][0]["active"])
         self.assertIsNone(player["periods"][0]["ended_at"])
 
-        stale = next(
-            entry for entry in payload["players"] if entry["id"] == "stale-player-id"
-        )
+        stale = next(entry for entry in payload["players"] if entry["id"] == "stale-player-id")
         self.assertFalse(stale["online"])
         self.assertEqual(stale["minutes_all"], 61)
         self.assertFalse(stale["periods"][0]["active"])
@@ -277,11 +275,13 @@ class PublicApiTests(TestCase):
         GuildSnapshot.objects.create(
             payload={
                 "schema_version": 3,
-                "guilds": [{
-                    "group_id": "aaaaaaaaaaaaaaaaaaaa",
-                    "guild_name": "Explorers",
-                    "players": [],
-                }],
+                "guilds": [
+                    {
+                        "group_id": "aaaaaaaaaaaaaaaaaaaa",
+                        "guild_name": "Explorers",
+                        "players": [],
+                    }
+                ],
                 "bases": [],
                 "players": [
                     {
@@ -314,9 +314,7 @@ class PublicApiTests(TestCase):
 
         payload = self.client.get("/api/v1/players").json()
         self.assertEqual(len(payload["players"]), 2)
-        current = next(
-            player for player in payload["players"] if player["name"] == "Explorer"
-        )
+        current = next(player for player in payload["players"] if player["name"] == "Explorer")
         self.assertEqual(current["id"], "public-player-id")
         self.assertEqual(current["level"], 55)
         self.assertEqual(current["building_count"], 10)
@@ -328,9 +326,7 @@ class PublicApiTests(TestCase):
         self.assertEqual(current["ping_7d"]["average"], 22.0)
 
         historical = next(
-            player
-            for player in payload["players"]
-            if player["name"] == "Historical Explorer"
+            player for player in payload["players"] if player["name"] == "Historical Explorer"
         )
         self.assertEqual(historical["id"], "save-cccccccccccccccccccc")
         self.assertTrue(historical["save_only"])
@@ -348,15 +344,17 @@ class PublicApiTests(TestCase):
                 "schema_version": 3,
                 "guilds": [],
                 "bases": [],
-                "players": [{
-                    "player_id": "b" * 20,
-                    "player_name": "Explorer",
-                    "level": 99,
-                    "exp": 1234567,
-                    "owned_pal_count": 24,
-                    "unused_status_points": 3,
-                    "status_points": {"attack": 2},
-                }],
+                "players": [
+                    {
+                        "player_id": "b" * 20,
+                        "player_name": "Explorer",
+                        "level": 99,
+                        "exp": 1234567,
+                        "owned_pal_count": 24,
+                        "unused_status_points": 3,
+                        "status_points": {"attack": 2},
+                    }
+                ],
             }
         )
 
@@ -383,17 +381,19 @@ class PublicApiTests(TestCase):
                 "schema_version": 3,
                 "guilds": [],
                 "bases": [],
-                "players": [{
-                    "player_id": "dddddddddddddddddddd",
-                    "player_name": "Explorer",
-                    "guild_id": "",
-                    "is_admin": False,
-                    "level": 60,
-                    "exp": 1,
-                    "owned_pal_count": 1,
-                    "unused_status_points": 0,
-                    "status_points": {},
-                }],
+                "players": [
+                    {
+                        "player_id": "dddddddddddddddddddd",
+                        "player_name": "Explorer",
+                        "guild_id": "",
+                        "is_admin": False,
+                        "level": 60,
+                        "exp": 1,
+                        "owned_pal_count": 1,
+                        "unused_status_points": 0,
+                        "status_points": {},
+                    }
+                ],
                 "world": {},
                 "diagnostics": {},
             }
@@ -406,7 +406,7 @@ class PublicApiTests(TestCase):
         self.assertEqual(self.client.get("/api/v1/history?range=forever").status_code, 400)
 
     def test_stale_player_snapshot_hides_locations(self):
-        stale = datetime.now(tz=dt_timezone.utc) - timedelta(minutes=10)
+        stale = datetime.now(tz=UTC) - timedelta(minutes=10)
         dataset = LatestDataset.objects.get(key="players")
         dataset.source_clock = stale
         dataset.save(update_fields=["source_clock"])

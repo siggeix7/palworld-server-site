@@ -1,4 +1,4 @@
-FROM node:24-alpine AS live-map-build
+FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS live-map-build
 
 WORKDIR /build
 COPY web/live-map/package.json web/live-map/package-lock.json ./
@@ -10,13 +10,13 @@ RUN npm run check
 RUN npm test
 RUN npm run build
 
-FROM python:3.13.5-slim-bookworm AS map-assets
+FROM python:3.13.5-slim-bookworm@sha256:4c2cf9917bd1cbacc5e9b07320025bdb7cdf2df7b0ceaccb55e9dd7e30987419 AS map-assets
 
 WORKDIR /build
 COPY docker/map-tiles-requirements.txt docker/generate-map-tiles.py ./tools/
 COPY web/dashboard/static/dashboard/live-map/maps ./maps
 RUN python -m pip install --disable-pip-version-check --no-cache-dir \
-      --only-binary=Pillow --requirement tools/map-tiles-requirements.txt \
+      --only-binary=Pillow --require-hashes --requirement tools/map-tiles-requirements.txt \
     && printf '%s  %s\n%s  %s\n' \
       '9961632d5c38a0a67fd18713fa63af0ac6f192e71fadeb5ba53ae696b8914dd1' \
       'maps/palpagos.jpg' \
@@ -24,10 +24,10 @@ RUN python -m pip install --disable-pip-version-check --no-cache-dir \
       'maps/world-tree.jpg' | sha256sum --check --strict \
     && python tools/generate-map-tiles.py --if-needed maps \
     && printf '%s  %s\n' \
-      'b1454293f3258c2db74fc51f984e864452554df9527d9146dea6992872afc261' \
+      '9de64557908c4ff415bda9829836d05826b5de3a2929fa1b0621e522d7c8326d' \
       'maps/manifest.json' | sha256sum --check --strict
 
-FROM rockylinux/rockylinux:10
+FROM rockylinux/rockylinux:10@sha256:827d37bc128288ccf160ee318bb3cb92d591164cb217e92f8bc61e3982ae1834
 
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
@@ -63,7 +63,7 @@ RUN sed -i \
     && ln -sf python3 /usr/bin/python
 
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --require-hashes -r requirements.txt
 
 RUN useradd --create-home --uid 1000 palworld-site \
     && mkdir -p /data /app/staticfiles \
@@ -77,6 +77,7 @@ COPY docker/ ./docker/
 COPY --from=live-map-build /build/dist/ ./web/dashboard/static/dashboard/live-map/
 RUN chmod +x /app/docker/entrypoint.sh \
     && DJANGO_SECRET_KEY=build-collectstatic-key \
+       PLAYER_HASH_SECRET=build-collectstatic-player-hash-key \
        PUBLIC_SITE_URL=https://build.invalid \
        SITE_ADMIN_USERS=build-admin@example.invalid \
        PRIVACY_CONTROLLER_NAME=build-artifact-controller \

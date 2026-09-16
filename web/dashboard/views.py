@@ -1,6 +1,7 @@
 import re
 from collections import Counter, defaultdict
 from datetime import timedelta
+from itertools import pairwise
 from statistics import median
 
 from django.conf import settings
@@ -22,6 +23,7 @@ from .models import (
     PositionSample,
     ServerEvent,
 )
+
 # Server-side cache TTL for heavy read-only aggregations. The collector refreshes
 # the underlying data every 15-30s, so a 5s cache is invisible to users while
 # collapsing redundant work across concurrent dashboard clients.
@@ -83,7 +85,7 @@ def _session_end(session, now):
 def _ramp_score(anchors, value):
     if value <= anchors[0][0]:
         return anchors[0][1]
-    for (x0, y0), (x1, y1) in zip(anchors, anchors[1:]):
+    for (x0, y0), (x1, y1) in pairwise(anchors):
         if value <= x1:
             return y0 + ((value - x0) / (x1 - x0)) * (y1 - y0)
     return anchors[-1][1]
@@ -102,7 +104,7 @@ def _fps_health(rows, now):
     values = [row[1] for row in rows]
     deltas = [
         (current[0] - previous[0]).total_seconds()
-        for previous, current in zip(rows, rows[1:])
+        for previous, current in pairwise(rows)
         if current[0] > previous[0]
     ]
     cadence_deltas = [value for value in deltas if 10 <= value <= 40]
@@ -116,9 +118,7 @@ def _fps_health(rows, now):
 
     for index, row in enumerate(rows):
         next_delta = (
-            (rows[index + 1][0] - row[0]).total_seconds()
-            if index + 1 < len(rows)
-            else nominal
+            (rows[index + 1][0] - row[0]).total_seconds() if index + 1 < len(rows) else nominal
         )
         gap_after = next_delta <= 0 or next_delta >= gap_threshold
         duration = nominal if gap_after else next_delta
@@ -223,8 +223,7 @@ def _dataset_map():
 
 def _session_stats(public_ids, now):
     players = {
-        player.public_id: player
-        for player in Player.objects.filter(public_id__in=public_ids)
+        player.public_id: player for player in Player.objects.filter(public_id__in=public_ids)
     }
     since = now - timedelta(days=7)
     sessions_by_player = defaultdict(list)
@@ -290,9 +289,7 @@ def _legal_page(request, page):
             "legal_description": document["description"],
             "legal_content_template": document["content"],
             "canonical_url": (
-                f"{settings.PUBLIC_SITE_URL}{request.path}"
-                if settings.PUBLIC_SITE_URL
-                else ""
+                f"{settings.PUBLIC_SITE_URL}{request.path}" if settings.PUBLIC_SITE_URL else ""
             ),
             "terms_version": settings.CURRENT_TERMS_VERSION,
             "terms_effective_date": settings.CURRENT_TERMS_EFFECTIVE_DATE,
@@ -359,7 +356,9 @@ def snapshot(request):
         last_updated = max(source_times) if source_times else None
         metric_time = datasets.get("metrics").source_clock if datasets.get("metrics") else None
         age = int((now - metric_time).total_seconds()) if metric_time else None
-        online = bool(status.get("reachable")) and age is not None and age <= settings.DATA_STALE_SECONDS
+        online = (
+            bool(status.get("reachable")) and age is not None and age <= settings.DATA_STALE_SECONDS
+        )
         uptime = metrics.get("uptime")
         started_at = (
             metric_time - timedelta(seconds=uptime)
@@ -370,16 +369,16 @@ def snapshot(request):
         players_time = datasets.get("players").source_clock if datasets.get("players") else None
         players_age = int((now - players_time).total_seconds()) if players_time else None
         players_stale = players_age is None or players_age > settings.DATA_STALE_SECONDS
-        players = [dict(p) for p in (players_payload.get("players", []) if not players_stale else [])]
+        players = [
+            dict(p) for p in (players_payload.get("players", []) if not players_stale else [])
+        ]
         stats = _session_stats([player["id"] for player in players], now)
         for player in players:
             player["session"] = stats.get(player["id"], {})
             x = player.get("location_x")
             y = player.get("location_y")
             player["location_available"] = (
-                isinstance(x, (int, float))
-                and isinstance(y, (int, float))
-                and (x != 0 or y != 0)
+                isinstance(x, (int, float)) and isinstance(y, (int, float)) and (x != 0 or y != 0)
             )
 
         recent_events = [
@@ -459,9 +458,9 @@ def history(request):
 
     now = timezone.now()
     since = now - duration
-    queryset = MetricSample.objects.filter(
-        source_clock__gte=since, source_clock__lte=now
-    ).order_by("source_clock")
+    queryset = MetricSample.objects.filter(source_clock__gte=since, source_clock__lte=now).order_by(
+        "source_clock"
+    )
     rows = _sample_queryset(
         queryset,
         (
@@ -512,7 +511,9 @@ def _compute_players_archive():
     queryset = Player.objects.prefetch_related(
         Prefetch(
             "sessions",
-            queryset=PlayerSession.objects.filter(started_at__gte=session_window).order_by("-started_at"),
+            queryset=PlayerSession.objects.filter(started_at__gte=session_window).order_by(
+                "-started_at"
+            ),
         )
     ).order_by("-last_seen", "name")
     archive = []
@@ -525,11 +526,7 @@ def _compute_players_archive():
         if not getattr(settings, "PLAYER_CLAIMS_ENABLED", False)
         else None
     )
-    save_payload = (
-        snapshot.payload
-        if snapshot and isinstance(snapshot.payload, dict)
-        else {}
-    )
+    save_payload = snapshot.payload if snapshot and isinstance(snapshot.payload, dict) else {}
     saved_players = save_payload.get("players", [])
     if not isinstance(saved_players, list):
         saved_players = []
@@ -553,9 +550,7 @@ def _compute_players_archive():
         valid_saved_players.append(saved_player)
         saved_by_name[normalized_name].append(saved_player)
     saved_players = valid_saved_players
-    telemetry_name_counts = Counter(
-        player.name.strip().casefold() for player in queryset
-    )
+    telemetry_name_counts = Counter(player.name.strip().casefold() for player in queryset)
     consumed_saved_ids = set()
 
     ping_stats = {
@@ -598,9 +593,7 @@ def _compute_players_archive():
             "saved_level": saved_player.get("level", 0),
             "exp": saved_player.get("exp", 0),
             "owned_pal_count": saved_player.get("owned_pal_count", 0),
-            "unused_status_points": saved_player.get(
-                "unused_status_points", 0
-            ),
+            "unused_status_points": saved_player.get("unused_status_points", 0),
             "status_points": saved_player.get("status_points", {}),
             "guild_name": guild_names.get(saved_player.get("guild_id"), ""),
             "is_guild_admin": bool(saved_player.get("is_admin", False)),
@@ -637,10 +630,7 @@ def _compute_players_archive():
                     "started_at": _iso(session.started_at),
                     "ended_at": None if active else _iso(ended_at),
                     "active": active,
-                    "duration_minutes": _duration_seconds(
-                        session.started_at, ended_at
-                    )
-                    // 60,
+                    "duration_minutes": _duration_seconds(session.started_at, ended_at) // 60,
                 }
             )
 
@@ -759,9 +749,7 @@ def _player_presence_grid(player, now):
     start = now - timedelta(weeks=PLAYER_PRESENCE_WEEKS)
     grid = [[0.0] * 24 for _ in range(7)]
     ended = list(
-        PlayerSession.objects.filter(
-            player=player, started_at__lt=now, ended_at__gt=start
-        )
+        PlayerSession.objects.filter(player=player, started_at__lt=now, ended_at__gt=start)
     )
     open_sessions = list(
         PlayerSession.objects.filter(player=player, started_at__lt=now, ended_at__isnull=True)
@@ -779,7 +767,8 @@ def _player_presence_grid(player, now):
                 cursor.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
             )
             minutes = (next_hour - cursor).total_seconds() / 60
-            grid[timezone.localdate(cursor).weekday()][cursor.hour] += minutes
+            local_cursor = timezone.localtime(cursor)
+            grid[local_cursor.weekday()][local_cursor.hour] += minutes
             cursor = next_hour
     return [[round(cell / PLAYER_PRESENCE_WEEKS) for cell in row] for row in grid]
 
@@ -791,7 +780,9 @@ def _compute_player_detail(public_id):
     except Player.DoesNotExist:
         return None
     sessions = list(
-        PlayerSession.objects.filter(player=player).order_by("-started_at")[:PLAYER_SESSION_LIST_LIMIT]
+        PlayerSession.objects.filter(player=player).order_by("-started_at")[
+            :PLAYER_SESSION_LIST_LIMIT
+        ]
     )
     active_session = PlayerSession.objects.filter(player=player, ended_at__isnull=True).first()
     current_session = None
@@ -909,7 +900,6 @@ VANILLA_DEFAULTS = {
     "bCanPickupOtherGuildDeathPenaltyDrop": False,
     "bEnableDefenseOtherGuildPlayer": False,
     "DeathPenalty": "All",
-    "PalSpawnNumRate": 1.0,
 }
 
 
@@ -943,29 +933,37 @@ def _compute_leaderboard():
     queryset = Player.objects.prefetch_related(
         Prefetch(
             "sessions",
-            queryset=PlayerSession.objects.filter(started_at__gte=session_window).order_by("-started_at"),
+            queryset=PlayerSession.objects.filter(started_at__gte=session_window).order_by(
+                "-started_at"
+            ),
         )
     )
     entries = []
     for player in queryset:
         windows = _playtime_windows(player, now, since_30d, since_365d)
-        entries.append({
-            "id": player.public_id,
-            "name": player.name,
-            "account_name": player.account_name,
-            "level": player.level,
-            "first_seen": _iso(player.first_seen),
-            "last_seen": _iso(player.last_seen),
-            "online": windows["online"],
-            "minutes_30d": windows["minutes_30d"],
-            "minutes_365d": windows["minutes_365d"],
-            "minutes_all": windows["minutes_all"],
-        })
+        entries.append(
+            {
+                "id": player.public_id,
+                "name": player.name,
+                "account_name": player.account_name,
+                "level": player.level,
+                "first_seen": _iso(player.first_seen),
+                "last_seen": _iso(player.last_seen),
+                "online": windows["online"],
+                "minutes_30d": windows["minutes_30d"],
+                "minutes_365d": windows["minutes_365d"],
+                "minutes_all": windows["minutes_all"],
+            }
+        )
 
     def ranked(key):
-        return sorted(entries, key=lambda e: (e[key], e["level"], e["name"].casefold()), reverse=True)[:LEADERBOARD_LIMIT]
+        return sorted(
+            entries, key=lambda e: (e[key], e["level"], e["name"].casefold()), reverse=True
+        )[:LEADERBOARD_LIMIT]
 
-    by_level = sorted(entries, key=lambda e: (e["level"], e["minutes_365d"], e["name"].casefold()), reverse=True)[:LEADERBOARD_LIMIT]
+    by_level = sorted(
+        entries, key=lambda e: (e["level"], e["minutes_365d"], e["name"].casefold()), reverse=True
+    )[:LEADERBOARD_LIMIT]
     return {
         "generated_at": _iso(now),
         "windows": {"month_days": 30, "year_days": 365},
@@ -987,14 +985,20 @@ def leaderboard(request):
     return response
 
 
-def _session_hour_buckets(started_at, ended_at, now):
-    cursor = started_at
-    end = ended_at or now
+def _session_hour_buckets(started_at, ended_at, now, since):
+    cursor = max(started_at, since)
+    end = min(ended_at or now, now)
     while cursor < end:
-        next_hour = cursor.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        local_cursor = timezone.localtime(cursor)
+        local_next_hour = local_cursor.replace(minute=0, second=0, microsecond=0) + timedelta(
+            hours=1
+        )
+        next_hour = local_next_hour.astimezone(cursor.tzinfo)
         chunk_end = min(next_hour, end)
+        if chunk_end <= cursor:
+            chunk_end = min(cursor + timedelta(hours=1), end)
         minutes = (chunk_end - cursor).total_seconds() / 60.0
-        yield cursor.weekday(), cursor.hour, minutes
+        yield local_cursor.weekday(), local_cursor.hour, minutes
         cursor = chunk_end
 
 
@@ -1006,11 +1010,13 @@ def _compute_activity_heatmap(range_name, duration):
     day_totals = [0.0 for _ in range(7)]
     session_count = 0
     queryset = PlayerSession.objects.filter(
-        last_seen__gte=since
+        last_seen__gte=since, last_seen__lte=now
     ).select_related("player")
     for session in queryset.iterator(chunk_size=500):
         session_count += 1
-        for dow, hour, minutes in _session_hour_buckets(session.started_at, session.ended_at, now):
+        for dow, hour, minutes in _session_hour_buckets(
+            session.started_at, session.ended_at, now, since
+        ):
             if minutes <= 0:
                 continue
             grid[dow][hour] += minutes
@@ -1040,7 +1046,10 @@ def activity_heatmap(request):
     if not duration:
         return JsonResponse({"error": "unsupported range"}, status=400)
     response = JsonResponse(
-        _cached_payload(f"activity_heatmap:{range_name}", lambda: _compute_activity_heatmap(range_name, duration))
+        _cached_payload(
+            f"activity_heatmap:{range_name}",
+            lambda: _compute_activity_heatmap(range_name, duration),
+        )
     )
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -1050,20 +1059,22 @@ def activity_heatmap(request):
 def world_objects(request):
     dataset = LatestDataset.objects.filter(key="game_data").first()
     if not dataset:
-        response = JsonResponse({
-            "available": False,
-            "objects": [],
-            "count": 0,
-            "source_count": 0,
-            "supported_count": 0,
-            "source_counts": {},
-            "active_counts": {},
-            "kind_counts": {},
-            "omitted_counts": {},
-            "truncated": False,
-            "stale": True,
-            "updated_at": None,
-        })
+        response = JsonResponse(
+            {
+                "available": False,
+                "objects": [],
+                "count": 0,
+                "source_count": 0,
+                "supported_count": 0,
+                "source_counts": {},
+                "active_counts": {},
+                "kind_counts": {},
+                "omitted_counts": {},
+                "truncated": False,
+                "stale": True,
+                "updated_at": None,
+            }
+        )
         response.headers["Cache-Control"] = "no-cache, private"
         return response
     now = timezone.now()
@@ -1075,20 +1086,22 @@ def world_objects(request):
         response.headers["Cache-Control"] = "no-cache, private"
         return response
     payload = dataset.payload or {}
-    response = JsonResponse({
-        "available": True,
-        "objects": payload.get("objects", []),
-        "count": payload.get("count", 0),
-        "source_count": payload.get("source_count", 0),
-        "supported_count": payload.get("supported_count", payload.get("count", 0)),
-        "source_counts": payload.get("source_counts", {}),
-        "active_counts": payload.get("active_counts", {}),
-        "kind_counts": payload.get("kind_counts", {}),
-        "omitted_counts": payload.get("omitted_counts", {}),
-        "truncated": bool(payload.get("truncated", False)),
-        "stale": source_clock < now - timedelta(seconds=settings.WORLD_DATA_STALE_SECONDS),
-        "updated_at": _iso(source_clock),
-    })
+    response = JsonResponse(
+        {
+            "available": True,
+            "objects": payload.get("objects", []),
+            "count": payload.get("count", 0),
+            "source_count": payload.get("source_count", 0),
+            "supported_count": payload.get("supported_count", payload.get("count", 0)),
+            "source_counts": payload.get("source_counts", {}),
+            "active_counts": payload.get("active_counts", {}),
+            "kind_counts": payload.get("kind_counts", {}),
+            "omitted_counts": payload.get("omitted_counts", {}),
+            "truncated": bool(payload.get("truncated", False)),
+            "stale": source_clock < now - timedelta(seconds=settings.WORLD_DATA_STALE_SECONDS),
+            "updated_at": _iso(source_clock),
+        }
+    )
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "no-cache, private"
     return response
@@ -1097,9 +1110,9 @@ def world_objects(request):
 def _uptime_pct(window, now):
     since = now - window
     times = list(
-        MetricSample.objects.filter(
-            source_clock__gte=since, source_clock__lte=now
-        ).order_by("source_clock").values_list("source_clock", flat=True)
+        MetricSample.objects.filter(source_clock__gte=since, source_clock__lte=now)
+        .order_by("source_clock")
+        .values_list("source_clock", flat=True)
     )
     if not times:
         return 0.0, []
@@ -1107,7 +1120,7 @@ def _uptime_pct(window, now):
         return min(100.0, DATA_GAP_THRESHOLD / window.total_seconds() * 100), []
     covered = 0.0
     gaps = []
-    for prev, curr in zip(times, times[1:]):
+    for prev, curr in pairwise(times):
         gap = (curr - prev).total_seconds()
         if gap <= DATA_GAP_THRESHOLD:
             covered += gap
@@ -1123,14 +1136,15 @@ def _compute_telemetry_stats():
     uptime_24h, gaps_24h = _uptime_pct(timedelta(hours=24), now)
     uptime_7d, _ = _uptime_pct(timedelta(days=7), now)
     fps_values = list(
-        MetricSample.objects.filter(source_clock__gte=since_24h)
-        .values_list("server_fps", flat=True)
+        MetricSample.objects.filter(source_clock__gte=since_24h).values_list(
+            "server_fps", flat=True
+        )
     )
     fps_values = [v for v in fps_values if v is not None and v > 0]
     if fps_values:
         mean_fps = sum(fps_values) / len(fps_values)
         variance = sum((v - mean_fps) ** 2 for v in fps_values) / len(fps_values)
-        std_fps = variance ** 0.5
+        std_fps = variance**0.5
         fps_cv = round(std_fps / mean_fps, 3) if mean_fps else None
         fps_min = min(fps_values)
         fps_max = max(fps_values)
@@ -1206,6 +1220,7 @@ def world_diff(request):
             "total": len(diffs),
             "has_settings": bool(current),
         }
+
     response = JsonResponse(_cached_payload("world_diff:v1", compute))
     response.headers["Cache-Control"] = "no-store"
     return response

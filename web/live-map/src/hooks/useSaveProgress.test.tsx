@@ -6,6 +6,8 @@ import { type SaveProgressSession, useSaveProgress } from './useSaveProgress'
 const responsePayload = {
   snapshotAt: '2026-08-15T10:00:00Z',
   catalogueVersion: 'catalogue-content-hash',
+  idleExpiresAt: '2099-01-01T00:00:00Z',
+  absoluteExpiresAt: '2099-01-02T00:00:00Z',
   domains: [
     { id: 'alpha-pals', coverage: 'complete', completedIds: [], total: 0 },
     { id: 'bosses', coverage: 'complete', completedIds: [], total: 0 },
@@ -62,6 +64,23 @@ describe('useSaveProgress', () => {
     expect(result.current.state).toEqual({ phase: 'inactive' })
     expect(window.localStorage.getItem(LOCAL_COMPLETION_STORAGE_KEY)).toBe('{"manual":"keep"}')
     expect(JSON.stringify(window.localStorage)).not.toContain('private-transient-waypoint')
+  })
+
+  it('reports the refreshed backend session expiry', async () => {
+    const onSessionRefreshed = vi.fn()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(responsePayload), { status: 200 }))
+    )
+    const { result } = renderHook(() =>
+      useSaveProgress(
+        { phase: 'connected', playerId: 'public-player', sessionEpoch: 1, bearer: 'session-token' },
+        { ...options, onSessionRefreshed }
+      )
+    )
+
+    await waitFor(() => expect(result.current.state.phase).toBe('available'))
+    expect(onSessionRefreshed).toHaveBeenCalledWith(Date.parse('2099-01-01T00:00:00Z'))
   })
 
   it('automatically checks again without exposing a previous snapshot', async () => {

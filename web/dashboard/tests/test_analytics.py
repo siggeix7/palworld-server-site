@@ -97,6 +97,20 @@ class AnalyticsApiTests(TestCase):
             400,
         )
 
+    def test_activity_heatmap_clamps_sessions_to_requested_range(self):
+        PlayerSession.objects.filter(player=self.player).delete()
+        PlayerSession.objects.create(
+            player=self.player,
+            started_at=self.now - timedelta(days=40),
+            last_seen=self.now,
+            ended_at=self.now,
+        )
+
+        response = self.client.get(reverse("activity-heatmap") + "?range=7d")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(response.json()["total_minutes"], 10081.0)
+
     def test_telemetry_stats_reports_uptime_and_stability(self):
         response = self.client.get(reverse("telemetry-stats"))
         self.assertEqual(response.status_code, 200)

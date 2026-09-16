@@ -1,10 +1,8 @@
+from dashboard import account_views, views
+from dashboard.forms import CanonicalPasswordResetForm, SiteAuthenticationForm
 from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
-
-from dashboard import account_views, views
-from dashboard.forms import CanonicalPasswordResetForm, SiteAuthenticationForm
-
 
 handler403 = "dashboard.api_views.permission_denied"
 

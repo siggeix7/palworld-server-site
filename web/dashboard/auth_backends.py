@@ -9,9 +9,7 @@ class EmailOrUsernameBackend(ModelBackend):
         user_model = get_user_model()
         try:
             lookup = (
-                {"email__iexact": username}
-                if "@" in username
-                else {"username__iexact": username}
+                {"email__iexact": username} if "@" in username else {"username__iexact": username}
             )
             user = user_model.objects.get(**lookup)
         except (user_model.DoesNotExist, user_model.MultipleObjectsReturned):

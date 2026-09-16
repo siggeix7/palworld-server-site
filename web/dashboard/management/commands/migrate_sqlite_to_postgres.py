@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import time
 from pathlib import Path
 
 from django.conf import settings
@@ -15,10 +16,14 @@ from psycopg.types.json import Jsonb
 
 from dashboard.models import (
     AuthThrottle,
+    ClaimChallenge,
+    ClaimSession,
+    ClaimThrottle,
     GuildSnapshot,
     LatestDataset,
     MetricSample,
     Player,
+    PlayerClaimData,
     PlayerSession,
     PositionSample,
     RuntimeState,
@@ -26,7 +31,6 @@ from dashboard.models import (
     UserProfile,
     WeeklyReportSchedule,
 )
-
 
 COPY_MODELS = (
     Group,
@@ -42,7 +46,33 @@ COPY_MODELS = (
     PlayerSession,
     PositionSample,
     ServerEvent,
+    ClaimThrottle,
+    ClaimChallenge,
+    ClaimSession,
+    PlayerClaimData,
+    WeeklyReportSchedule,
 )
+
+OPTIONAL_SOURCE_MODELS = frozenset(
+    {
+        ClaimThrottle,
+        ClaimChallenge,
+        ClaimSession,
+        PlayerClaimData,
+        WeeklyReportSchedule,
+    }
+)
+
+OBSOLETE_TABLE_SPECS = {
+    "dashboard_connectorbatch": {
+        "json": {"datasets", "source_hosts", "ignored_items"},
+        "datetime": {"received_at"},
+    },
+    "dashboard_vmmetricsample": {
+        "json": set(),
+        "datetime": {"source_clock", "received_at"},
+    },
+}
 
 
 class Command(BaseCommand):
@@ -73,22 +103,20 @@ class Command(BaseCommand):
             self._ensure_auth_metadata()
             WeeklyReportSchedule.objects.using("default").all().delete()
             for model in COPY_MODELS:
-                if model in {Group, Session}:
-                    model.objects.using("default").all().delete()
                 counts[model._meta.db_table] = self._copy_model(model)
             self._copy_many_to_many()
             counts.update(self._copy_obsolete_tables(source_path))
             self._reset_sequences()
-            WeeklyReportSchedule.objects.using("default").get_or_create(id=1)
+            if counts[WeeklyReportSchedule._meta.db_table] == 0:
+                WeeklyReportSchedule.objects.using("default").get_or_create(id=1)
+                counts[WeeklyReportSchedule._meta.db_table] = 1
             self._verify_counts(counts)
 
         with connections["default"].cursor() as cursor:
             cursor.execute("ANALYZE")
         copied = sum(counts.values())
         self.stdout.write(
-            self.style.SUCCESS(
-                f"SQLite migration completed: {copied} rows copied and verified"
-            )
+            self.style.SUCCESS(f"SQLite migration completed: {copied} rows copied and verified")
         )
 
     def _check_sqlite(self, source_path):
@@ -102,33 +130,97 @@ class Command(BaseCommand):
                 raise CommandError("SQLite foreign_key_check failed")
 
     def _check_target_empty(self):
-        ignored = {"auth.Group", "sessions.Session"}
-        populated = [
-            model._meta.label
-            for model in COPY_MODELS
-            if model._meta.label not in ignored
-            if model.objects.using("default").exists()
-        ]
+        populated = []
+        for model in COPY_MODELS:
+            if model is WeeklyReportSchedule:
+                if not self._is_initial_schedule():
+                    populated.append(model._meta.label)
+            elif model.objects.using("default").exists():
+                populated.append(model._meta.label)
+
+        target_tables = self._table_names("default")
+        for table in OBSOLETE_TABLE_SPECS:
+            if table in target_tables and self._table_count("default", table):
+                populated.append(table)
         if populated:
-            raise CommandError(
-                "PostgreSQL target is not empty: " + ", ".join(populated)
-            )
+            raise CommandError("PostgreSQL target is not empty: " + ", ".join(populated))
+
+    def _is_initial_schedule(self):
+        schedule = WeeklyReportSchedule.objects.using("default").filter(id=1).first()
+        queryset = WeeklyReportSchedule.objects.using("default")
+        if schedule is None:
+            return not queryset.exists()
+        return queryset.count() == 1 and all(
+            getattr(schedule, field) == value
+            for field, value in {
+                "enabled": True,
+                "weekday": 0,
+                "run_time": time(8, 0),
+                "timezone": "Europe/Rome",
+                "next_run_at": None,
+                "last_scheduled_for": None,
+                "last_started_at": None,
+                "last_finished_at": None,
+                "last_status": WeeklyReportSchedule.NEVER,
+                "last_error": "",
+            }.items()
+        )
 
     def _copy_model(self, model):
+        source_columns = self._source_columns(model)
+        if source_columns is None:
+            if model in OPTIONAL_SOURCE_MODELS:
+                return 0
+            raise CommandError(f"legacy SQLite database is missing table {model._meta.db_table}")
+
         fields = list(model._meta.local_concrete_fields)
-        field_names = [field.attname for field in fields]
-        source_rows = model.objects.using("legacy").order_by(model._meta.pk.attname)
+        source_fields = [field for field in fields if field.column in source_columns]
+        missing_fields = [field for field in fields if field.column not in source_columns]
+        for field in missing_fields:
+            if not field.null and not field.has_default():
+                raise CommandError(
+                    f"legacy SQLite table {model._meta.db_table} is missing required column "
+                    f"{field.column}"
+                )
+
+        source_rows = (
+            model.objects.using("legacy")
+            .only(*(field.name for field in source_fields))
+            .order_by(model._meta.pk.attname)
+        )
         objects = []
         for source in source_rows.iterator(chunk_size=1000):
-            objects.append(
-                model(**{field_name: getattr(source, field_name) for field_name in field_names})
-            )
+            values = {field.attname: getattr(source, field.attname) for field in source_fields}
+            values.update({field.attname: field.get_default() for field in missing_fields})
+            objects.append(model(**values))
             if len(objects) == 1000:
                 model.objects.using("default").bulk_create(objects, batch_size=1000)
                 objects.clear()
         if objects:
             model.objects.using("default").bulk_create(objects, batch_size=1000)
         return source_rows.count()
+
+    def _source_columns(self, model):
+        connection = connections["legacy"]
+        with connection.cursor() as cursor:
+            if model._meta.db_table not in connection.introspection.table_names(cursor):
+                return None
+            return {
+                column.name
+                for column in connection.introspection.get_table_description(
+                    cursor, model._meta.db_table
+                )
+            }
+
+    def _table_names(self, alias):
+        connection = connections[alias]
+        with connection.cursor() as cursor:
+            return set(connection.introspection.table_names(cursor))
+
+    def _table_count(self, alias, table):
+        with connections[alias].cursor() as cursor:
+            cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
+            return cursor.fetchone()[0]
 
     def _ensure_auth_metadata(self):
         target_types = {
@@ -149,13 +241,9 @@ class Command(BaseCommand):
                 permission.content_type.model,
                 permission.codename,
             )
-            for permission in Permission.objects.using("default").select_related(
-                "content_type"
-            )
+            for permission in Permission.objects.using("default").select_related("content_type")
         }
-        for source_permission in Permission.objects.using("legacy").select_related(
-            "content_type"
-        ):
+        for source_permission in Permission.objects.using("legacy").select_related("content_type"):
             identity = (
                 source_permission.content_type.app_label,
                 source_permission.content_type.model,
@@ -194,9 +282,7 @@ class Command(BaseCommand):
             (User.user_permissions.through, "user_id"),
         ):
             objects = []
-            source_rows = model.objects.using("legacy").select_related(
-                "permission__content_type"
-            )
+            source_rows = model.objects.using("legacy").select_related("permission__content_type")
             for source in source_rows.iterator(chunk_size=1000):
                 permission = source.permission
                 identity = (
@@ -216,30 +302,21 @@ class Command(BaseCommand):
             model.objects.using("default").bulk_create(objects, batch_size=1000)
 
     def _copy_obsolete_tables(self, source_path):
-        specs = {
-            "dashboard_connectorbatch": {
-                "json": {"datasets", "source_hosts", "ignored_items"},
-                "datetime": {"received_at"},
-            },
-            "dashboard_vmmetricsample": {
-                "json": set(),
-                "datetime": {"source_clock", "received_at"},
-            },
-        }
         counts = {}
         uri = f"file:{source_path}?mode=ro&immutable=1"
         with sqlite3.connect(uri, uri=True) as source:
             source.row_factory = sqlite3.Row
             existing = {
                 row[0]
-                for row in source.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
-                )
+                for row in source.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
             }
+            target_tables = self._table_names("default")
             with connections["default"].cursor() as target:
-                for table, spec in specs.items():
+                for table, spec in OBSOLETE_TABLE_SPECS.items():
                     if table not in existing:
                         continue
+                    if table not in target_tables:
+                        raise CommandError(f"PostgreSQL target is missing table {table}")
                     rows = list(source.execute(f'SELECT * FROM "{table}" ORDER BY id'))
                     if not rows:
                         counts[table] = 0
@@ -266,7 +343,8 @@ class Command(BaseCommand):
         return counts
 
     def _reset_sequences(self):
-        models = list(COPY_MODELS) + [
+        models = [
+            *COPY_MODELS,
             Group.permissions.through,
             get_user_model().groups.through,
             get_user_model().user_permissions.through,

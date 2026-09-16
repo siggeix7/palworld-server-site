@@ -27,3 +27,4 @@ zabbix
 data
 postgres-data
 secrets
+backups

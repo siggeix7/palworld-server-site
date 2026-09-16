@@ -12,7 +12,6 @@ from django.utils.http import urlsafe_base64_encode
 
 from .tokens import email_verification_token
 
-
 logger = logging.getLogger(__name__)
 
 

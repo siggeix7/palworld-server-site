@@ -36,6 +36,16 @@ export type SaveProgressSession =
 interface SaveProgressOptions {
   expectedCatalogueVersion: string | null
   onUnauthorized?: () => void
+  onSessionRefreshed?: (expiresAt: number) => void
+}
+
+function parseSessionExpiry(value: unknown): number | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
+  const input = value as Record<string, unknown>
+  const idle = typeof input.idleExpiresAt === 'string' ? Date.parse(input.idleExpiresAt) : Number.NaN
+  const absolute = typeof input.absoluteExpiresAt === 'string' ? Date.parse(input.absoluteExpiresAt) : Number.NaN
+  const expiresAt = Math.min(idle, absolute)
+  return Number.isFinite(expiresAt) && expiresAt > Date.now() ? expiresAt : null
 }
 
 function belongsToSession(
@@ -142,9 +152,12 @@ export function useSaveProgress(session: SaveProgressSession, options: SaveProgr
           return
         }
         if (!response.ok) throw new Error(`/api/me/progress returned ${response.status}`)
-        const snapshot = parseSaveProgress(await response.json())
-        if (!snapshot) throw new Error('/api/me/progress returned an invalid payload')
+        const body: unknown = await response.json()
+        const expiresAt = parseSessionExpiry(body)
+        const snapshot = parseSaveProgress(body)
+        if (!snapshot || expiresAt === null) throw new Error('/api/me/progress returned an invalid payload')
         if (!currentRequest()) return
+        options.onSessionRefreshed?.(expiresAt)
         if (snapshot.catalogueVersion !== options.expectedCatalogueVersion) {
           if (retained) {
             commit({
@@ -206,7 +219,8 @@ export function useSaveProgress(session: SaveProgressSession, options: SaveProgr
     connectedSessionEpoch,
     connectedBearer,
     options.expectedCatalogueVersion,
-    options.onUnauthorized
+    options.onUnauthorized,
+    options.onSessionRefreshed
   ])
 
   // The effect performs the durable cleanup. This synchronous boundary makes

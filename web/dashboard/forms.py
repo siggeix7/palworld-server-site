@@ -11,7 +11,6 @@ from django.contrib.auth.forms import (
 
 from .emails import get_public_site_parts
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -27,10 +26,7 @@ class RegistrationForm(UserCreationForm):
     )
     accept_terms = forms.BooleanField(
         required=True,
-        label=(
-            "Dichiaro di aver letto l'informativa sulla privacy e "
-            "accetto le condizioni d'uso"
-        ),
+        label=("Dichiaro di aver letto l'informativa sulla privacy e accetto le condizioni d'uso"),
         widget=forms.CheckboxInput(attrs={"aria-describedby": "id_accept_terms_error"}),
     )
     terms_version = forms.CharField(widget=forms.HiddenInput)
@@ -52,9 +48,7 @@ class RegistrationForm(UserCreationForm):
         if not username.isascii():
             raise forms.ValidationError("Lo username può contenere soltanto caratteri ASCII.")
         reserved_usernames = {
-            identifier
-            for identifier in settings.SITE_ADMIN_USERS
-            if "@" not in identifier
+            identifier for identifier in settings.SITE_ADMIN_USERS if "@" not in identifier
         }
         if username.casefold() in reserved_usernames:
             raise forms.ValidationError("Questo username è riservato.")
@@ -96,10 +90,7 @@ class TermsAcceptanceForm(forms.Form):
     terms_version = forms.CharField(widget=forms.HiddenInput)
     accept_terms = forms.BooleanField(
         required=True,
-        label=(
-            "Dichiaro di aver letto l'informativa privacy e "
-            "accetto le condizioni d'uso"
-        ),
+        label=("Dichiaro di aver letto l'informativa privacy e accetto le condizioni d'uso"),
         widget=forms.CheckboxInput(attrs={"aria-describedby": "id_accept_terms_error"}),
     )
 
@@ -144,9 +135,7 @@ class UsernameChangeForm(forms.Form):
         if not username.isascii():
             raise forms.ValidationError("Lo username può contenere soltanto caratteri ASCII.")
         reserved_usernames = {
-            identifier
-            for identifier in settings.SITE_ADMIN_USERS
-            if "@" not in identifier
+            identifier for identifier in settings.SITE_ADMIN_USERS if "@" not in identifier
         }
         if username.casefold() in reserved_usernames:
             raise forms.ValidationError("Questo username è riservato.")

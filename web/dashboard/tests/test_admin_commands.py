@@ -185,9 +185,7 @@ class AdminCommandTests(TestCase):
                     content_type="application/json",
                 )
                 self.assertEqual(response.status_code, 400)
-        response = self.client.post(
-            reverse("palworld-kick"), data="{}", content_type="text/plain"
-        )
+        response = self.client.post(reverse("palworld-kick"), data="{}", content_type="text/plain")
         self.assertEqual(response.status_code, 415)
 
     def test_palworld_failure_is_reported_as_502(self):
@@ -254,10 +252,9 @@ class AdminCommandTests(TestCase):
         response = mock.Mock(
             status_code=200,
             ok=True,
-            content=b"{}",
-            text="{}",
         )
-        response.json.return_value = {}
+        response.headers = {}
+        response.iter_content.return_value = [b"{}"]
         session = mock.Mock()
         session.request.return_value = response
         with mock.patch("dashboard.admin_views.requests.Session", return_value=session):
@@ -274,8 +271,9 @@ class AdminCommandTests(TestCase):
             ("POST", "http://palworld.example.com:8212/v1/api/unban", {"userid": "u3"}),
         ]
         self.assertEqual(len(session.request.call_args_list), len(expected))
-        for call, (method, url, body) in zip(session.request.call_args_list, expected):
+        for call, (method, url, body) in zip(session.request.call_args_list, expected, strict=True):
             self.assertEqual(call.args, (method, url))
             self.assertEqual(call.kwargs["json"], body)
             self.assertFalse(call.kwargs["allow_redirects"])
             self.assertFalse(call.kwargs["verify"])
+            self.assertTrue(call.kwargs["stream"])

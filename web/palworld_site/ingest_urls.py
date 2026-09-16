@@ -1,7 +1,5 @@
-from django.urls import path
-
 from dashboard import admin_views, collector_views
-
+from django.urls import path
 
 urlpatterns = [
     path("healthz/", collector_views.health, name="private-health"),

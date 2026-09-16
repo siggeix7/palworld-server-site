@@ -1,8 +1,15 @@
 .env
+.venv/
+secrets/
+backups/
 *.log
+*.tar.gz
+*.sha256
 Level*.sav
 Level*.json
 Level*.bin
 *.zip
+Players/
+*.gvas
 __pycache__/
 *.pyc

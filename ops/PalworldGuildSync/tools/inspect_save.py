@@ -5,11 +5,9 @@ import os
 
 from palsav.io import load_sav
 
-
 SAVE_PATH = os.getenv(
     "SAVE_PATH",
-    "/opt/Palworld/palworld/Pal/Saved/SaveGames/0/"
-    "36814278E2A240ADB8F57D42AAF739CD/Level.sav",
+    "/opt/Palworld/palworld/Pal/Saved/SaveGames/0/36814278E2A240ADB8F57D42AAF739CD/Level.sav",
 )
 
 

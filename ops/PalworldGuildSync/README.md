@@ -14,20 +14,29 @@ the site's ingest service.
    `988dc766a903fa9ef56d172ecd2bee5b77c4920123f7dccc6084ee251c68b2e3`.
    Install its local `palsav-flex 0.2.0` and `palooz 0.2.0` packages; they are
    not published on PyPI.
-2. Create `/opt/PalworldGuildSync/.venv` and install the local parser packages
-   and this directory's requirements into that virtual environment.
-3. Copy this directory to `/opt/PalworldGuildSync` without replacing `.env`.
-4. Copy `.env.example` to `.env`, set the real token, and run
-    `chmod 600 /opt/PalworldGuildSync/.env`.
+2. From this checkout, run the installer as root. It creates the virtual
+   environment, installs the hash-locked requirements and local parser packages,
+   and installs the cron and logrotate entries:
+
+   ```bash
+   SAVE_TOOLS_DIR=/opt/PalworldSaveTools ./install.sh
+   ```
+
+   The installer copies the tracked files to `/opt/PalworldGuildSync` without
+   replacing an existing `.env`. It creates `.env` from the example on a new
+   install and reports that it still needs configuration.
+3. Set the real token and the same `PLAYER_HASH_SECRET` used by the site in
+   `/opt/PalworldGuildSync/.env`, and run
+     `chmod 600 /opt/PalworldGuildSync/.env`.
    Prefer an HTTPS endpoint with `VERIFY_SSL=true`. HTTP requires
    `ALLOW_INSECURE_HTTP=true` and must remain confined to a trusted LAN or VPN.
-5. Make `guild_sync.py` and `guild_sync_cron.sh` executable.
-6. Confirm that `SAVE_PATH` points to `Level.sav`; the collector discovers the
+   Prefer `PLAYER_HASH_SECRET_FILE` over putting the shared secret in `.env`.
+4. Confirm that `SAVE_PATH` points to `Level.sav`; the collector discovers the
    sibling `Players` directory automatically and excludes `*_dps.sav` files.
-7. Add this crontab entry:
+   The installer configures this schedule in `/etc/cron.d/palworld-guild-sync`:
 
 ```cron
-*/5 * * * * /opt/PalworldGuildSync/guild_sync_cron.sh
+*/5 * * * * root /opt/PalworldGuildSync/guild_sync_cron.sh
 ```
 
 Run a manual synchronization with:
@@ -35,6 +44,33 @@ Run a manual synchronization with:
 ```bash
 /opt/PalworldGuildSync/guild_sync_cron.sh
 ```
+
+The job serializes installs and syncs with `/run/lock/palworld-guild-sync.lock`.
+Its log is `/var/log/guild_sync.log` and is rotated daily, retaining 14
+compressed rotations.
+
+## Save Backups
+
+The backup contains `Level.sav` and the adjacent `Players` directory, but never
+the GuildSync `.env`. Stop the game server before creating a consistent backup;
+the explicit flag acknowledges that the save state was checked:
+
+```bash
+/opt/PalworldGuildSync/backup.sh --allow-live
+```
+
+Backups and SHA-256 sidecars are stored with mode `0600` under
+`/opt/PalworldGuildSync/backups`, with the newest 14 archives retained. Restore
+only while the game server is stopped and use the explicit confirmation flag:
+
+```bash
+/opt/PalworldGuildSync/restore.sh \
+  --archive /opt/PalworldGuildSync/backups/palworld-save-<timestamp>.tar.gz \
+  --confirm
+```
+
+Restore verifies the sidecar checksum, rejects unexpected archive paths and
+symbolic links, and creates a pre-restore rollback archive before replacement.
 
 ## Repository Policy
 

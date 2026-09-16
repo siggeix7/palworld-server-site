@@ -39,34 +39,40 @@ class GuildIngestTests(TestCase):
     def test_stores_minimized_guild_base_and_player_data(self):
         payload = {
             "schema_version": 3,
-            "guilds": [{
-                "group_id": "a" * 20,
-                "guild_name": "Explorers",
-                "pal_count": 24,
-                "worker_count": 8,
-                "players": [],
-            }],
-            "bases": [{
-                "base_id": "b" * 20,
-                "group_id": "a" * 20,
-                "name": "Forte Nord",
-                "location_x": -100,
-                "location_y": 200,
-                "worker_count": 8,
-                "work_types": [],
-                "raid_active": False,
-            }],
-            "players": [{
-                "player_id": "c" * 20,
-                "player_name": "Historical Explorer",
-                "guild_id": "a" * 20,
-                "is_admin": False,
-                "level": 42,
-                "exp": 987654,
-                "owned_pal_count": 17,
-                "unused_status_points": 2,
-                "status_points": {"max_hp": 5, "attack": 3},
-            }],
+            "guilds": [
+                {
+                    "group_id": "a" * 20,
+                    "guild_name": "Explorers",
+                    "pal_count": 24,
+                    "worker_count": 8,
+                    "players": [],
+                }
+            ],
+            "bases": [
+                {
+                    "base_id": "b" * 20,
+                    "group_id": "a" * 20,
+                    "name": "Forte Nord",
+                    "location_x": -100,
+                    "location_y": 200,
+                    "worker_count": 8,
+                    "work_types": [],
+                    "raid_active": False,
+                }
+            ],
+            "players": [
+                {
+                    "player_id": "c" * 20,
+                    "player_name": "Historical Explorer",
+                    "guild_id": "a" * 20,
+                    "is_admin": False,
+                    "level": 42,
+                    "exp": 987654,
+                    "owned_pal_count": 17,
+                    "unused_status_points": 2,
+                    "status_points": {"max_hp": 5, "attack": 3},
+                }
+            ],
             "world": {"active_raid_count": 0},
             "diagnostics": {"unresolved_worker_count": 0},
         }
@@ -98,32 +104,34 @@ class GuildIngestTests(TestCase):
             "world": {},
             "diagnostics": {},
             "claim": {
-                "players": [{
-                    "player_uid": player_uid,
-                    "player_name": "Private Explorer",
-                    "inventory": {
-                        "common": [
-                            {"slot": 0, "item_id": "Stone", "count": 1},
-                            {"slot": 1, "item_id": "Wood", "count": 2},
-                            {"slot": 2, "item_id": "Berry", "count": 3},
-                        ],
-                        "weapons": [],
-                        "armor": [],
-                        "food": [],
-                        "drop_slot": [],
-                        "essential": [],
-                    },
-                    "party": [],
-                    "progress": {
-                        "fast_travel": [],
-                        "areas": [],
-                        "notes": [],
-                        "relics": [],
-                        "item_pickups": [],
-                        "normal_bosses": [],
-                        "tower_bosses": [],
-                    },
-                }],
+                "players": [
+                    {
+                        "player_uid": player_uid,
+                        "player_name": "Private Explorer",
+                        "inventory": {
+                            "common": [
+                                {"slot": 0, "item_id": "Stone", "count": 1},
+                                {"slot": 1, "item_id": "Wood", "count": 2},
+                                {"slot": 2, "item_id": "Berry", "count": 3},
+                            ],
+                            "weapons": [],
+                            "armor": [],
+                            "food": [],
+                            "drop_slot": [],
+                            "essential": [],
+                        },
+                        "party": [],
+                        "progress": {
+                            "fast_travel": [],
+                            "areas": [],
+                            "notes": [],
+                            "relics": [],
+                            "item_pickups": [],
+                            "normal_bosses": [],
+                            "tower_bosses": [],
+                        },
+                    }
+                ],
             },
         }
         response = self.post(payload)
@@ -134,19 +142,19 @@ class GuildIngestTests(TestCase):
         claim = PlayerClaimData.objects.get(public_id=_player_id({"userId": player_uid}))
         self.assertNotIn(player_uid, json.dumps(claim.payload))
         self.assertTrue(
-            PlayerClaimData.objects.filter(
-                public_id=_player_id({"playerId": player_uid})
-            ).exists()
+            PlayerClaimData.objects.filter(public_id=_player_id({"playerId": player_uid})).exists()
         )
 
     def test_rejects_raw_ids_malformed_payloads_and_bad_auth(self):
         raw_payload = {
             "schema_version": 2,
-            "guilds": [{
-                "group_id": "raw-guild-uuid",
-                "guild_name": "Explorers",
-                "players": [],
-            }],
+            "guilds": [
+                {
+                    "group_id": "raw-guild-uuid",
+                    "guild_name": "Explorers",
+                    "players": [],
+                }
+            ],
             "bases": [],
             "world": {},
             "diagnostics": {},
@@ -189,14 +197,48 @@ class GuildIngestTests(TestCase):
                 self.assertEqual(response.status_code, 400)
         self.assertFalse(GuildSnapshot.objects.exists())
 
+    def test_rejects_wrong_json_types_without_server_error(self):
+        cases = [
+            {"schema_version": [], "guilds": [], "bases": [], "world": {}, "diagnostics": {}},
+            {
+                "schema_version": 2,
+                "guilds": [{"group_id": None}],
+                "bases": [],
+                "world": {},
+                "diagnostics": {},
+            },
+            {
+                "schema_version": 2,
+                "guilds": [],
+                "bases": [{"base_id": [], "group_id": "a" * 20}],
+                "world": {},
+                "diagnostics": {},
+            },
+            {
+                "schema_version": 3,
+                "guilds": [],
+                "bases": [],
+                "players": [{"player_id": {}}],
+                "world": {},
+                "diagnostics": {},
+            },
+        ]
+        for payload in cases:
+            with self.subTest(payload=payload):
+                response = self.post(payload)
+                self.assertIn(response.status_code, (400, 422))
+                self.assertNotIn("django-test-secret", response.content.decode())
+
     def test_rejects_oversized_or_control_character_names(self):
         base_payload = {
             "schema_version": 2,
-            "guilds": [{
-                "group_id": "a" * 20,
-                "guild_name": "x" * 129,
-                "players": [],
-            }],
+            "guilds": [
+                {
+                    "group_id": "a" * 20,
+                    "guild_name": "x" * 129,
+                    "players": [],
+                }
+            ],
             "bases": [],
             "world": {},
             "diagnostics": {},
@@ -232,52 +274,71 @@ class DirectDatasetTests(TestCase):
     def test_older_and_invalid_payloads_do_not_replace_last_good_data(self):
         clock = timezone.now()
         store_dataset("players", {"players": []}, clock)
-        self.assertFalse(store_dataset(
-            "players",
-            {"players": [{"name": "Old"}]},
-            clock - timedelta(minutes=1),
-        ))
+        self.assertFalse(
+            store_dataset(
+                "players",
+                {"players": [{"name": "Old"}]},
+                clock - timedelta(minutes=1),
+            )
+        )
         with self.assertRaises(IngestError):
             store_dataset("players", {"players": "invalid"})
         self.assertEqual(LatestDataset.objects.get(key="players").payload, {"players": []})
 
     def test_sanitizes_server_metadata_and_settings(self):
-        store_dataset("info", {
-            "version": "v1\x00",
-            "servername": "Server\nName",
-            "description": "Description\t",
-            "worldguid": "private-world-guid",
-        })
-        store_dataset("settings", {
-            "Difficulty": "Normal",
-            "AdminPassword": "private-password",
-            "PublicIP": "192.0.2.10",
-        })
-        serialized = json.dumps({
-            "info": LatestDataset.objects.get(key="info").payload,
-            "settings": LatestDataset.objects.get(key="settings").payload,
-        })
+        store_dataset(
+            "info",
+            {
+                "version": "v1\x00",
+                "servername": "Server\nName",
+                "description": "Description\t",
+                "worldguid": "private-world-guid",
+            },
+        )
+        store_dataset(
+            "settings",
+            {
+                "Difficulty": "Normal",
+                "AdminPassword": "private-password",
+                "PublicIP": "192.0.2.10",
+            },
+        )
+        serialized = json.dumps(
+            {
+                "info": LatestDataset.objects.get(key="info").payload,
+                "settings": LatestDataset.objects.get(key="settings").payload,
+            }
+        )
         for private in ("private-world-guid", "private-password", "192.0.2.10"):
             self.assertNotIn(private, serialized)
 
     def test_sanitizes_players_and_infers_sessions(self):
         raw_user_id = "76561198000000000"
         clock = timezone.now()
-        store_dataset("players", {"players": [{
-            "userId": raw_user_id,
-            "playerId": "raw-player-id",
-            "name": "Explorer",
-            "accountName": "Account",
-            "ping": 22.5,
-            "location_x": 10,
-            "location_y": 20,
-            "level": 12,
-            "building_count": 4,
-            "ip": "192.0.2.20",
-        }]}, clock)
+        store_dataset(
+            "players",
+            {
+                "players": [
+                    {
+                        "userId": raw_user_id,
+                        "playerId": "raw-player-id",
+                        "name": "Explorer",
+                        "accountName": "Account",
+                        "ping": 22.5,
+                        "location_x": 10,
+                        "location_y": 20,
+                        "level": 12,
+                        "building_count": 4,
+                        "ip": "192.0.2.20",
+                    }
+                ]
+            },
+            clock,
+        )
         player = Player.objects.get()
         self.assertNotEqual(player.public_id, raw_user_id)
         self.assertEqual(len(player.public_id), 24)
+        self.assertEqual(player.claim_public_id, _player_id({"playerId": "raw-player-id"}))
         self.assertEqual(player.ip_address, "192.0.2.20")
         self.assertIsNotNone(player.ip_observed_at)
         self.assertTrue(PlayerSession.objects.filter(player=player, ended_at__isnull=True).exists())
@@ -288,12 +349,103 @@ class DirectDatasetTests(TestCase):
         self.assertNotIn("raw-player-id", serialized)
         self.assertNotIn("192.0.2.20", serialized)
 
+    def test_player_claim_alias_canonicalizes_uuid_player_ids(self):
+        raw_player_id = "AABBCCDD-0011-2233-4455-66778899AABB"
+        clock = timezone.now()
+        store_dataset(
+            "players",
+            {
+                "players": [
+                    {
+                        "userId": "steam-player",
+                        "playerId": raw_player_id,
+                        "name": "Canonical Explorer",
+                        "location_x": 1,
+                        "location_y": 2,
+                    }
+                ]
+            },
+            clock,
+        )
+        player = Player.objects.get()
+        self.assertEqual(player.public_id, _player_id({"userId": "steam-player"}))
+        self.assertEqual(
+            player.claim_public_id,
+            _player_id({"playerId": raw_player_id.replace("-", "").lower()}),
+        )
+
+    def test_hyphenated_player_id_keeps_legacy_public_identity(self):
+        raw_player_id = "AABBCCDD-0011-2233-4455-66778899AABB"
+        store_dataset(
+            "players",
+            {
+                "players": [
+                    {
+                        "playerId": raw_player_id,
+                        "name": "Legacy UUID Explorer",
+                        "location_x": 1,
+                        "location_y": 2,
+                    }
+                ]
+            },
+        )
+
+        player = Player.objects.get()
+        self.assertEqual(player.public_id, _player_id({"playerId": raw_player_id}))
+        self.assertEqual(
+            player.claim_public_id,
+            _player_id({"playerId": raw_player_id.replace("-", "").lower()}),
+        )
+
+    def test_existing_player_receives_claim_alias_on_next_poll(self):
+        raw_user_id = "legacy-user"
+        raw_player_id = "legacy-player-id"
+        clock = timezone.now()
+        Player.objects.create(
+            public_id=_player_id({"userId": raw_user_id}),
+            name="Legacy Explorer",
+            first_seen=clock - timedelta(minutes=1),
+            last_seen=clock - timedelta(minutes=1),
+        )
+
+        store_dataset(
+            "players",
+            {
+                "players": [
+                    {
+                        "userId": raw_user_id,
+                        "playerId": raw_player_id,
+                        "name": "Legacy Explorer",
+                        "location_x": 1,
+                        "location_y": 2,
+                    }
+                ]
+            },
+            clock,
+        )
+
+        player = Player.objects.get()
+        self.assertEqual(player.claim_public_id, _player_id({"playerId": raw_player_id}))
+
     def test_player_rollups_track_lifetime_playtime_across_pruning(self):
         start = timezone.now() - timedelta(minutes=10)
-        store_dataset("players", {"players": [{
-            "userId": "u1", "playerId": "p1", "name": "Rollup Tester",
-            "location_x": 1, "location_y": 2, "level": 1, "ping": 5,
-        }]}, start)
+        store_dataset(
+            "players",
+            {
+                "players": [
+                    {
+                        "userId": "u1",
+                        "playerId": "p1",
+                        "name": "Rollup Tester",
+                        "location_x": 1,
+                        "location_y": 2,
+                        "level": 1,
+                        "ping": 5,
+                    }
+                ]
+            },
+            start,
+        )
         player = Player.objects.get()
         self.assertEqual(player.session_count_lifetime, 1)
         self.assertEqual(player.minutes_lifetime, 0)
@@ -308,7 +460,9 @@ class DirectDatasetTests(TestCase):
         self.assertEqual(player.longest_session_minutes, expected_minutes)
         self.assertGreater(player.session_count_lifetime, 0)
 
-        PlayerSession.objects.filter(started_at__lt=end - timedelta(seconds=1), ended_at__isnull=False).delete()
+        PlayerSession.objects.filter(
+            started_at__lt=end - timedelta(seconds=1), ended_at__isnull=False
+        ).delete()
         player.refresh_from_db()
         self.assertFalse(PlayerSession.objects.filter(player=player).exists())
         self.assertEqual(player.minutes_lifetime, expected_minutes)

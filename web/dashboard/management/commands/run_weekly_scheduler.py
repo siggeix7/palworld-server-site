@@ -23,15 +23,11 @@ class Command(BaseCommand):
 
         signal.signal(signal.SIGTERM, stop)
         signal.signal(signal.SIGINT, stop)
-        with open(
-            settings.WEEKLY_REPORT_SCHEDULER_LOCK_PATH, "w", encoding="ascii"
-        ) as lock:
+        with open(settings.WEEKLY_REPORT_SCHEDULER_LOCK_PATH, "w", encoding="ascii") as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
-                raise CommandError(
-                    "another weekly report scheduler is already running"
-                ) from exc
+                raise CommandError("another weekly report scheduler is already running") from exc
             mark_interrupted_run()
             while not stop_event.is_set():
                 close_old_connections()

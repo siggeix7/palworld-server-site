@@ -2,13 +2,32 @@
 set -euo pipefail
 umask 077
 
-: "${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}"
-: "${PRIVATE_API_TOKEN:?PRIVATE_API_TOKEN is required}"
 : "${PALWORLD_API_URL:?PALWORLD_API_URL is required}"
-: "${PALWORLD_API_PASSWORD:?PALWORLD_API_PASSWORD is required}"
+
+require_secret() {
+  local value_variable="$1"
+  local file_variable="$2"
+  local file_path="${!file_variable:-}"
+  if [[ -n "${file_path}" ]]; then
+    if [[ ! -r "${file_path}" || ! -s "${file_path}" ]]; then
+      printf '%s points to a missing or empty readable file\n' "${file_variable}" >&2
+      exit 1
+    fi
+  elif [[ -z "${!value_variable:-}" ]]; then
+    printf '%s or %s is required\n' "${file_variable}" "${value_variable}" >&2
+    exit 1
+  fi
+}
+
+require_secret DJANGO_SECRET_KEY DJANGO_SECRET_KEY_FILE
+require_secret PLAYER_HASH_SECRET PLAYER_HASH_SECRET_FILE
+require_secret PRIVATE_API_TOKEN PRIVATE_API_TOKEN_FILE
+require_secret PALWORLD_API_PASSWORD PALWORLD_API_PASSWORD_FILE
 
 mkdir -p /data
 chmod 0700 /data
+
+python3 web/manage.py check
 
 if [[ "${DATABASE_ENGINE:-sqlite}" == "sqlite" ]]; then
   database_dir="$(dirname -- "${DATABASE_PATH}")"

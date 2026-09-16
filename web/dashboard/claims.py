@@ -3,7 +3,7 @@ import ipaddress
 import json
 import re
 import secrets
-from datetime import timedelta, timezone as datetime_timezone
+from datetime import UTC, timedelta
 from functools import lru_cache
 
 from django.conf import settings
@@ -15,7 +15,6 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .live_map import _catalogue_asset
 from .models import ClaimChallenge, ClaimSession, ClaimThrottle, Player, PlayerClaimData
-
 
 CLAIM_BODY_LIMIT = 8 << 10
 CLAIM_PLAYER_ID_LIMIT = 256
@@ -114,16 +113,34 @@ def _request_source(request):
 
 def _throttle_key(scope, source):
     return hashlib.sha256(
-        f"{settings.SECRET_KEY}:player-claims:{scope}:{source}".encode("utf-8")
+        f"{settings.SECRET_KEY}:player-claims:{scope}:{source}".encode()
     ).hexdigest()
 
 
-def _allow_request(request, scope, source_limit, source_window, global_limit, global_window):
+def _allow_request(
+    request,
+    scope,
+    source_limit,
+    source_window,
+    global_limit,
+    global_window,
+    subject=None,
+    subject_limit=None,
+    subject_window=None,
+):
     now = timezone.now()
     entries = (
         (_throttle_key(scope, _request_source(request)), source_limit, source_window),
         (_throttle_key(scope, "global"), global_limit, global_window),
     )
+    if subject is not None:
+        entries += (
+            (
+                _throttle_key(scope, f"subject:{subject}"),
+                subject_limit if subject_limit is not None else source_limit,
+                subject_window if subject_window is not None else source_window,
+            ),
+        )
     try:
         with transaction.atomic():
             ClaimThrottle.objects.filter(
@@ -193,8 +210,10 @@ def _decode_json(request):
 
 
 def _valid_public_player_id(value):
-    return isinstance(value, str) and len(value) <= CLAIM_PLAYER_ID_LIMIT and bool(
-        PUBLIC_PLAYER_ID_PATTERN.fullmatch(value)
+    return (
+        isinstance(value, str)
+        and len(value) <= CLAIM_PLAYER_ID_LIMIT
+        and bool(PUBLIC_PLAYER_ID_PATTERN.fullmatch(value))
     )
 
 
@@ -220,7 +239,7 @@ def hmac_digest(value):
 
 
 def _iso(value):
-    return value.astimezone(datetime_timezone.utc).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _humanize(value):
@@ -303,7 +322,10 @@ def _candidate(prompt, value, options, question_id, state):
     if len(selected) < MIN_QUIZ_OPTIONS:
         return None, state
     state = _shuffle(selected, state)
-    correct = next((index for index, option in enumerate(selected) if option.casefold() == value.casefold()), -1)
+    correct = next(
+        (index for index, option in enumerate(selected) if option.casefold() == value.casefold()),
+        -1,
+    )
     if correct < 0:
         return None, state
     return {
@@ -324,14 +346,22 @@ def _build_quiz(payload, snapshot_at, selector):
     if not isinstance(inventory, dict):
         raise ClaimError("claim_unavailable", 503)
     facts = []
-    common = [stack for stack in inventory.get("common", []) if _valid_stack(stack) and stack["slot"] < MAX_COMMON_SLOTS]
+    common = [
+        stack
+        for stack in inventory.get("common", [])
+        if _valid_stack(stack) and stack["slot"] < MAX_COMMON_SLOTS
+    ]
     for key, prompt in (
         ("common", "What was in inventory slot %d?"),
         ("weapons", "What was in loadout slot %d?"),
         ("armor", "What was equipped in equipment slot %d?"),
         ("food", "What was in food pouch slot %d?"),
     ):
-        stacks = common if key == "common" else [stack for stack in inventory.get(key, []) if _valid_stack(stack)]
+        stacks = (
+            common
+            if key == "common"
+            else [stack for stack in inventory.get(key, []) if _valid_stack(stack)]
+        )
         options = _unique_options(stack["item_id"] for stack in stacks)
         if len(options) < MIN_QUIZ_OPTIONS:
             continue
@@ -341,7 +371,8 @@ def _build_quiz(payload, snapshot_at, selector):
     party = payload.get("party", []) if isinstance(payload, dict) else []
     if isinstance(party, list):
         party_entries = [
-            pal for pal in party
+            pal
+            for pal in party
             if isinstance(pal, dict)
             and isinstance(pal.get("slot"), int)
             and not isinstance(pal.get("slot"), bool)
@@ -352,7 +383,13 @@ def _build_quiz(payload, snapshot_at, selector):
         options = _unique_options(pal["species"] for pal in party_entries)
         if len(options) >= MIN_QUIZ_OPTIONS:
             for pal in party_entries:
-                facts.append((f"Which Pal species was in party slot {pal['slot'] + 1}?", pal["species"], options))
+                facts.append(
+                    (
+                        f"Which Pal species was in party slot {pal['slot'] + 1}?",
+                        pal["species"],
+                        options,
+                    )
+                )
 
     if not facts:
         raise ClaimError("no_suitable_question", 409)
@@ -376,7 +413,13 @@ def _claim_data(public_player_id):
     try:
         data = PlayerClaimData.objects.get(public_id=public_player_id)
     except PlayerClaimData.DoesNotExist as exc:
-        raise ClaimError("claim_unavailable", 503) from exc
+        player = Player.objects.filter(public_id=public_player_id).first()
+        if not player or not player.claim_public_id:
+            raise ClaimError("claim_unavailable", 503) from exc
+        try:
+            data = PlayerClaimData.objects.get(public_id=player.claim_public_id)
+        except PlayerClaimData.DoesNotExist as alias_exc:
+            raise ClaimError("claim_unavailable", 503) from alias_exc
     if timezone.now() - data.updated_at > CLAIM_DATA_STALE_AFTER:
         raise ClaimError("claim_unavailable", 503)
     if not isinstance(data.payload, dict):
@@ -387,9 +430,7 @@ def _claim_data(public_player_id):
 def _cleanup_expired():
     now = timezone.now()
     ClaimChallenge.objects.filter(expires_at__lte=now).delete()
-    ClaimSession.objects.filter(
-        idle_expires_at__lte=now
-    ).delete()
+    ClaimSession.objects.filter(idle_expires_at__lte=now).delete()
     ClaimSession.objects.filter(absolute_expires_at__lte=now).delete()
 
 
@@ -469,12 +510,14 @@ def _progress_response(data):
             for record in category_records
             if record["stateKey"].casefold() in completed_by_key.get(progress_key, set())
         )
-        domains.append({
-            "id": domain_id,
-            "coverage": "complete",
-            "completedIds": completed,
-            "total": len(category_records),
-        })
+        domains.append(
+            {
+                "id": domain_id,
+                "coverage": "complete",
+                "completedIds": completed,
+                "total": len(category_records),
+            }
+        )
     return {
         "snapshotAt": _iso(data.snapshot_at),
         "catalogueVersion": catalogue_hash,
@@ -493,16 +536,24 @@ def _start_error(exc):
 def start_player_claim(request):
     if not _enabled():
         return _error("claim_unavailable", 503)
-    allowed, retry_after = _allow_request(
-        request, "start", 5, timedelta(minutes=10), 100, timedelta(minutes=1)
-    )
-    if not allowed:
-        return _error("claim_unavailable", 429, retry_after)
     try:
         body = _decode_json(request)
         if set(body) != {"playerId"} or not _valid_public_player_id(body.get("playerId")):
             raise ClaimError("invalid_request", 400)
         player_id = body["playerId"]
+        allowed, retry_after = _allow_request(
+            request,
+            "start",
+            5,
+            timedelta(minutes=10),
+            100,
+            timedelta(minutes=1),
+            subject=player_id,
+            subject_limit=1,
+            subject_window=CLAIM_CHALLENGE_TTL,
+        )
+        if not allowed:
+            return _error("claim_unavailable", 429, retry_after)
         if not Player.objects.filter(public_id=player_id).exists():
             raise ClaimError("claim_unavailable", 503)
         data = _claim_data(player_id)
@@ -527,16 +578,21 @@ def start_player_claim(request):
                 remaining_questions=remaining,
                 expires_at=expires_at,
             )
-            return _private(JsonResponse({
-                "challengeToken": token,
-                "status": "ready",
-                "instructions": {
-                    "kind": "inventory_quiz",
-                    "questions": [current["question"]],
-                    "snapshotAt": _iso(data.snapshot_at),
-                },
-                "expiresAt": _iso(expires_at),
-            }, status=201))
+            return _private(
+                JsonResponse(
+                    {
+                        "challengeToken": token,
+                        "status": "ready",
+                        "instructions": {
+                            "kind": "inventory_quiz",
+                            "questions": [current["question"]],
+                            "snapshotAt": _iso(data.snapshot_at),
+                        },
+                        "expiresAt": _iso(expires_at),
+                    },
+                    status=201,
+                )
+            )
         raise ClaimError("claim_unavailable", 503)
     except ClaimError as exc:
         return _start_error(exc)
@@ -556,7 +612,11 @@ def cycle_player_claim_question(request):
         return _error("claim_unavailable", 429, retry_after)
     try:
         body = _decode_json(request)
-        if set(body) != {"challengeToken", "questionId"} or not _is_bearer(body.get("challengeToken")) or not _valid_question_id(body.get("questionId")):
+        if (
+            set(body) != {"challengeToken", "questionId"}
+            or not _is_bearer(body.get("challengeToken"))
+            or not _valid_question_id(body.get("questionId"))
+        ):
             raise ClaimError("invalid_request", 400)
         with transaction.atomic():
             challenge = ClaimChallenge.objects.select_for_update().get(
@@ -569,7 +629,11 @@ def cycle_player_claim_question(request):
                 raise ClaimError("question_busy", 409)
             if challenge.question.get("id") != body["questionId"]:
                 raise ClaimError("invalid_request", 400)
-            remaining = challenge.remaining_questions if isinstance(challenge.remaining_questions, list) else []
+            remaining = (
+                challenge.remaining_questions
+                if isinstance(challenge.remaining_questions, list)
+                else []
+            )
             if not remaining:
                 raise ClaimError("no_alternate_question", 409)
             next_question = remaining.pop(0)
@@ -583,15 +647,19 @@ def cycle_player_claim_question(request):
             challenge.remaining_questions = remaining
             challenge.save(update_fields=["question", "correct_answer", "remaining_questions"])
             data = _claim_data(challenge.public_player_id)
-            return _private(JsonResponse({
-                "status": "ready",
-                "instructions": {
-                    "kind": "inventory_quiz",
-                    "questions": [question],
-                    "snapshotAt": _iso(data.snapshot_at),
-                },
-                "expiresAt": _iso(challenge.expires_at),
-            }))
+            return _private(
+                JsonResponse(
+                    {
+                        "status": "ready",
+                        "instructions": {
+                            "kind": "inventory_quiz",
+                            "questions": [question],
+                            "snapshotAt": _iso(data.snapshot_at),
+                        },
+                        "expiresAt": _iso(challenge.expires_at),
+                    }
+                )
+            )
     except ClaimChallenge.DoesNotExist:
         return _error("invalid_or_expired_challenge", 401)
     except ClaimError as exc:
@@ -660,12 +728,16 @@ def verify_player_claim(request):
                 absolute_expires_at=absolute,
             )
             challenge.delete()
-            return _private(JsonResponse({
-                "status": "verified",
-                "idleExpiresAt": _iso(idle),
-                "absoluteExpiresAt": _iso(absolute),
-                "sessionToken": session_token,
-            }))
+            return _private(
+                JsonResponse(
+                    {
+                        "status": "verified",
+                        "idleExpiresAt": _iso(idle),
+                        "absoluteExpiresAt": _iso(absolute),
+                        "sessionToken": session_token,
+                    }
+                )
+            )
     except ClaimChallenge.DoesNotExist:
         return _error("invalid_or_expired_challenge", 401)
     except ClaimError as exc:
@@ -682,12 +754,16 @@ def claim_session(request):
     try:
         with transaction.atomic():
             session = _session(_authorization_bearer(request), lock=True)
-            return _private(JsonResponse({
-                "authenticated": True,
-                "playerId": session.public_player_id,
-                "idleExpiresAt": _iso(session.idle_expires_at),
-                "absoluteExpiresAt": _iso(session.absolute_expires_at),
-            }))
+            return _private(
+                JsonResponse(
+                    {
+                        "authenticated": True,
+                        "playerId": session.public_player_id,
+                        "idleExpiresAt": _iso(session.idle_expires_at),
+                        "absoluteExpiresAt": _iso(session.absolute_expires_at),
+                    }
+                )
+            )
     except ClaimError as exc:
         return _error(exc.code, exc.status)
     except (OperationalError, ValueError):
@@ -708,7 +784,10 @@ def claim_progress(request):
         with transaction.atomic():
             session = _session(_authorization_bearer(request), lock=True)
             data = _claim_data(session.public_player_id)
-            return _private(JsonResponse(_progress_response(data)))
+            payload = _progress_response(data)
+            payload["idleExpiresAt"] = _iso(session.idle_expires_at)
+            payload["absoluteExpiresAt"] = _iso(session.absolute_expires_at)
+            return _private(JsonResponse(payload))
     except ClaimError as exc:
         return _error(exc.code, exc.status)
     except (OperationalError, ValueError, TypeError):

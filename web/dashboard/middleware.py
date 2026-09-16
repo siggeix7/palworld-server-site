@@ -1,5 +1,7 @@
 import hashlib
+import ipaddress
 import secrets
+import uuid
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -12,8 +14,8 @@ from django.utils import timezone
 from django.utils.cache import patch_cache_control
 
 from .accounts import get_user_profile, needs_terms_acceptance
+from .logging import REQUEST_ID_PATTERN, request_id_context
 from .models import AuthThrottle
-
 
 AUTH_RATE_LIMITS = {
     "/accounts/login/": ("login", 10, timedelta(minutes=15)),
@@ -21,24 +23,35 @@ AUTH_RATE_LIMITS = {
     "/accounts/resend-verification/": ("resend", 5, timedelta(hours=1)),
     "/accounts/password-reset/": ("password-reset", 5, timedelta(hours=1)),
 }
+LOGIN_ACCOUNT_RATE_LIMIT = ("login-account", 5, timedelta(minutes=15))
 
 
-def _consume_auth_attempt(request, scope, limit, window):
+def _request_source(request):
     forwarded_for = request.headers.get("X-Forwarded-For", "")
     remote_address = request.META.get("REMOTE_ADDR", "unknown")
     address = remote_address
     if remote_address in settings.AUTH_TRUSTED_PROXY_ADDRESSES and forwarded_for:
         address = forwarded_for.rsplit(",", 1)[-1].strip() or remote_address
-    key = hashlib.sha256(
-        f"{settings.SECRET_KEY}:{scope}:{address}".encode()
-    ).hexdigest()
+    try:
+        parsed = ipaddress.ip_address(address)
+    except ValueError:
+        return address[:128] or "unknown"
+    if parsed.version == 6:
+        return str(ipaddress.ip_network(f"{parsed}/64", strict=False))
+    return str(parsed)
+
+
+def _login_identifier(request):
+    return request.POST.get("username", "").strip().casefold()[:254]
+
+
+def _consume_auth_attempt(scope, identity, limit, window):
+    key = hashlib.sha256(f"{settings.SECRET_KEY}:{scope}:{identity}".encode()).hexdigest()
     now = timezone.now()
     cutoff = now - window
     try:
         if secrets.randbelow(100) == 0:
-            AuthThrottle.objects.filter(
-                window_started_at__lt=now - timedelta(days=1)
-            ).delete()
+            AuthThrottle.objects.filter(window_started_at__lt=now - timedelta(days=1)).delete()
         with transaction.atomic():
             throttle, created = AuthThrottle.objects.select_for_update().get_or_create(
                 key=key,
@@ -130,18 +143,48 @@ class SiteAccessMiddleware:
             return None
         rate_limit = AUTH_RATE_LIMITS.get(request.path)
         if request.method == "POST" and rate_limit:
-            allowed, retry_after = _consume_auth_attempt(request, *rate_limit)
-            if not allowed:
-                response = render(
-                    request,
-                    "dashboard/accounts/rate_limited.html",
-                    {"retry_after": retry_after},
-                    status=429,
+            scope, limit, window = rate_limit
+            buckets = [(scope, _request_source(request), limit, window)]
+            if request.path == "/accounts/login/":
+                account = _login_identifier(request)
+                if account:
+                    buckets.append(
+                        (*LOGIN_ACCOUNT_RATE_LIMIT[:1], account, *LOGIN_ACCOUNT_RATE_LIMIT[1:])
+                    )
+            for bucket_scope, identity, bucket_limit, bucket_window in buckets:
+                allowed, retry_after = _consume_auth_attempt(
+                    bucket_scope, identity, bucket_limit, bucket_window
                 )
-                response.headers["Retry-After"] = str(retry_after)
-                patch_cache_control(response, no_store=True, private=True)
-                return response
+                if not allowed:
+                    response = render(
+                        request,
+                        "dashboard/accounts/rate_limited.html",
+                        {"retry_after": retry_after},
+                        status=429,
+                    )
+                    response.headers["Retry-After"] = str(retry_after)
+                    patch_cache_control(response, no_store=True, private=True)
+                    return response
         return None
+
+
+class RequestIDMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        requested_id = request.headers.get("X-Request-ID", "")
+        request_id = (
+            requested_id if REQUEST_ID_PATTERN.fullmatch(requested_id) else uuid.uuid4().hex
+        )
+        token = request_id_context.set(request_id)
+        request.request_id = request_id
+        try:
+            response = self.get_response(request)
+        finally:
+            request_id_context.reset(token)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
 class PublicSecurityHeadersMiddleware:
@@ -151,10 +194,13 @@ class PublicSecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+        )
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data:; style-src 'self'; "
+            "style-src-attr 'unsafe-inline'; "
             "script-src 'self'; connect-src 'self'; font-src 'self'; "
             "object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         )

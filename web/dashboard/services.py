@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import logging
 import math
 from datetime import timedelta
 
@@ -24,6 +25,8 @@ from .models import (
     RuntimeState,
     ServerEvent,
 )
+
+logger = logging.getLogger(__name__)
 
 DATASETS = {
     "game_data",
@@ -153,23 +156,31 @@ def _payload(value):
 
 
 def _player_id(raw):
-    identity = (
-        raw.get("userId")
-        or raw.get("user_id")
-        or raw.get("playerId")
-        or raw.get("player_uid")
-        or raw.get("playerUid")
-        or raw.get("accountName")
-        or raw.get("account_name")
-        or raw.get("name")
-        or raw.get("nickname")
-        or "unknown"
-    )
+    identity = "unknown"
+    for key in (
+        "userId",
+        "user_id",
+        "playerId",
+        "player_uid",
+        "playerUid",
+        "accountName",
+        "account_name",
+        "name",
+        "nickname",
+    ):
+        value = raw.get(key)
+        if value:
+            identity = value
+            break
     return hmac.new(
         settings.PLAYER_HASH_SECRET.encode("utf-8"),
         str(identity).encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()[:24]
+
+
+def _claim_player_id(raw_player_id):
+    return _player_id({"playerId": _canonical_player_external_id(raw_player_id)})
 
 
 def _sanitize_info(value):
@@ -229,10 +240,8 @@ def _sanitize_players(value):
     user_counts = {}
     player_counts = {}
     for raw in raw_players:
-        user_id = _canonical_external_id(
-            _first_present(raw, "userId", "user_id")
-        )
-        player_id = _canonical_external_id(
+        user_id = _canonical_external_id(_first_present(raw, "userId", "user_id"))
+        player_id = _canonical_player_external_id(
             _first_present(raw, "playerId", "player_uid", "playerUid")
         )
         if user_id:
@@ -244,6 +253,7 @@ def _sanitize_players(value):
     # Adapted from lib/palworld.ts at upstream commit 588fa639; see NOTICE.md.
     players = []
     player_ip_candidates = {}
+    player_claim_ids = {}
     for raw in raw_players:
         name = _clean_text(raw.get("name") or raw.get("nickname"), 128)
         if not name:
@@ -251,7 +261,7 @@ def _sanitize_players(value):
         raw_user_id = _first_present(raw, "userId", "user_id")
         raw_player_id = _first_present(raw, "playerId", "player_uid", "playerUid")
         user_id = _canonical_external_id(raw_user_id)
-        player_id = _canonical_external_id(raw_player_id)
+        player_id = _canonical_player_external_id(raw_player_id)
         if user_id and user_counts.get(user_id) == 1:
             public_id = _player_id(raw)
         elif player_id and player_counts.get(player_id) == 1:
@@ -260,13 +270,16 @@ def _sanitize_players(value):
             continue
         else:
             public_id = _player_id(raw)
+        claim_public_id = (
+            _claim_player_id(raw_player_id)
+            if player_id and player_counts.get(player_id) == 1
+            else ""
+        )
         players.append(
             {
                 "id": public_id,
                 "name": name,
-                "accountName": _clean_text(
-                    raw.get("accountName") or raw.get("account_name"), 128
-                ),
+                "accountName": _clean_text(raw.get("accountName") or raw.get("account_name"), 128),
                 "ping": round(_number(raw.get("ping")), 2),
                 "location_x": _number(_first_present(raw, "location_x", "locationX")),
                 "location_y": _number(_first_present(raw, "location_y", "locationY")),
@@ -274,6 +287,8 @@ def _sanitize_players(value):
                 "building_count": _integer(_first_present(raw, "building_count", "buildingCount")),
             }
         )
+        if claim_public_id:
+            player_claim_ids[public_id] = claim_public_id
         ip_address = _clean_ip(raw.get("ip"))
         if ip_address:
             player_ip_candidates.setdefault(public_id, set()).add(ip_address)
@@ -285,6 +300,7 @@ def _sanitize_players(value):
             for public_id, addresses in player_ip_candidates.items()
             if len(addresses) == 1
         },
+        "_player_claim_ids": player_claim_ids,
     }
 
 
@@ -345,7 +361,7 @@ _ACTOR_KIND_MAP = {
 def _world_object_id(instance_id, kind):
     return hmac.new(
         settings.PLAYER_HASH_SECRET.encode("utf-8"),
-        f"world:{kind}:{instance_id}".encode("utf-8"),
+        f"world:{kind}:{instance_id}".encode(),
         hashlib.sha256,
     ).hexdigest()[:24]
 
@@ -353,7 +369,7 @@ def _world_object_id(instance_id, kind):
 def _world_relation_id(namespace, identity):
     return hmac.new(
         settings.PLAYER_HASH_SECRET.encode("utf-8"),
-        f"world:{namespace}:{identity}".encode("utf-8"),
+        f"world:{namespace}:{identity}".encode(),
         hashlib.sha256,
     ).hexdigest()[:24]
 
@@ -403,12 +419,18 @@ def _canonical_external_id(value):
     return value.strip().casefold() if isinstance(value, str) else ""
 
 
+def _canonical_player_external_id(value):
+    value = _canonical_external_id(value)
+    compact = value.replace("-", "")
+    if len(compact) == 32 and all(character in "0123456789abcdef" for character in compact):
+        return compact
+    return value
+
+
 def _player_id_from_instance(value):
     value = _canonical_external_id(value)
     parts = [part.strip() for part in value.split(":")]
-    if len(parts) == 1 and len(parts[0]) == 32:
-        player_id = parts[0]
-    elif (
+    if (len(parts) == 1 and len(parts[0]) == 32) or (
         len(parts) == 2
         and all(len(part) == 32 for part in parts)
         and all(all(char in "0123456789abcdef" for char in part) for part in parts)
@@ -424,34 +446,35 @@ def _world_identity(actor, kind, guild_id, x, y):
     if instance_id:
         return instance_id
     if kind == "bases":
-        return "\0".join((
-            "palbox",
-            guild_id,
-            str(actor.get("Class") or "").strip(),
-            format(x, ".15g"),
-            format(y, ".15g"),
-        ))
+        return "\0".join(
+            (
+                "palbox",
+                guild_id,
+                str(actor.get("Class") or "").strip(),
+                format(x, ".15g"),
+                format(y, ".15g"),
+            )
+        )
     owner_id = _canonical_external_id(actor.get("TrainerInstanceID"))
     if not owner_id:
         owner_id = _canonical_external_id(actor.get("userid"))
     if not owner_id:
         return ""
-    return "\0".join((
-        "owned",
-        kind,
-        owner_id,
-        guild_id,
-        str(actor.get("Class") or "").strip(),
-        _clean_text(actor.get("NickName"), 96),
-    ))
+    return "\0".join(
+        (
+            "owned",
+            kind,
+            owner_id,
+            guild_id,
+            str(actor.get("Class") or "").strip(),
+            _clean_text(actor.get("NickName"), 96),
+        )
+    )
 
 
 def _map_for_coords(x, y):
     for map_id, bounds in WORLD_MAP_BOUNDS.items():
-        if (
-            bounds["min_x"] <= x <= bounds["max_x"]
-            and bounds["min_y"] <= y <= bounds["max_y"]
-        ):
+        if bounds["min_x"] <= x <= bounds["max_x"] and bounds["min_y"] <= y <= bounds["max_y"]:
             return map_id
     return None
 
@@ -464,8 +487,8 @@ def _sanitize_game_data(value):
     if not isinstance(actor_data, list):
         raise IngestError("game_data dataset must contain an ActorData array")
 
-    source_counts = {kind: 0 for kind in WORLD_ACTOR_KINDS}
-    active_counts = {kind: 0 for kind in WORLD_ACTOR_KINDS}
+    source_counts = dict.fromkeys(WORLD_ACTOR_KINDS, 0)
+    active_counts = dict.fromkeys(WORLD_ACTOR_KINDS, 0)
     omitted_counts = {
         "unsupported": 0,
         "inactive": 0,
@@ -483,10 +506,7 @@ def _sanitize_game_data(value):
     for actor in actor_data:
         if not isinstance(actor, dict):
             continue
-        if (
-            _classify_world_actor(actor) != "players"
-            or not _is_active_value(actor.get("IsActive"))
-        ):
+        if _classify_world_actor(actor) != "players" or not _is_active_value(actor.get("IsActive")):
             continue
         instance_id = _canonical_external_id(actor.get("InstanceID"))
         if instance_id:
@@ -502,10 +522,7 @@ def _sanitize_game_data(value):
     for actor in actor_data:
         if not isinstance(actor, dict):
             continue
-        if (
-            _classify_world_actor(actor) != "players"
-            or not _is_active_value(actor.get("IsActive"))
-        ):
+        if _classify_world_actor(actor) != "players" or not _is_active_value(actor.get("IsActive")):
             continue
         instance_id = _canonical_external_id(actor.get("InstanceID"))
         if not instance_id or player_instance_counts.get(instance_id) != 1:
@@ -515,16 +532,20 @@ def _sanitize_game_data(value):
         player_id = _player_id_from_instance(actor.get("InstanceID"))
         public_ids = []
         if canonical_user_id and player_user_counts.get(canonical_user_id) == 1:
-            public_ids.extend((
-                _player_id({"userId": userid}),
-                _player_id({"userId": canonical_user_id}),
-            ))
+            public_ids.extend(
+                (
+                    _player_id({"userId": userid}),
+                    _player_id({"userId": canonical_user_id}),
+                )
+            )
         if player_id and player_id_counts.get(player_id) == 1:
             raw_player_id = str(actor.get("InstanceID")).strip().split(":", 1)[0].strip()
-            public_ids.extend((
-                _player_id({"playerId": raw_player_id}),
-                _player_id({"playerId": player_id}),
-            ))
+            public_ids.extend(
+                (
+                    _player_id({"playerId": raw_player_id}),
+                    _player_id({"playerId": player_id}),
+                )
+            )
         if not public_ids:
             continue
         player_id_map[instance_id] = list(dict.fromkeys(public_ids))
@@ -533,10 +554,7 @@ def _sanitize_game_data(value):
     for actor in actor_data:
         if not isinstance(actor, dict):
             continue
-        if (
-            _classify_world_actor(actor) != "players"
-            or not _is_active_value(actor.get("IsActive"))
-        ):
+        if _classify_world_actor(actor) != "players" or not _is_active_value(actor.get("IsActive")):
             continue
         ip_address = _clean_ip(actor.get("ip"))
         if not ip_address:
@@ -545,17 +563,21 @@ def _sanitize_game_data(value):
         user_id = actor.get("userid")
         canonical_user_id = _canonical_external_id(user_id)
         if canonical_user_id and player_user_counts.get(canonical_user_id) == 1:
-            public_ids.extend((
-                _player_id({"userId": user_id}),
-                _player_id({"userId": canonical_user_id}),
-            ))
+            public_ids.extend(
+                (
+                    _player_id({"userId": user_id}),
+                    _player_id({"userId": canonical_user_id}),
+                )
+            )
         player_id = _player_id_from_instance(actor.get("InstanceID"))
         if player_id and player_id_counts.get(player_id) == 1:
             raw_player_id = str(actor.get("InstanceID")).strip().split(":", 1)[0].strip()
-            public_ids.extend((
-                _player_id({"playerId": raw_player_id}),
-                _player_id({"playerId": player_id}),
-            ))
+            public_ids.extend(
+                (
+                    _player_id({"playerId": raw_player_id}),
+                    _player_id({"playerId": player_id}),
+                )
+            )
         for public_id in set(public_ids):
             player_ip_candidates.setdefault(public_id, set()).add(ip_address)
 
@@ -597,12 +619,16 @@ def _sanitize_game_data(value):
             name = _clean_text(actor.get("GuildName"), 96) or "Palbox"
             class_name = ""
         else:
-            name = nick_name or class_name or {
-                "workers": "Base worker",
-                "wild-pals": "Wild Pal",
-                "companions": "Companion Pal",
-                "npcs": "NPC",
-            }.get(kind, "Map object")
+            name = (
+                nick_name
+                or class_name
+                or {
+                    "workers": "Base worker",
+                    "wild-pals": "Wild Pal",
+                    "companions": "Companion Pal",
+                    "npcs": "NPC",
+                }.get(kind, "Map object")
+            )
         obj = {
             "id": _world_object_id(identity, kind),
             "kind": kind,
@@ -617,9 +643,7 @@ def _sanitize_game_data(value):
         if level > 0:
             obj["level"] = level
         if kind == "companions":
-            owner_ids = player_id_map.get(
-                _canonical_external_id(actor.get("TrainerInstanceID"))
-            )
+            owner_ids = player_id_map.get(_canonical_external_id(actor.get("TrainerInstanceID")))
             if owner_ids:
                 obj["owner_id"] = owner_ids[0]
                 if len(owner_ids) > 1:
@@ -645,10 +669,12 @@ def _sanitize_game_data(value):
             omitted_counts["ambiguous_identity"] += 1
             continue
         unique_candidates.append(candidate)
-    unique_candidates.sort(key=lambda candidate: (
-        WORLD_OBJECT_PRIORITY[candidate["object"]["kind"]],
-        candidate["identity"],
-    ))
+    unique_candidates.sort(
+        key=lambda candidate: (
+            WORLD_OBJECT_PRIORITY[candidate["object"]["kind"]],
+            candidate["identity"],
+        )
+    )
     supported_count = len(unique_candidates)
     retained = unique_candidates[:MAX_WORLD_OBJECTS]
 
@@ -668,19 +694,13 @@ def _sanitize_game_data(value):
         nearest = None
         nearest_distance_sq = math.inf
         for base in bases_by_guild_map.get((guild_id, obj["map"]), []):
-            distance_sq = (
-                (candidate["x"] - base["x"]) ** 2
-                + (candidate["y"] - base["y"]) ** 2
-            )
+            distance_sq = (candidate["x"] - base["x"]) ** 2 + (candidate["y"] - base["y"]) ** 2
             if distance_sq > BASE_ASSOCIATION_RADIUS_SQ:
                 continue
             if (
                 nearest is None
                 or distance_sq < nearest_distance_sq
-                or (
-                    distance_sq == nearest_distance_sq
-                    and base["identity"] < nearest["identity"]
-                )
+                or (distance_sq == nearest_distance_sq and base["identity"] < nearest["identity"])
             ):
                 nearest = base
                 nearest_distance_sq = distance_sq
@@ -688,9 +708,7 @@ def _sanitize_game_data(value):
             obj["base_id"] = nearest["object"]["base_id"]
 
     objects = [candidate["object"] for candidate in retained]
-    kind_counts = {
-        kind: 0 for kind in WORLD_ACTOR_KINDS if kind in INCLUDED_WORLD_KINDS
-    }
+    kind_counts = {kind: 0 for kind in WORLD_ACTOR_KINDS if kind in INCLUDED_WORLD_KINDS}
     for obj in objects:
         kind_counts[obj["kind"]] += 1
     return {
@@ -740,13 +758,9 @@ def _save_metrics(payload, source_clock):
 def _save_player_ips(player_ips, source_clock):
     if not isinstance(player_ips, dict):
         return
-    public_ids = [
-        public_id for public_id in player_ips
-        if isinstance(public_id, str) and public_id
-    ]
+    public_ids = [public_id for public_id in player_ips if isinstance(public_id, str) and public_id]
     players = {
-        player.public_id: player
-        for player in Player.objects.filter(public_id__in=public_ids)
+        player.public_id: player for player in Player.objects.filter(public_id__in=public_ids)
     }
     for public_id, value in player_ips.items():
         player = players.get(public_id)
@@ -760,10 +774,12 @@ def _save_player_ips(player_ips, source_clock):
         player.save(update_fields=["ip_address", "ip_observed_at"])
 
 
-def _save_players(payload, source_clock):
+def _save_players(payload, source_clock, player_claim_ids=None):
+    player_claim_ids = player_claim_ids or {}
     incoming = {}
     for data in payload["players"]:
-        player, created = Player.objects.get_or_create(
+        claim_public_id = player_claim_ids.get(data["id"])
+        player, created = Player.objects.select_for_update().get_or_create(
             public_id=data["id"],
             defaults={
                 "name": data["name"],
@@ -774,21 +790,33 @@ def _save_players(payload, source_clock):
                 "building_count": data["building_count"],
             },
         )
+        if (
+            claim_public_id
+            and (created or source_clock >= player.last_seen)
+            and player.claim_public_id != claim_public_id
+        ):
+            Player.objects.filter(claim_public_id=claim_public_id).exclude(pk=player.pk).update(
+                claim_public_id=None
+            )
+            player.claim_public_id = claim_public_id
+            if created:
+                player.save(update_fields=["claim_public_id"])
         if not created and source_clock >= player.last_seen:
+            update_fields = [
+                "name",
+                "account_name",
+                "last_seen",
+                "level",
+                "building_count",
+            ]
+            if claim_public_id and player.claim_public_id == claim_public_id:
+                update_fields.append("claim_public_id")
             player.name = data["name"]
             player.account_name = data["accountName"]
             player.last_seen = source_clock
             player.level = data["level"]
             player.building_count = data["building_count"]
-            player.save(
-                update_fields=[
-                    "name",
-                    "account_name",
-                    "last_seen",
-                    "level",
-                    "building_count",
-                ]
-            )
+            player.save(update_fields=update_fields)
         incoming[player.id] = (player, data, created)
 
         if data["location_x"] != 0 or data["location_y"] != 0:
@@ -806,7 +834,9 @@ def _save_players(payload, source_clock):
 
     active = {
         session.player_id: session
-        for session in PlayerSession.objects.select_related("player").filter(ended_at__isnull=True)
+        for session in PlayerSession.objects.select_related("player")
+        .select_for_update()
+        .filter(ended_at__isnull=True)
     }
 
     for player_id, (player, _data, _created) in incoming.items():
@@ -816,9 +846,7 @@ def _save_players(payload, source_clock):
                 session.last_seen = source_clock
                 session.save(update_fields=["last_seen"])
             continue
-        PlayerSession.objects.create(
-            player=player, started_at=source_clock, last_seen=source_clock
-        )
+        PlayerSession.objects.create(player=player, started_at=source_clock, last_seen=source_clock)
         player.session_count_lifetime += 1
         player.save(update_fields=["session_count_lifetime"])
         ServerEvent.objects.create(
@@ -833,15 +861,26 @@ def _save_players(payload, source_clock):
         duration = _duration_seconds(session.started_at, source_clock)
         player = session.player
         player.minutes_lifetime += duration // 60
-        player.longest_session_minutes = max(
-            player.longest_session_minutes, duration // 60
-        )
+        player.longest_session_minutes = max(player.longest_session_minutes, duration // 60)
         player.save(update_fields=["minutes_lifetime", "longest_session_minutes"])
         ServerEvent.objects.create(
             player=player,
             event_type=ServerEvent.LEAVE,
             source_clock=source_clock,
         )
+
+
+RETENTION_DELETE_BATCH_SIZE = 1000
+
+
+def _delete_in_batches(queryset, batch_size=RETENTION_DELETE_BATCH_SIZE):
+    deleted = 0
+    while True:
+        primary_keys = list(queryset.values_list("pk", flat=True)[:batch_size])
+        if not primary_keys:
+            return deleted
+        count, _ = queryset.filter(pk__in=primary_keys).delete()
+        deleted += count
 
 
 def cleanup_if_due():
@@ -853,25 +892,36 @@ def cleanup_if_due():
     if now.timestamp() - last < 3600:
         return
 
-    PositionSample.objects.filter(
-        source_clock__lt=now - timedelta(days=settings.POSITION_RETENTION_DAYS)
-    ).delete()
-    MetricSample.objects.filter(
-        source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
-    ).delete()
-    ServerEvent.objects.filter(
-        source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
-    ).delete()
-    PlayerSession.objects.filter(
-        ended_at__lt=now - timedelta(days=settings.SESSION_RETENTION_DAYS),
-        ended_at__isnull=False,
-    ).delete()
-    Player.objects.filter(
+    deleted = {
+        "position_samples": _delete_in_batches(
+            PositionSample.objects.filter(
+                source_clock__lt=now - timedelta(days=settings.POSITION_RETENTION_DAYS)
+            )
+        ),
+        "metric_samples": _delete_in_batches(
+            MetricSample.objects.filter(
+                source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
+            )
+        ),
+        "server_events": _delete_in_batches(
+            ServerEvent.objects.filter(
+                source_clock__lt=now - timedelta(days=settings.METRIC_RETENTION_DAYS)
+            )
+        ),
+        "player_sessions": _delete_in_batches(
+            PlayerSession.objects.filter(
+                ended_at__lt=now - timedelta(days=settings.SESSION_RETENTION_DAYS),
+                ended_at__isnull=False,
+            )
+        ),
+    }
+    deleted["player_ips"] = Player.objects.filter(
         ip_observed_at__lt=now - timedelta(days=settings.PLAYER_IP_RETENTION_DAYS),
     ).update(ip_address=None, ip_observed_at=None)
-    Player.objects.filter(
-        last_seen__lt=now - timedelta(days=settings.PLAYER_RETENTION_DAYS)
-    ).delete()
+    deleted["players"] = _delete_in_batches(
+        Player.objects.filter(last_seen__lt=now - timedelta(days=settings.PLAYER_RETENTION_DAYS))
+    )
+    deleted["latest_datasets"] = 0
     for key, retention_days in {
         "game_data": settings.POSITION_RETENTION_DAYS,
         "metrics": settings.METRIC_RETENTION_DAYS,
@@ -880,27 +930,40 @@ def cleanup_if_due():
         "settings": settings.PLAYER_RETENTION_DAYS,
         "status": settings.PLAYER_RETENTION_DAYS,
     }.items():
-        LatestDataset.objects.filter(
-            key=key,
-            received_at__lt=now - timedelta(days=retention_days),
-        ).delete()
-    GuildSnapshot.objects.filter(
-        updated_at__lt=now - timedelta(days=settings.SAVE_RETENTION_DAYS)
-    ).delete()
-    PlayerClaimData.objects.filter(
-        updated_at__lt=now - timedelta(days=settings.SAVE_RETENTION_DAYS)
-    ).delete()
-    ClaimChallenge.objects.filter(expires_at__lte=now).delete()
-    ClaimSession.objects.filter(idle_expires_at__lte=now).delete()
-    ClaimSession.objects.filter(absolute_expires_at__lte=now).delete()
-    ClaimThrottle.objects.filter(
-        window_started_at__lt=now - timedelta(hours=1)
-    ).delete()
-    AuthThrottle.objects.filter(
-        window_started_at__lt=now - timedelta(days=1)
-    ).delete()
+        deleted["latest_datasets"] += _delete_in_batches(
+            LatestDataset.objects.filter(
+                key=key,
+                received_at__lt=now - timedelta(days=retention_days),
+            )
+        )
+    deleted["guild_snapshots"] = _delete_in_batches(
+        GuildSnapshot.objects.filter(
+            updated_at__lt=now - timedelta(days=settings.SAVE_RETENTION_DAYS)
+        )
+    )
+    deleted["player_claim_data"] = _delete_in_batches(
+        PlayerClaimData.objects.filter(
+            updated_at__lt=now - timedelta(days=settings.SAVE_RETENTION_DAYS)
+        )
+    )
+    deleted["claim_challenges"] = _delete_in_batches(
+        ClaimChallenge.objects.filter(expires_at__lte=now)
+    )
+    deleted["claim_sessions"] = _delete_in_batches(
+        ClaimSession.objects.filter(idle_expires_at__lte=now)
+    )
+    deleted["claim_sessions"] += _delete_in_batches(
+        ClaimSession.objects.filter(absolute_expires_at__lte=now)
+    )
+    deleted["claim_throttles"] = _delete_in_batches(
+        ClaimThrottle.objects.filter(window_started_at__lt=now - timedelta(hours=1))
+    )
+    deleted["auth_throttles"] = _delete_in_batches(
+        AuthThrottle.objects.filter(window_started_at__lt=now - timedelta(days=1))
+    )
     state.value = {"last": int(now.timestamp())}
     state.save(update_fields=["value", "updated_at"])
+    logger.info("Retention cleanup completed deleted=%s", deleted)
 
 
 @transaction.atomic
@@ -915,9 +978,7 @@ def _close_stale_sessions(now):
         duration = _duration_seconds(session.started_at, session.ended_at)
         player = session.player
         player.minutes_lifetime += duration // 60
-        player.longest_session_minutes = max(
-            player.longest_session_minutes, duration // 60
-        )
+        player.longest_session_minutes = max(player.longest_session_minutes, duration // 60)
         player.save(update_fields=["minutes_lifetime", "longest_session_minutes"])
         ServerEvent.objects.create(
             player=player,
@@ -935,11 +996,8 @@ def store_dataset(dataset, value, source_clock=None):
         raise IngestError("dataset clock is too far in the future")
     payload = SANITIZERS[dataset](value)
     player_ips = payload.pop("_player_ips", {}) if dataset in {"game_data", "players"} else {}
-    current = (
-        LatestDataset.objects.select_for_update()
-        .filter(key=dataset)
-        .first()
-    )
+    player_claim_ids = payload.pop("_player_claim_ids", {}) if dataset == "players" else {}
+    current = LatestDataset.objects.select_for_update().filter(key=dataset).first()
     if current and source_clock < current.source_clock:
         return False
 
@@ -950,7 +1008,7 @@ def store_dataset(dataset, value, source_clock=None):
     if dataset == "metrics":
         _save_metrics(payload, source_clock)
     elif dataset == "players":
-        _save_players(payload, source_clock)
+        _save_players(payload, source_clock, player_claim_ids)
         _save_player_ips(player_ips, source_clock)
     elif dataset == "game_data":
         _save_player_ips(player_ips, source_clock)
@@ -975,7 +1033,7 @@ def recompute_lifetime_rollups(player):
     )
     closed_seconds = 0
     longest = 0
-    for started_at, ended_at, last_seen in sessions:
+    for started_at, ended_at, _last_seen in sessions:
         if ended_at is not None:
             duration = max(0, int((ended_at - started_at).total_seconds()))
             closed_seconds += duration
@@ -983,8 +1041,10 @@ def recompute_lifetime_rollups(player):
     player.minutes_lifetime = closed_seconds // 60
     player.session_count_lifetime = len(sessions)
     player.longest_session_minutes = longest // 60
-    player.save(update_fields=[
-        "minutes_lifetime",
-        "session_count_lifetime",
-        "longest_session_minutes",
-    ])
+    player.save(
+        update_fields=[
+            "minutes_lifetime",
+            "session_count_lifetime",
+            "longest_session_minutes",
+        ]
+    )

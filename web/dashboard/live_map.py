@@ -18,7 +18,6 @@ from django.views.decorators.http import require_GET
 from .models import GuildSnapshot, LatestDataset, Player, PositionSample
 from .services import WORLD_MAP_BOUNDS
 
-
 UPSTREAM_REVISION = "369ac4085a451ad546d3cee5d08952f36e4b2282"
 CATALOGUE_PATH = Path(settings.BASE_DIR) / "dashboard/data/live-map-catalogue.json"
 CATALOGUE_METADATA = {
@@ -46,10 +45,7 @@ def _is_stale(timestamp, seconds):
 
 def _map_for_coordinates(x, y):
     for map_id, bounds in WORLD_MAP_BOUNDS.items():
-        if (
-            bounds["min_x"] <= x <= bounds["max_x"]
-            and bounds["min_y"] <= y <= bounds["max_y"]
-        ):
+        if bounds["min_x"] <= x <= bounds["max_x"] and bounds["min_y"] <= y <= bounds["max_y"]:
             return map_id
     return None
 
@@ -165,9 +161,7 @@ def config(request):
                     },
                 },
             ],
-            "catalogueUrl": (
-                f"{reverse('live-map-catalogue')}?v={catalogue_hash}"
-            ),
+            "catalogueUrl": (f"{reverse('live-map-catalogue')}?v={catalogue_hash}"),
             "landmarks": [],
             "landmarkCatalogue": CATALOGUE_METADATA,
             "upstreamRevision": UPSTREAM_REVISION,
@@ -248,13 +242,9 @@ def players(request):
     name_counts = Counter(player.name.strip().casefold() for player in player_rows)
 
     public_save_overlay = not bool(getattr(settings, "PLAYER_CLAIMS_ENABLED", False))
-    save_snapshot, save_payload = (
-        _snapshot_payload() if public_save_overlay else (None, {})
-    )
+    save_snapshot, save_payload = _snapshot_payload() if public_save_overlay else (None, {})
     game_payload = datasets.get("game_data").payload if datasets.get("game_data") else {}
-    guild_names, saved_by_name, live_keys_by_name = _guild_data(
-        save_payload, game_payload or {}
-    )
+    guild_names, saved_by_name, live_keys_by_name = _guild_data(save_payload, game_payload or {})
 
     public_players = []
     for player in player_rows:
@@ -283,11 +273,7 @@ def players(request):
         saved_guild_id = saved.get("guild_id", "") if saved else ""
         guild_name = guild_names.get(saved_guild_id, "")
         live_guild_keys = live_keys_by_name.get(guild_name.casefold(), set())
-        guild_key = (
-            next(iter(live_guild_keys))
-            if len(live_guild_keys) == 1
-            else saved_guild_id
-        )
+        guild_key = next(iter(live_guild_keys)) if len(live_guild_keys) == 1 else saved_guild_id
         level = max(
             player.level,
             int(live.get("level", 0)) if live else 0,
@@ -334,10 +320,7 @@ def players(request):
         "saveAvailable": bool(save_snapshot),
         "saveStale": (
             public_save_overlay
-            and (
-                not save_snapshot
-                or timezone.now() - save_snapshot.updated_at > SAVE_STALE_AFTER
-            )
+            and (not save_snapshot or timezone.now() - save_snapshot.updated_at > SAVE_STALE_AFTER)
         ),
         "players": public_players,
     }
@@ -393,11 +376,7 @@ def objects(request):
         owner_candidates = source.get("owner_ids")
         if isinstance(owner_candidates, list):
             owner_id = next(
-                (
-                    candidate
-                    for candidate in owner_candidates
-                    if candidate in known_player_ids
-                ),
+                (candidate for candidate in owner_candidates if candidate in known_player_ids),
                 source.get("owner_id"),
             )
         else:
