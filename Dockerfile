@@ -1,4 +1,4 @@
-FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS live-map-build
+FROM node:26-alpine@sha256:ef24c5053d50fdc3e4e56eb4e7ddb7861874ab0fdc797046ba897581deb8e868 AS live-map-build
 
 WORKDIR /build
 COPY web/live-map/package.json web/live-map/package-lock.json ./
@@ -10,7 +10,7 @@ RUN npm run check
 RUN npm test
 RUN npm run build
 
-FROM python:3.13.5-slim-bookworm@sha256:4c2cf9917bd1cbacc5e9b07320025bdb7cdf2df7b0ceaccb55e9dd7e30987419 AS map-assets
+FROM python:3.14.7-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f AS map-assets
 
 WORKDIR /build
 COPY docker/map-tiles-requirements.txt docker/generate-map-tiles.py ./tools/
