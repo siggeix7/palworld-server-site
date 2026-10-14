@@ -1,5 +1,5 @@
-Django==5.2.17
-gunicorn==23.0.0
-whitenoise==6.9.0
-requests==2.33.0
-psycopg[binary]==3.2.9
+Django==6.1.2
+gunicorn==26.2.0
+whitenoise==6.12.0
+requests==2.34.2
+psycopg[binary]==3.3.6
