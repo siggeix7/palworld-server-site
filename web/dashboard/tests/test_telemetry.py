@@ -9,7 +9,16 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import SpanKind, Status, StatusCode
+from opentelemetry.trace import (
+    NonRecordingSpan,
+    SpanContext,
+    SpanKind,
+    Status,
+    StatusCode,
+    TraceFlags,
+    TraceState,
+    set_span_in_context,
+)
 from palworld_site import telemetry
 
 
@@ -123,6 +132,26 @@ class TelemetryTests(SimpleTestCase):
         self.assertEqual(exported.attributes["db.operation.name"], "SELECT")
         self.assertNotIn("PRIVATE_CANARY", exported.to_json())
         self.assertGreaterEqual(exported.end_time, exported.start_time)
+
+    def test_incoming_vendor_tracestate_is_removed_while_trace_ids_are_preserved(self):
+        tracer, exporter = self.tracer()
+        parent = SpanContext(
+            trace_id=123,
+            span_id=456,
+            is_remote=True,
+            trace_flags=TraceFlags(TraceFlags.SAMPLED),
+            trace_state=TraceState([("vendor", "PRIVATE_CANARY")]),
+        )
+        with tracer.start_as_current_span(
+            "request", context=set_span_in_context(NonRecordingSpan(parent)), kind=SpanKind.SERVER
+        ):
+            pass
+        exported = exporter.get_finished_spans()[0]
+        self.assertEqual(exported.context.trace_id, parent.trace_id)
+        self.assertEqual(exported.parent.span_id, parent.span_id)
+        self.assertFalse(exported.context.trace_state)
+        self.assertFalse(exported.parent.trace_state)
+        self.assertNotIn("PRIVATE_CANARY", exported.to_json())
 
     def test_only_structured_application_events_can_be_exported(self):
         event_filter = telemetry.SafeEventFilter()

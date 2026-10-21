@@ -117,7 +117,7 @@ non avviano esportatori.
 
 La telemetria applica una allowlist prima dell'accodamento delle trace: conserva
 metodo e stato HTTP, template della route, operazione SQL e durata. URL grezzi,
-query string, parametri e testo SQL, credenziali, attributi utente, eventi di
+query string, parametri e testo SQL, credenziali, tracestate dei vendor, attributi utente, eventi di
 eccezione e messaggi di errore liberi sono esclusi dall'export. Anche le route
 di verifica e reset degli account vengono redatte.
 

@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from opentelemetry import metrics, trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor
-from opentelemetry.trace import SpanKind, Status, StatusCode
+from opentelemetry.trace import SpanContext, SpanKind, Status, StatusCode, TraceState
 
 logger = logging.getLogger(__name__)
 event_logger = logging.getLogger("palworld.telemetry")
@@ -84,6 +84,18 @@ def _http_attributes(attributes):
     return result
 
 
+def _safe_context(context):
+    if context is None:
+        return None
+    return SpanContext(
+        trace_id=context.trace_id,
+        span_id=context.span_id,
+        is_remote=context.is_remote,
+        trace_flags=context.trace_flags,
+        trace_state=TraceState(),
+    )
+
+
 def sanitized_span(span):
     attributes = span.attributes or {}
     database = attributes.get("db.system.name", attributes.get("db.system"))
@@ -120,8 +132,8 @@ def sanitized_span(span):
     )
     return ReadableSpan(
         name=name,
-        context=span.context,
-        parent=span.parent,
+        context=_safe_context(span.context),
+        parent=_safe_context(span.parent),
         resource=resource,
         attributes=safe,
         events=(),
