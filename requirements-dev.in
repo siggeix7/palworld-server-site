@@ -1,5 +1,5 @@
 -c requirements.txt
 pip-audit==2.10.1
-pip-tools==7.6.1
-pre-commit==4.6.2
-ruff==0.16.7
+pip-tools==7.6.2
+pre-commit==4.7.0
+ruff==0.17.1
