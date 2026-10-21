@@ -123,6 +123,11 @@ services:
       TIME_ZONE: "${TIME_ZONE:-Europe/Rome}"
       WEB_WORKERS: "${WEB_WORKERS:-2}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      OTEL_ENABLED: "${OTEL_ENABLED:-false}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-palworld}"
+      OTEL_TRACES_SAMPLER_ARG: "${OTEL_TRACES_SAMPLER_ARG:-0.1}"
     volumes:
       - "${DATA_PATH:-./data}:/data"
       - "${APP_SECRETS_PATH:-./secrets/app}:/run/app-secrets:ro"

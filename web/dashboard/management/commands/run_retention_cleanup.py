@@ -6,6 +6,7 @@ import threading
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import OperationalError, close_old_connections
+from palworld_site.telemetry import configure, operation
 
 from dashboard.services import cleanup_if_due
 
@@ -17,6 +18,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         del args, options
+        configure("retention")
         stop_event = threading.Event()
 
         def stop(_signum, _frame):
@@ -32,7 +34,8 @@ class Command(BaseCommand):
             while not stop_event.is_set():
                 close_old_connections()
                 try:
-                    cleanup_if_due()
+                    with operation("palworld.retention"):
+                        cleanup_if_due()
                 except OperationalError:
                     logger.warning("Retention cleanup delayed by database error")
                 finally:

@@ -11,6 +11,7 @@ import requests
 from django.conf import settings
 from django.db import OperationalError, close_old_connections
 from django.utils import timezone
+from palworld_site.telemetry import operation
 
 from .models import RuntimeState
 from .services import DATASETS, IngestError, run_maintenance, store_dataset
@@ -202,6 +203,13 @@ class PalworldCollector:
             close_old_connections()
 
     def collect(self, dataset):
+        with operation("palworld.collect", dataset=dataset) as observation:
+            result = self._collect(dataset)
+            if self.dataset_state[dataset]["error"]:
+                observation.fail()
+            return result
+
+    def _collect(self, dataset):
         state = self.dataset_state[dataset]
         started = self.monotonic()
         attempted_at = timezone.now()

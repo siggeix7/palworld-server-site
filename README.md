@@ -94,6 +94,45 @@ directory host e le variabili `*_FILE` sui relativi percorsi container sotto
 vuoti o più grandi di 16 KiB bloccano l'avvio. I secret PostgreSQL restano
 gestiti separatamente da Compose.
 
+## OpenTelemetry e laboratorio APM
+
+Il backend può esportare trace, metriche e log strutturati tramite OTLP/gRPC.
+La funzione è disattivata per impostazione predefinita. Per attivarla nel
+laboratorio, configurare un receiver fidato sulla rete Docker interna:
+
+```dotenv
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://zabbix-proxy-apm:4317
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_SERVICE_NAME=palworld
+OTEL_TRACES_SAMPLER_ARG=0.1
+```
+
+Il campionamento delle trace è compreso tra `0` e `1`; `1` raccoglie tutte le
+trace del laboratorio. I servizi esportati hanno i suffissi `-web`, `-ingest`,
+`-collector`, `-retention` e `-scheduler`. L'inizializzazione avviene in ogni
+worker WSGI dopo il fork di Gunicorn, con l'avvio attuale senza `--preload`, e
+nei processi dei comandi di background. Le verifiche e le migrazioni di startup
+non avviano esportatori.
+
+La telemetria applica una allowlist prima dell'accodamento delle trace: conserva
+metodo e stato HTTP, template della route, operazione SQL e durata. URL grezzi,
+query string, parametri e testo SQL, credenziali, attributi utente, eventi di
+eccezione e messaggi di errore liberi sono esclusi dall'export. Anche le route
+di verifica e reset degli account vengono redatte.
+
+I log OTLP sono eventi strutturati dedicati (`HTTP request completed` e
+`Background operation completed`), correlati alle trace. I log applicativi
+esistenti mantengono i propri filtri e la propria destinazione. Le metriche
+usano soltanto dimensioni controllate, quali metodo, stato, dataset ed esito;
+le route e gli identificativi utente non sono etichette delle metriche.
+
+L'export è asincrono, con code limitate e timeout brevi. Una configurazione
+non valida disabilita la telemetria con un messaggio generico. Il backend
+continua a usare autenticazione, CSRF e URL pubblici/privati del sito. Il
+receiver OTLP e il database APM devono essere raggiungibili sulla rete interna:
+la strumentazione non richiede endpoint pubblici aggiuntivi sul sito.
+
 ## Configurazione
 
 Creare `/opt/palworld-server-site/.env` partendo da `.env.example`. Variabili

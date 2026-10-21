@@ -6,6 +6,7 @@ import threading
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import OperationalError, close_old_connections
+from palworld_site.telemetry import configure, operation
 
 from dashboard.weekly_scheduler import mark_interrupted_run, run_due_report
 
@@ -16,6 +17,7 @@ class Command(BaseCommand):
     help = "Run the persistent weekly report scheduler"
 
     def handle(self, *args, **options):
+        configure("scheduler")
         stop_event = threading.Event()
 
         def stop(_signum, _frame):
@@ -32,7 +34,8 @@ class Command(BaseCommand):
             while not stop_event.is_set():
                 close_old_connections()
                 try:
-                    run_due_report()
+                    with operation("palworld.weekly_report"):
+                        run_due_report()
                 except OperationalError:
                     logger.warning("Weekly report scheduler delayed by database error")
                 finally:

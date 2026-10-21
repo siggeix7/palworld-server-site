@@ -4,6 +4,7 @@ import threading
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from palworld_site.telemetry import configure
 
 from dashboard.collector import PalworldCollector
 
@@ -12,6 +13,7 @@ class Command(BaseCommand):
     help = "Poll the Palworld REST API and persist sanitized snapshots"
 
     def handle(self, *args, **options):
+        configure("collector")
         stop_event = threading.Event()
 
         def stop(_signum, _frame):
