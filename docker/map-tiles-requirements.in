@@ -1,2 +1,2 @@
 # Encoded WebP bytes are version-sensitive; update with the manifest encoder metadata.
-Pillow==11.3.0
+Pillow==13.0.0
