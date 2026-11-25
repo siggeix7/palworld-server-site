@@ -1,4 +1,4 @@
-FROM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS live-map-build
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS live-map-build
 
 WORKDIR /build
 COPY web/live-map/package.json web/live-map/package-lock.json ./
@@ -10,7 +10,7 @@ RUN npm run check
 RUN npm test
 RUN npm run build
 
-FROM python:3.13.5-slim-bookworm@sha256:4c2cf9917bd1cbacc5e9b07320025bdb7cdf2df7b0ceaccb55e9dd7e30987419 AS map-assets
+FROM python:3.15.1-slim-bookworm@sha256:575f8bc12ec26542e0678bc6b60e385218248019d433157ec327264a78c3a853 AS map-assets
 
 WORKDIR /build
 COPY docker/map-tiles-requirements.txt docker/generate-map-tiles.py ./tools/
@@ -27,7 +27,7 @@ RUN python -m pip install --disable-pip-version-check --no-cache-dir \
       '9de64557908c4ff415bda9829836d05826b5de3a2929fa1b0621e522d7c8326d' \
       'maps/manifest.json' | sha256sum --check --strict
 
-FROM rockylinux/rockylinux:10@sha256:827d37bc128288ccf160ee318bb3cb92d591164cb217e92f8bc61e3982ae1834
+FROM rockylinux/rockylinux:10@sha256:d24beedc58f79b9e0e9289fedaa4fcbcbe692b1438883a86f177fd7c51053ca8
 
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
